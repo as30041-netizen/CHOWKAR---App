@@ -93,10 +93,11 @@ export const fetchJobs = async (): Promise<{ jobs: Job[]; error?: string }> => {
 // Create a new job
 export const createJob = async (job: Job): Promise<{ success: boolean; error?: string }> => {
   try {
-    const { error } = await supabase
+    console.log('[JobService] Creating job:', job.title);
+    const { data, error } = await supabase
       .from('jobs')
       .insert({
-        id: job.id,
+        // Let database generate UUID, don't send id
         poster_id: job.posterId,
         poster_name: job.posterName,
         poster_phone: job.posterPhone,
@@ -112,14 +113,21 @@ export const createJob = async (job: Job): Promise<{ success: boolean; error?: s
         budget: job.budget,
         status: job.status,
         image: job.image
-      });
+      })
+      .select()
+      .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('[JobService] Supabase error:', error);
+      throw error;
+    }
 
+    console.log('[JobService] Job created successfully with ID:', data.id);
     return { success: true };
-  } catch (error) {
-    console.error('Error creating job:', error);
-    return { success: false, error: 'Failed to create job' };
+  } catch (error: any) {
+    console.error('[JobService] Error creating job:', error);
+    const errorMessage = error?.message || error?.toString() || 'Failed to create job';
+    return { success: false, error: errorMessage };
   }
 };
 
