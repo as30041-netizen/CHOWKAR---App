@@ -184,16 +184,16 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setIsAuthLoading(false);
         }
       } else if (event === 'SIGNED_OUT') {
-        // Only process sign-out if we've initialized and user was actually logged in
-        if (hasInitialized && isLoggedIn) {
-          console.log('[Auth] User signed out');
+        // Only process sign-out if we've initialized (to avoid processing during initial load)
+        if (hasInitialized) {
+          console.log('[Auth] User signed out, clearing state');
           setUser(MOCK_USER);
           setIsLoggedIn(false);
           setTransactions([]);
           setNotifications([]);
           setMessages([]);
         } else {
-          console.log('[Auth] Sign-out event ignored (not logged in or not initialized)');
+          console.log('[Auth] Sign-out event ignored (app not initialized yet)');
         }
         setIsAuthLoading(false);
       } else if (event === 'TOKEN_REFRESHED') {
@@ -480,12 +480,26 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = async () => {
-    await signOut();
-    setIsLoggedIn(false);
-    setUser(MOCK_USER);
-    setTransactions([]);
-    setNotifications([]);
-    setMessages([]);
+    try {
+      console.log('[Auth] Logging out...');
+      const result = await signOut();
+      if (result.error) {
+        console.error('[Auth] Sign out error:', result.error);
+        showAlert('Failed to sign out. Please try again.', 'error');
+        return;
+      }
+      console.log('[Auth] Sign out successful');
+      // State will be cleared by the SIGNED_OUT event handler
+      // But we'll clear it here too for immediate feedback
+      setIsLoggedIn(false);
+      setUser(MOCK_USER);
+      setTransactions([]);
+      setNotifications([]);
+      setMessages([]);
+    } catch (error) {
+      console.error('[Auth] Exception during logout:', error);
+      showAlert('An error occurred during sign out', 'error');
+    }
   };
 
   const retryAuth = async () => {
