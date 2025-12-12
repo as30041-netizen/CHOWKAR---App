@@ -66,6 +66,8 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     console.log('[Auth] Initializing authentication...');
+    console.log('[Auth] Current URL:', window.location.href);
+    console.log('[Auth] URL Hash:', window.location.hash);
 
     // Clean up old localStorage auth data that may interfere
     try {
@@ -75,8 +77,24 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.warn('[Auth] Could not clean localStorage:', e);
     }
 
+    // Check if there are OAuth parameters in the URL
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const hasOAuthParams = hashParams.has('access_token') || hashParams.has('code');
+
+    if (hasOAuthParams) {
+      console.log('[Auth] OAuth parameters detected in URL, processing...');
+    }
+
+    // Set up auth state listener
+    // Note: onAuthStateChange handles OAuth callbacks automatically when detectSessionInUrl is true
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('[Auth] State change event:', event, 'Session exists:', !!session);
+
+      // Additional debug logging for OAuth flow
+      if (session) {
+        console.log('[Auth] Session user email:', session.user.email);
+        console.log('[Auth] Session provider:', session.user.app_metadata.provider);
+      }
 
       if (event === 'INITIAL_SESSION') {
         setHasInitialized(true);
