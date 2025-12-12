@@ -58,6 +58,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [currentAlert, setCurrentAlert] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   // Persistence Effects (only for preferences, NOT auth state)
   useEffect(() => localStorage.setItem('chowkar_role', JSON.stringify(role)), [role]);
@@ -78,6 +79,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.log('[Auth] State change event:', event, 'Session exists:', !!session);
 
       if (event === 'INITIAL_SESSION') {
+        setHasInitialized(true);
         if (session?.user) {
           console.log('[Auth] Initial session detected, fetching profile...');
           setIsAuthLoading(true);
@@ -133,12 +135,17 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setIsAuthLoading(false);
         }
       } else if (event === 'SIGNED_OUT') {
-        console.log('[Auth] User signed out');
-        setUser(MOCK_USER);
-        setIsLoggedIn(false);
-        setTransactions([]);
-        setNotifications([]);
-        setMessages([]);
+        // Only process sign-out if we've initialized and user was actually logged in
+        if (hasInitialized && isLoggedIn) {
+          console.log('[Auth] User signed out');
+          setUser(MOCK_USER);
+          setIsLoggedIn(false);
+          setTransactions([]);
+          setNotifications([]);
+          setMessages([]);
+        } else {
+          console.log('[Auth] Sign-out event ignored (not logged in or not initialized)');
+        }
         setIsAuthLoading(false);
       } else if (event === 'TOKEN_REFRESHED') {
         console.log('[Auth] Token refreshed');
