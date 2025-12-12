@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserProvider, useUser } from './contexts/UserContextDB';
 import { JobProvider, useJobs } from './contexts/JobContextDB';
 import { Job, Bid, ChatMessage, UserRole, JobStatus, Transaction, Coordinates, Notification, Review, User } from './types';
