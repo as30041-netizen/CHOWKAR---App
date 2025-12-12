@@ -1,0 +1,278 @@
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing Supabase environment variables');
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true
+  }
+});
+
+// Database type helpers
+export type Database = {
+  public: {
+    Tables: {
+      profiles: {
+        Row: {
+          id: string;
+          name: string;
+          phone: string;
+          location: string;
+          latitude: number | null;
+          longitude: number | null;
+          wallet_balance: number;
+          rating: number;
+          profile_photo: string | null;
+          is_premium: boolean;
+          ai_usage_count: number;
+          bio: string | null;
+          skills: string[];
+          experience: string | null;
+          jobs_completed: number;
+          join_date: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          name: string;
+          phone: string;
+          location: string;
+          latitude?: number | null;
+          longitude?: number | null;
+          wallet_balance?: number;
+          rating?: number;
+          profile_photo?: string | null;
+          is_premium?: boolean;
+          ai_usage_count?: number;
+          bio?: string | null;
+          skills?: string[];
+          experience?: string | null;
+          jobs_completed?: number;
+          join_date?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          phone?: string;
+          location?: string;
+          latitude?: number | null;
+          longitude?: number | null;
+          wallet_balance?: number;
+          rating?: number;
+          profile_photo?: string | null;
+          is_premium?: boolean;
+          ai_usage_count?: number;
+          bio?: string | null;
+          skills?: string[];
+          experience?: string | null;
+          jobs_completed?: number;
+        };
+      };
+      jobs: {
+        Row: {
+          id: string;
+          poster_id: string;
+          poster_name: string;
+          poster_phone: string;
+          poster_photo: string | null;
+          title: string;
+          description: string;
+          category: string;
+          location: string;
+          latitude: number | null;
+          longitude: number | null;
+          job_date: string;
+          duration: string;
+          budget: number;
+          status: 'OPEN' | 'IN_PROGRESS' | 'COMPLETED';
+          accepted_bid_id: string | null;
+          image: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          poster_id: string;
+          poster_name: string;
+          poster_phone: string;
+          poster_photo?: string | null;
+          title: string;
+          description: string;
+          category: string;
+          location: string;
+          latitude?: number | null;
+          longitude?: number | null;
+          job_date: string;
+          duration: string;
+          budget: number;
+          status?: 'OPEN' | 'IN_PROGRESS' | 'COMPLETED';
+          accepted_bid_id?: string | null;
+          image?: string | null;
+        };
+        Update: {
+          poster_name?: string;
+          poster_phone?: string;
+          poster_photo?: string | null;
+          title?: string;
+          description?: string;
+          category?: string;
+          location?: string;
+          latitude?: number | null;
+          longitude?: number | null;
+          job_date?: string;
+          duration?: string;
+          budget?: number;
+          status?: 'OPEN' | 'IN_PROGRESS' | 'COMPLETED';
+          accepted_bid_id?: string | null;
+          image?: string | null;
+        };
+      };
+      bids: {
+        Row: {
+          id: string;
+          job_id: string;
+          worker_id: string;
+          worker_name: string;
+          worker_phone: string;
+          worker_rating: number;
+          worker_location: string;
+          worker_latitude: number | null;
+          worker_longitude: number | null;
+          worker_photo: string | null;
+          amount: number;
+          message: string;
+          status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+          negotiation_history: any;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          job_id: string;
+          worker_id: string;
+          worker_name: string;
+          worker_phone: string;
+          worker_rating: number;
+          worker_location: string;
+          worker_latitude?: number | null;
+          worker_longitude?: number | null;
+          worker_photo?: string | null;
+          amount: number;
+          message: string;
+          status?: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+          negotiation_history?: any;
+        };
+        Update: {
+          amount?: number;
+          message?: string;
+          status?: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+          negotiation_history?: any;
+        };
+      };
+      transactions: {
+        Row: {
+          id: string;
+          user_id: string;
+          amount: number;
+          type: 'CREDIT' | 'DEBIT';
+          description: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          amount: number;
+          type: 'CREDIT' | 'DEBIT';
+          description: string;
+        };
+        Update: {
+          amount?: number;
+          type?: 'CREDIT' | 'DEBIT';
+          description?: string;
+        };
+      };
+      notifications: {
+        Row: {
+          id: string;
+          user_id: string;
+          title: string;
+          message: string;
+          type: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
+          read: boolean;
+          related_job_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          title: string;
+          message: string;
+          type: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
+          read?: boolean;
+          related_job_id?: string | null;
+        };
+        Update: {
+          title?: string;
+          message?: string;
+          type?: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
+          read?: boolean;
+        };
+      };
+      chat_messages: {
+        Row: {
+          id: string;
+          job_id: string;
+          sender_id: string;
+          text: string;
+          translated_text: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          job_id: string;
+          sender_id: string;
+          text: string;
+          translated_text?: string | null;
+        };
+        Update: {
+          text?: string;
+          translated_text?: string | null;
+        };
+      };
+      reviews: {
+        Row: {
+          id: string;
+          reviewer_id: string;
+          reviewee_id: string;
+          job_id: string | null;
+          rating: number;
+          comment: string | null;
+          tags: string[];
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          reviewer_id: string;
+          reviewee_id: string;
+          job_id?: string | null;
+          rating: number;
+          comment?: string | null;
+          tags?: string[];
+        };
+        Update: {
+          rating?: number;
+          comment?: string | null;
+          tags?: string[];
+        };
+      };
+    };
+  };
+};
