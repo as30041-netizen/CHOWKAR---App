@@ -13,6 +13,7 @@ interface UserContextType {
   setLanguage: React.Dispatch<React.SetStateAction<'en' | 'hi'>>;
   isLoggedIn: boolean;
   setIsLoggedIn: React.Dispatch<React.SetStateAction<boolean>>;
+  isAuthLoading: boolean;
   transactions: Transaction[];
   setTransactions: React.Dispatch<React.SetStateAction<Transaction[]>>;
   notifications: Notification[];
@@ -343,6 +344,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       role, setRole,
       language, setLanguage,
       isLoggedIn, setIsLoggedIn,
+      isAuthLoading,
       transactions, setTransactions,
       notifications, setNotifications,
       messages, setMessages,

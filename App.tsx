@@ -24,7 +24,7 @@ import {
 
 const AppContent: React.FC = () => {
   const {
-    user, setUser, role, setRole, language, setLanguage, isLoggedIn, setIsLoggedIn,
+    user, setUser, role, setRole, language, setLanguage, isLoggedIn, setIsLoggedIn, isAuthLoading,
     transactions, setTransactions, notifications, setNotifications, messages, setMessages,
     addNotification, checkFreeLimit, incrementAiUsage, logout, t,
     showSubscriptionModal, setShowSubscriptionModal,
@@ -428,6 +428,21 @@ const AppContent: React.FC = () => {
       showAlert('Failed to update profile. Please try again.', 'error');
     }
   };
+
+  // --- Loading Screen ---
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-green-50 to-teal-100 flex flex-col items-center justify-center p-6 font-sans text-gray-900">
+        <div className="flex flex-col items-center">
+          <div className="w-20 h-20 bg-gradient-to-tr from-emerald-100 to-green-50 rounded-full flex items-center justify-center mb-6 shadow-inner ring-4 ring-white animate-pulse">
+            <MapPin size={40} className="text-emerald-600 drop-shadow-sm" fill="#10b981" />
+          </div>
+          <h1 className="text-4xl font-black text-emerald-950 tracking-tighter drop-shadow-sm mb-4">CHOWKAR</h1>
+          <Loader2 size={32} className="text-emerald-600 animate-spin" />
+        </div>
+      </div>
+    );
+  }
 
   // --- Auth View ---
   if (!isLoggedIn) {
