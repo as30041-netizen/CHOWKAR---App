@@ -49,7 +49,7 @@ export const getCurrentUser = async (): Promise<{ user: User | null; error?: str
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('*')
-      .eq('auth_user_id', authUser.id)
+      .eq('id', authUser.id)
       .maybeSingle();
 
     if (profileError) throw profileError;
@@ -65,9 +65,11 @@ export const getCurrentUser = async (): Promise<{ user: User | null; error?: str
       const { data: newProfile, error: createError } = await supabase
         .from('profiles')
         .insert({
+          id: authUser.id,
           auth_user_id: authUser.id,
           name: userName,
           email: authUser.email || '',
+          phone: '',
           location: 'Not set',
           wallet_balance: 0,
           rating: 5.0,
