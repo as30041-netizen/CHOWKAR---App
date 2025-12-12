@@ -408,12 +408,32 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const handleSubmitReview = () => {
+  const handleSubmitReview = async () => {
      if (reviewRating === 0) { showAlert("Please select a rating.", 'error'); return; }
-     const newReview: Review = { id: `rev${Date.now()}`, reviewerId: user.id, reviewerName: user.name, rating: reviewRating, comment: reviewComment, date: Date.now(), tags: reviewTags };
-     if (reviewTarget && reviewTarget.id === user.id) { setUser(prev => ({ ...prev, reviews: [newReview, ...(prev.reviews || [])] })); }
-     addNotification(reviewTarget!.id, "New Review", `You received a ${reviewRating} star review from ${user.name}!`, "SUCCESS");
-     setReviewModalOpen(false); showAlert(t.reviewSubmitted, 'success');
+     if (!reviewTarget) { showAlert("No review target selected.", 'error'); return; }
+
+     try {
+       // Insert review into database
+       const { error } = await supabase
+         .from('reviews')
+         .insert({
+           reviewer_id: user.id,
+           reviewee_id: reviewTarget.id,
+           job_id: selectedJob?.id || null,
+           rating: reviewRating,
+           comment: reviewComment || null,
+           tags: reviewTags.length > 0 ? reviewTags : null
+         });
+
+       if (error) throw error;
+
+       await addNotification(reviewTarget.id, "New Review", `You received a ${reviewRating} star review from ${user.name}!`, "SUCCESS");
+       setReviewModalOpen(false);
+       showAlert(t.reviewSubmitted, 'success');
+     } catch (error) {
+       console.error('Error submitting review:', error);
+       showAlert('Failed to submit review. Please try again.', 'error');
+     }
   };
   
   const handleSaveProfile = async () => {
@@ -785,7 +805,47 @@ const AppContent: React.FC = () => {
                 </div>
             </div>
         )}
-        
+
+        {/* Filter Modal */}
+        {showFilterModal && (
+            <div className="fixed inset-0 bg-black/70 z-[60] flex items-end sm:items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
+                <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-pop relative">
+                    <button onClick={() => setShowFilterModal(false)} className="absolute top-3 right-3 bg-black/10 p-1.5 rounded-full hover:bg-black/20 transition-colors z-20"><X size={20}/></button>
+                    <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 p-6 text-white relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+                        <h2 className="text-xl font-bold mb-1 flex items-center gap-2"><SlidersHorizontal size={24} /> Filter Jobs</h2>
+                        <p className="text-sm text-emerald-100">Refine your job search</p>
+                    </div>
+                    <div className="p-5 space-y-4">
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">Location</label>
+                            <input
+                                type="text"
+                                value={filterLocation}
+                                onChange={(e) => setFilterLocation(e.target.value)}
+                                placeholder="Enter location..."
+                                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                            />
+                        </div>
+                        <div className="flex gap-3 pt-2">
+                            <button
+                                onClick={() => { setFilterLocation(''); setShowFilterModal(false); }}
+                                className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-200 transition-colors"
+                            >
+                                Clear Filters
+                            </button>
+                            <button
+                                onClick={() => setShowFilterModal(false)}
+                                className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white py-3 rounded-xl font-semibold hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg"
+                            >
+                                Apply Filters
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {/* Chat Interface */}
         {chatOpen.isOpen && chatOpen.job && (
             <ChatInterface 
@@ -805,22 +865,6 @@ const AppContent: React.FC = () => {
                       });
 
                       setMessages(prev => [...prev, msg]);
-
-                      setTimeout(async () => {
-                        const autoReply: ChatMessage = { id: `r${Date.now()}`, jobId: chatOpen.job!.id, senderId: 'other', text: 'Got it, thanks!', timestamp: Date.now() };
-
-                        try {
-                          await supabase.from('chat_messages').insert({
-                            id: autoReply.id,
-                            job_id: autoReply.jobId,
-                            sender_id: autoReply.senderId,
-                            text: autoReply.text
-                          });
-                          setMessages(prev => [...prev, autoReply]);
-                        } catch (error) {
-                          console.error('Error saving auto reply:', error);
-                        }
-                      }, 1500);
                     } catch (error) {
                       console.error('Error saving message:', error);
                       showAlert('Failed to send message. Please try again.', 'error');

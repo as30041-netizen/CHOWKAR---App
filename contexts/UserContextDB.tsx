@@ -232,12 +232,30 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       setNotifications(notifs);
 
-      // Fetch chat messages
-      const { data: messagesData, error: msgError } = await supabase
-        .from('chat_messages')
-        .select('*')
-        .eq('sender_id', user.id)
-        .order('created_at', { ascending: true });
+      // Fetch chat messages for all jobs where user is involved (as poster or worker)
+      const { data: userJobs } = await supabase
+        .from('jobs')
+        .select('id')
+        .eq('user_id', user.id);
+
+      const { data: userBids } = await supabase
+        .from('bids')
+        .select('job_id')
+        .eq('worker_id', user.id)
+        .eq('status', 'ACCEPTED');
+
+      const jobIds = [
+        ...(userJobs?.map(j => j.id) || []),
+        ...(userBids?.map(b => b.job_id) || [])
+      ];
+
+      const { data: messagesData, error: msgError } = jobIds.length > 0
+        ? await supabase
+            .from('chat_messages')
+            .select('*')
+            .in('job_id', jobIds)
+            .order('created_at', { ascending: true })
+        : { data: [], error: null };
 
       if (msgError) throw msgError;
 

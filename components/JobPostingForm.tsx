@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { useUser } from '../contexts/UserContext';
-import { useJobs } from '../contexts/JobContext';
+import { useUser } from '../contexts/UserContextDB';
+import { useJobs } from '../contexts/JobContextDB';
 import { Job, JobStatus, Coordinates } from '../types';
 import { CATEGORIES, CATEGORY_TRANSLATIONS, FREE_AI_USAGE_LIMIT } from '../constants';
 import { enhanceJobDescriptionStream, estimateWage, analyzeImageForJob } from '../services/geminiService';
