@@ -10,7 +10,7 @@ import { WalletView } from './components/WalletView';
 import { LeafletMap } from './components/LeafletMap';
 import { enhanceBidMessageStream, translateText } from './services/geminiService';
 import { getDeviceLocation, calculateDistance } from './utils/geo';
-import { sendOTP, verifyOTP, SignUpData } from './services/authService';
+import { signInWithGoogle, completeProfile } from './services/authService';
 import { supabase } from './lib/supabase';
 import { 
   MapPin, LayoutGrid, Plus, Wallet, UserCircle, Search, SlidersHorizontal, 
@@ -34,14 +34,12 @@ const AppContent: React.FC = () => {
   const { jobs, setJobs, updateJob, deleteJob } = useJobs();
 
   // --- Auth State ---
-  const [authView, setAuthView] = useState<'signin' | 'signup'>('signin');
-  const [mobileNumber, setMobileNumber] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [enteredOtp, setEnteredOtp] = useState('');
-  const [regName, setRegName] = useState('');
-  const [regLocation, setRegLocation] = useState('');
-  const [regCoords, setRegCoords] = useState<Coordinates | undefined>(undefined);
+  const [showProfileCompletion, setShowProfileCompletion] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [profileLocation, setProfileLocation] = useState('');
+  const [profileCoords, setProfileCoords] = useState<Coordinates | undefined>(undefined);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [isSigningIn, setIsSigningIn] = useState(false);
 
   // --- UI State ---
   const [activeTab, setActiveTab] = useState<'home' | 'post' | 'wallet' | 'profile'>('home');
@@ -101,51 +99,47 @@ const AppContent: React.FC = () => {
   const unreadCount = notifications.filter(n => n.userId === user.id && !n.read).length;
   const postedJobsCount = jobs.filter(j => j.posterId === user.id).length;
 
+  useEffect(() => {
+    if (isLoggedIn && user.id && (!user.phone || user.location === 'Not set')) {
+      setShowProfileCompletion(true);
+    }
+  }, [isLoggedIn, user.id, user.phone, user.location]);
+
   // --- Handlers ---
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (mobileNumber.length >= 10) {
-      const result = await sendOTP(mobileNumber);
-      if (result.success) {
-        setOtpSent(true);
-      } else {
-        showAlert(result.error || t.alertInvalidMobile, 'error');
-      }
-    } else {
-      showAlert(t.alertInvalidMobile, 'error');
+  const handleGoogleSignIn = async () => {
+    setIsSigningIn(true);
+    const result = await signInWithGoogle();
+    if (!result.success) {
+      showAlert(result.error || 'Failed to sign in', 'error');
+      setIsSigningIn(false);
     }
   };
 
-  const handleVerifyOtp = async (e: React.FormEvent) => {
+  const handleCompleteProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!phoneNumber || !profileLocation) {
+      showAlert('Please fill in all required fields', 'error');
+      return;
+    }
 
-    const signUpData: SignUpData | undefined = authView === 'signup' ? {
-      phone: mobileNumber,
-      name: regName || 'New User',
-      location: regLocation || 'India',
-      coordinates: regCoords
-    } : undefined;
-
-    const result = await verifyOTP(mobileNumber, enteredOtp, signUpData);
-
-    if (result.success && result.user) {
-      setUser(result.user);
-      setIsLoggedIn(true);
-
-      if (authView === 'signup') {
-        await addNotification(result.user.id, t.notifWelcome, t.notifWelcomeBody, "SUCCESS");
-      }
+    const result = await completeProfile(user.id, phoneNumber, profileLocation, profileCoords);
+    if (result.success) {
+      setShowProfileCompletion(false);
+      setUser(prev => ({
+        ...prev,
+        phone: phoneNumber,
+        location: profileLocation,
+        coordinates: profileCoords
+      }));
+      await addNotification(user.id, t.notifWelcome, t.notifWelcomeBody, "SUCCESS");
+      showAlert('Profile completed successfully!', 'success');
     } else {
-      showAlert(result.error || t.alertInvalidOtp, 'error');
+      showAlert(result.error || 'Failed to complete profile', 'error');
     }
   };
 
   const handleLogout = () => {
       logout();
-      setAuthView('signin');
-      setOtpSent(false);
-      setEnteredOtp('');
-      setMobileNumber('');
   };
 
   const handleEnhanceBid = async () => {
@@ -444,18 +438,17 @@ const AppContent: React.FC = () => {
           input::placeholder, textarea::placeholder { color: #9ca3af !important; }
           input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus, input:-webkit-autofill:active{ -webkit-box-shadow: 0 0 0 30px white inset !important; -webkit-text-fill-color: black !important; }
          `}</style>
-         
+
          <div className="absolute top-6 right-6 z-10">
             <button onClick={() => setLanguage(l => l === 'en' ? 'hi' : 'en')} className="flex items-center gap-1.5 bg-white/60 backdrop-blur-sm px-4 py-2 rounded-full border border-emerald-100 shadow-sm text-xs font-bold text-emerald-800 hover:bg-white transition-all">
                 <Languages size={14} /> {language === 'en' ? 'हिन्दी' : 'English'}
             </button>
         </div>
 
-        {/* Global Alert Toast */}
         {currentAlert && (
             <div className={`fixed top-20 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-full shadow-2xl font-bold text-sm flex items-center gap-3 animate-slide-down backdrop-blur-md border border-white/20 ${
-                currentAlert.type === 'error' ? 'bg-red-500/90 text-white' : 
-                currentAlert.type === 'success' ? 'bg-emerald-600/90 text-white' : 
+                currentAlert.type === 'error' ? 'bg-red-500/90 text-white' :
+                currentAlert.type === 'success' ? 'bg-emerald-600/90 text-white' :
                 'bg-gray-800/90 text-white'
             }`}>
                 {currentAlert.type === 'error' && <XCircle size={18} className="text-white/80"/>}
@@ -472,54 +465,29 @@ const AppContent: React.FC = () => {
                </div>
                <h1 className="text-4xl font-black text-emerald-950 tracking-tighter drop-shadow-sm">CHOWKAR</h1>
             </div>
-            
-            <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">{authView === 'signin' ? t.signIn : t.joinTitle}</h2>
-            
-            {!otpSent ? (
-                <form onSubmit={handleSendOtp} className="space-y-4">
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wide ml-1">{t.mobileNumber}</label>
-                        <div className="relative group">
-                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-700 font-bold border-r border-emerald-100 pr-3">+91</span>
-                            <input type="tel" required maxLength={10} className="w-full bg-white border-2 border-emerald-100/80 rounded-2xl p-4 pl-16 text-lg font-semibold outline-none focus:border-emerald-500 transition-all placeholder-gray-300 shadow-sm" value={mobileNumber} onChange={e => setMobileNumber(e.target.value.replace(/\D/g, ''))} placeholder="98765 43210" />
-                            <Phone size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                        </div>
-                    </div>
 
-                    {authView === 'signup' && (
-                        <div className="space-y-4 animate-slide-down">
-                            <div className="relative group">
-                                <UserCircle size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                                <input type="text" required className="w-full bg-white border-2 border-emerald-100/80 rounded-2xl p-4 pl-12 font-medium outline-none focus:border-emerald-500 transition-all placeholder-gray-400 shadow-sm" placeholder={t.fullName} value={regName} onChange={e => setRegName(e.target.value)} />
-                            </div>
-                            <div className="relative group">
-                                <MapPin size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                                <input type="text" required className="w-full bg-white border-2 border-emerald-100/80 rounded-2xl p-4 pl-12 font-medium outline-none focus:border-emerald-500 transition-all placeholder-gray-400 shadow-sm" placeholder={t.cityVillage} value={regLocation} onChange={e => setRegLocation(e.target.value)} />
-                            </div>
-                            <button type="button" onClick={() => { setIsGettingLocation(true); getDeviceLocation(setRegCoords, () => setIsGettingLocation(false)); }} className={`w-full py-3 rounded-2xl border-2 border-dashed flex items-center justify-center gap-2 text-sm font-bold transition-all ${regCoords ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'border-gray-300 text-gray-500 hover:bg-gray-50'}`}>
-                                {isGettingLocation ? <Loader2 size={16} className="animate-spin" /> : <Navigation size={16} />} {regCoords ? t.locationCaptured : t.useGps}
-                            </button>
-                        </div>
-                    )}
+            <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">{t.signIn}</h2>
+            <p className="text-center text-gray-600 text-sm mb-6">
+              {language === 'en' ? 'Sign in with your Google account to get started' : 'शुरू करने के लिए अपने Google खाते से साइन इन करें'}
+            </p>
 
-                    <button type="submit" className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold text-lg shadow-lg hover:translate-y-[-2px] transition-all mt-4">
-                        {t.getOtp} <ArrowUpRight size={20} className="inline ml-2" />
-                    </button>
-                </form>
-            ) : (
-                <form onSubmit={handleVerifyOtp} className="space-y-6 animate-slide-in-right">
-                    <div className="text-center"><p className="text-sm text-gray-500 font-medium mb-1">{t.otpSentTo}</p><p className="text-lg font-bold text-gray-800 tracking-wide">+91 {mobileNumber}</p></div>
-                    <div className="relative"><input type="text" maxLength={6} className="w-full bg-gray-50 border-2 border-emerald-100 rounded-2xl p-4 text-center text-3xl font-bold tracking-[0.5em] text-emerald-800 outline-none focus:bg-white focus:border-emerald-500 transition-all" placeholder="••••••" value={enteredOtp} onChange={e => setEnteredOtp(e.target.value.replace(/\D/g, ''))} /></div>
-                    <button type="submit" className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold text-lg shadow-lg hover:bg-emerald-700 transition-all">{authView === 'signin' ? t.verifyLogin : t.verifyRegister}</button>
-                    <button type="button" onClick={() => setOtpSent(false)} className="w-full text-sm text-emerald-600 font-bold hover:underline">Change Mobile Number</button>
-                </form>
-            )}
-            
-            <div className="text-center mt-8 pt-6 border-t border-gray-100">
-                <button onClick={() => { setAuthView(authView === 'signin' ? 'signup' : 'signin'); setOtpSent(false); }} className="text-gray-500 font-medium hover:text-emerald-700 transition-colors text-sm">
-                    {authView === 'signin' ? t.newHere : t.alreadyHaveAccount} <span className="font-bold text-emerald-700 underline decoration-2 underline-offset-4 ml-1">{authView === 'signin' ? t.createAccount : t.signIn}</span>
-                </button>
-            </div>
+            <button
+              onClick={handleGoogleSignIn}
+              disabled={isSigningIn}
+              className="w-full bg-white text-gray-700 py-4 rounded-2xl font-bold text-lg shadow-lg hover:shadow-xl transition-all border-2 border-gray-200 flex items-center justify-center gap-3 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSigningIn ? (
+                <Loader2 size={24} className="animate-spin" />
+              ) : (
+                <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+              )}
+              {language === 'en' ? 'Continue with Google' : 'Google के साथ जारी रखें'}
+            </button>
         </div>
       </div>
     );
@@ -710,6 +678,73 @@ const AppContent: React.FC = () => {
             <button onClick={() => setActiveTab('wallet')} className={`flex flex-col items-center gap-1 ${activeTab === 'wallet' ? 'text-emerald-700' : 'text-gray-400'}`}><Wallet size={24} /><span className="text-xs font-medium">{t.navWallet}</span></button>
             <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-1 ${activeTab === 'profile' ? 'text-emerald-700' : 'text-gray-400'}`}><UserCircle size={24} /><span className="text-xs font-medium">{t.navProfile}</span></button>
         </nav>
+
+        {/* Profile Completion Modal */}
+        {showProfileCompletion && (
+            <div className="fixed inset-0 bg-black/70 z-[70] flex items-center justify-center p-4 backdrop-blur-sm">
+                <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl animate-pop">
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">{language === 'en' ? 'Complete Your Profile' : 'अपनी प्रोफ़ाइल पूर्ण करें'}</h2>
+                    <p className="text-gray-600 text-sm mb-6">
+                      {language === 'en' ? 'Please provide your phone number and location to continue' : 'जारी रखने के लिए कृपया अपना फ़ोन नंबर और स्थान प्रदान करें'}
+                    </p>
+
+                    <form onSubmit={handleCompleteProfile} className="space-y-4">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wide ml-1">{t.mobileNumber}</label>
+                            <div className="relative group">
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-700 font-bold border-r border-emerald-100 pr-3">+91</span>
+                                <input
+                                  type="tel"
+                                  required
+                                  maxLength={10}
+                                  className="w-full bg-white border-2 border-emerald-100/80 rounded-2xl p-4 pl-16 text-lg font-semibold outline-none focus:border-emerald-500 transition-all placeholder-gray-300 shadow-sm"
+                                  value={phoneNumber}
+                                  onChange={e => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
+                                  placeholder="98765 43210"
+                                />
+                                <Phone size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wide ml-1">{t.cityVillage}</label>
+                            <div className="relative group">
+                                <MapPin size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                                <input
+                                  type="text"
+                                  required
+                                  className="w-full bg-white border-2 border-emerald-100/80 rounded-2xl p-4 pl-12 font-medium outline-none focus:border-emerald-500 transition-all placeholder-gray-400 shadow-sm"
+                                  placeholder={t.cityVillage}
+                                  value={profileLocation}
+                                  onChange={e => setProfileLocation(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsGettingLocation(true);
+                            getDeviceLocation(setProfileCoords, () => setIsGettingLocation(false));
+                          }}
+                          className={`w-full py-3 rounded-2xl border-2 border-dashed flex items-center justify-center gap-2 text-sm font-bold transition-all ${
+                            profileCoords ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'border-gray-300 text-gray-500 hover:bg-gray-50'
+                          }`}
+                        >
+                          {isGettingLocation ? <Loader2 size={16} className="animate-spin" /> : <Navigation size={16} />}
+                          {profileCoords ? t.locationCaptured : t.useGps}
+                        </button>
+
+                        <button
+                          type="submit"
+                          className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold text-lg shadow-lg hover:bg-emerald-700 transition-all"
+                        >
+                          {language === 'en' ? 'Continue' : 'जारी रखें'}
+                        </button>
+                    </form>
+                </div>
+            </div>
+        )}
 
         {/* Global Modals */}
         {showSubscriptionModal && (

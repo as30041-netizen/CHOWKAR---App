@@ -1,148 +1,109 @@
 import { supabase } from '../lib/supabase';
 import { User, Coordinates } from '../types';
 
-export interface SignUpData {
-  phone: string;
-  name: string;
-  location: string;
-  coordinates?: Coordinates;
-}
-
-// For development/testing: Mock OTP verification
-// In production, this would integrate with an SMS provider
-export const sendOTP = async (phone: string): Promise<{ success: boolean; error?: string }> => {
+export const signInWithGoogle = async (): Promise<{ success: boolean; error?: string }> => {
   try {
-    // TODO: Integrate with SMS provider (Twilio, MSG91, etc.)
-    // For now, we'll just return success
-    console.log(`OTP would be sent to: ${phone}`);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        }
+      }
+    });
+
+    if (error) throw error;
     return { success: true };
   } catch (error) {
-    console.error('Error sending OTP:', error);
-    return { success: false, error: 'Failed to send OTP' };
+    console.error('Error signing in with Google:', error);
+    return { success: false, error: 'Failed to sign in with Google' };
   }
 };
 
-// Verify OTP and sign in/sign up
-export const verifyOTP = async (
-  phone: string,
-  otp: string,
-  signUpData?: SignUpData
-): Promise<{ success: boolean; user?: User; error?: string }> => {
+export const signOut = async (): Promise<{ success: boolean; error?: string }> => {
   try {
-    // For development: Accept 123456 as valid OTP
-    if (otp !== '123456') {
-      return { success: false, error: 'Invalid OTP' };
-    }
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+    return { success: true };
+  } catch (error) {
+    console.error('Error signing out:', error);
+    return { success: false, error: 'Failed to sign out' };
+  }
+};
 
-    // Check if user exists
-    const { data: existingProfile, error: profileError } = await supabase
+export const getCurrentUser = async (): Promise<{ user: User | null; error?: string }> => {
+  try {
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+
+    if (authError) throw authError;
+    if (!authUser) return { user: null };
+
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('*')
-      .eq('phone', phone)
+      .eq('auth_user_id', authUser.id)
       .maybeSingle();
 
-    if (profileError && profileError.code !== 'PGRST116') {
-      throw profileError;
-    }
+    if (profileError) throw profileError;
+    if (!profile) return { user: null };
 
-    if (existingProfile) {
-      // User exists - sign in
-      // Create a session using Supabase auth
-      // For now, we'll use a mock user ID based on phone
-      const mockUserId = `user_${phone.replace(/\D/g, '')}`;
+    const user: User = {
+      id: profile.id,
+      name: profile.name,
+      phone: profile.phone || '',
+      email: profile.email || authUser.email || '',
+      location: profile.location,
+      coordinates: profile.latitude && profile.longitude
+        ? { lat: Number(profile.latitude), lng: Number(profile.longitude) }
+        : undefined,
+      walletBalance: profile.wallet_balance,
+      rating: Number(profile.rating),
+      profilePhoto: profile.profile_photo || undefined,
+      isPremium: profile.is_premium,
+      aiUsageCount: profile.ai_usage_count,
+      bio: profile.bio || undefined,
+      skills: profile.skills || [],
+      experience: profile.experience || undefined,
+      jobsCompleted: profile.jobs_completed,
+      joinDate: new Date(profile.join_date).getTime(),
+      reviews: []
+    };
 
-      const user: User = {
-        id: existingProfile.id,
-        name: existingProfile.name,
-        phone: existingProfile.phone,
-        location: existingProfile.location,
-        coordinates: existingProfile.latitude && existingProfile.longitude
-          ? { lat: Number(existingProfile.latitude), lng: Number(existingProfile.longitude) }
-          : undefined,
-        walletBalance: existingProfile.wallet_balance,
-        rating: Number(existingProfile.rating),
-        profilePhoto: existingProfile.profile_photo || undefined,
-        isPremium: existingProfile.is_premium,
-        aiUsageCount: existingProfile.ai_usage_count,
-        bio: existingProfile.bio || undefined,
-        skills: existingProfile.skills || [],
-        experience: existingProfile.experience || undefined,
-        jobsCompleted: existingProfile.jobs_completed,
-        joinDate: new Date(existingProfile.join_date).getTime(),
-        reviews: [] // Load reviews separately if needed
-      };
-
-      return { success: true, user };
-    } else {
-      // User doesn't exist - sign up
-      if (!signUpData) {
-        return { success: false, error: 'Sign up data required' };
-      }
-
-      // Generate a unique user ID
-      const userId = crypto.randomUUID();
-
-      // Create profile
-      const { data: newProfile, error: insertError } = await supabase
-        .from('profiles')
-        .insert({
-          id: userId,
-          name: signUpData.name,
-          phone: signUpData.phone,
-          location: signUpData.location,
-          latitude: signUpData.coordinates?.lat,
-          longitude: signUpData.coordinates?.lng,
-          wallet_balance: 100, // Welcome bonus
-          rating: 5.0,
-          is_premium: false,
-          ai_usage_count: 0,
-          jobs_completed: 0
-        })
-        .select()
-        .single();
-
-      if (insertError) throw insertError;
-
-      // Create welcome transaction
-      await supabase
-        .from('transactions')
-        .insert({
-          user_id: userId,
-          amount: 100,
-          type: 'CREDIT',
-          description: 'Welcome Bonus'
-        });
-
-      const user: User = {
-        id: newProfile.id,
-        name: newProfile.name,
-        phone: newProfile.phone,
-        location: newProfile.location,
-        coordinates: newProfile.latitude && newProfile.longitude
-          ? { lat: Number(newProfile.latitude), lng: Number(newProfile.longitude) }
-          : undefined,
-        walletBalance: newProfile.wallet_balance,
-        rating: Number(newProfile.rating),
-        profilePhoto: newProfile.profile_photo || undefined,
-        isPremium: newProfile.is_premium,
-        aiUsageCount: newProfile.ai_usage_count,
-        bio: newProfile.bio || undefined,
-        skills: newProfile.skills || [],
-        experience: newProfile.experience || undefined,
-        jobsCompleted: newProfile.jobs_completed,
-        joinDate: new Date(newProfile.join_date).getTime(),
-        reviews: []
-      };
-
-      return { success: true, user };
-    }
+    return { user };
   } catch (error) {
-    console.error('Error verifying OTP:', error);
-    return { success: false, error: 'Authentication failed' };
+    console.error('Error getting current user:', error);
+    return { user: null, error: 'Failed to get current user' };
   }
 };
 
-// Update user profile
+export const completeProfile = async (
+  userId: string,
+  phone: string,
+  location: string,
+  coordinates?: Coordinates
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        phone,
+        location,
+        latitude: coordinates?.lat,
+        longitude: coordinates?.lng
+      })
+      .eq('id', userId);
+
+    if (error) throw error;
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error completing profile:', error);
+    return { success: false, error: 'Failed to complete profile' };
+  }
+};
+
 export const updateUserProfile = async (
   userId: string,
   updates: Partial<User>
@@ -152,6 +113,7 @@ export const updateUserProfile = async (
       .from('profiles')
       .update({
         name: updates.name,
+        email: updates.email,
         phone: updates.phone,
         location: updates.location,
         latitude: updates.coordinates?.lat,

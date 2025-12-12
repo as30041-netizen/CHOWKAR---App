@@ -2,7 +2,7 @@ import React, { createContext, useState, useContext, ReactNode, useEffect } from
 import { User, UserRole, Transaction, Notification, ChatMessage } from '../types';
 import { MOCK_USER, TRANSLATIONS, FREE_AI_USAGE_LIMIT } from '../constants';
 import { supabase } from '../lib/supabase';
-import {updateWalletBalance, incrementAIUsage as incrementAIUsageDB, updateUserProfile } from '../services/authService';
+import {updateWalletBalance, incrementAIUsage as incrementAIUsageDB, updateUserProfile, getCurrentUser, signOut } from '../services/authService';
 
 interface UserContextType {
   user: User;
@@ -56,12 +56,51 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [currentAlert, setCurrentAlert] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   // Persistence Effects (only for preferences)
   useEffect(() => localStorage.setItem('chowkar_user', JSON.stringify(user)), [user]);
   useEffect(() => localStorage.setItem('chowkar_role', JSON.stringify(role)), [role]);
   useEffect(() => localStorage.setItem('chowkar_language', JSON.stringify(language)), [language]);
   useEffect(() => localStorage.setItem('chowkar_isLoggedIn', JSON.stringify(isLoggedIn)), [isLoggedIn]);
+
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const { user: currentUser } = await getCurrentUser();
+        if (currentUser) {
+          setUser(currentUser);
+          setIsLoggedIn(true);
+        }
+      } catch (error) {
+        console.error('Error checking session:', error);
+      } finally {
+        setIsAuthLoading(false);
+      }
+    };
+
+    checkSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        const { user: currentUser } = await getCurrentUser();
+        if (currentUser) {
+          setUser(currentUser);
+          setIsLoggedIn(true);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setUser(MOCK_USER);
+        setIsLoggedIn(false);
+        setTransactions([]);
+        setNotifications([]);
+        setMessages([]);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // Fetch user data from database when logged in
   useEffect(() => {
@@ -289,7 +328,8 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await signOut();
     setIsLoggedIn(false);
     setUser(MOCK_USER);
     setTransactions([]);
