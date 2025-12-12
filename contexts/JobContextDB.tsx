@@ -87,12 +87,12 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setJobs(prev => [job, ...prev]);
 
       // Save to database
-      const { error } = await createJobDB(job);
+      const { success, error } = await createJobDB(job);
 
-      if (error) {
+      if (!success || error) {
         // Rollback on error
         setJobs(prev => prev.filter(j => j.id !== job.id));
-        throw new Error(error);
+        throw new Error(error || 'Failed to create job');
       }
     } catch (err) {
       console.error('Error adding job:', err);
@@ -107,12 +107,12 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setJobs(prev => prev.map(j => j.id === updatedJob.id ? updatedJob : j));
 
       // Save to database
-      const { error } = await updateJobDB(updatedJob);
+      const { success, error } = await updateJobDB(updatedJob);
 
-      if (error) {
+      if (!success || error) {
         // Rollback on error
         setJobs(previousJobs);
-        throw new Error(error);
+        throw new Error(error || 'Failed to update job');
       }
     } catch (err) {
       console.error('Error updating job:', err);
@@ -127,12 +127,12 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setJobs(prev => prev.filter(j => j.id !== jobId));
 
       // Delete from database
-      const { error } = await deleteJobDB(jobId);
+      const { success, error } = await deleteJobDB(jobId);
 
-      if (error) {
+      if (!success || error) {
         // Rollback on error
         setJobs(previousJobs);
-        throw new Error(error);
+        throw new Error(error || 'Failed to delete job');
       }
     } catch (err) {
       console.error('Error deleting job:', err);
