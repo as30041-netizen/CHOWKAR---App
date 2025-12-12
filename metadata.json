@@ -1,0 +1,8 @@
+{
+  "name": "CHOWKAR - Local Work",
+  "description": "CHOWKAR by Jyorick - A hyperlocal marketplace connecting local workers with employers.",
+  "requestFramePermissions": [
+    "geolocation",
+    "microphone"
+  ]
+}
