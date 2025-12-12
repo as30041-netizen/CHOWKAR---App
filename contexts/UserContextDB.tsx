@@ -2,7 +2,7 @@ import React, { createContext, useState, useContext, ReactNode, useEffect } from
 import { User, UserRole, Transaction, Notification, ChatMessage } from '../types';
 import { MOCK_USER, TRANSLATIONS, FREE_AI_USAGE_LIMIT } from '../constants';
 import { supabase } from '../lib/supabase';
-import {updateWalletBalance, incrementAIUsage as incrementAIUsageDB, updateUserProfile, getCurrentUser, signOut } from '../services/authService';
+import { updateWalletBalance, incrementAIUsage as incrementAIUsageDB, updateUserProfile, getCurrentUser, signOut } from '../services/authService';
 
 interface UserContextType {
   user: User;
@@ -58,7 +58,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
-  const [currentAlert, setCurrentAlert] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
+  const [currentAlert, setCurrentAlert] = useState<{ message: string, type: 'success' | 'error' | 'info' } | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [loadingMessage, setLoadingMessage] = useState('Initializing...');
   const [hasInitialized, setHasInitialized] = useState(false);
@@ -114,7 +114,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }, 10000); // 10 second timeout
 
           try {
-            const { user: currentUser, error} = await getCurrentUser();
+            const { user: currentUser, error } = await getCurrentUser();
             clearTimeout(timeoutId);
 
             if (error) {
@@ -279,7 +279,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const { data: userJobs, error: jobsError } = await supabase
         .from('jobs')
         .select('id')
-        .eq('user_id', user.id);
+        .eq('poster_id', user.id);
 
       if (jobsError) {
         console.error('[Data] Error fetching user jobs:', jobsError);
@@ -302,10 +302,10 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       const { data: messagesData, error: msgError } = jobIds.length > 0
         ? await supabase
-            .from('chat_messages')
-            .select('*')
-            .in('job_id', jobIds)
-            .order('created_at', { ascending: true })
+          .from('chat_messages')
+          .select('*')
+          .in('job_id', jobIds)
+          .order('created_at', { ascending: true })
         : { data: [], error: null };
 
       if (msgError) throw msgError;
