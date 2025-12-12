@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { UserProvider, useUser } from './contexts/UserContext';
-import { JobProvider, useJobs } from './contexts/JobContext';
+import React, { useState, useEffect } from 'react';
+import { UserProvider, useUser } from './contexts/UserContextDB';
+import { JobProvider, useJobs } from './contexts/JobContextDB';
 import { Job, Bid, ChatMessage, UserRole, JobStatus, Transaction, Coordinates, Notification, Review, User } from './types';
 import { CATEGORIES, POSTER_FEE, WORKER_COMMISSION_RATE, CATEGORY_TRANSLATIONS, REVIEW_TAGS, REVIEW_TAGS_TRANSLATIONS } from './constants';
 import { JobCard } from './components/JobCard';
@@ -10,6 +10,8 @@ import { WalletView } from './components/WalletView';
 import { LeafletMap } from './components/LeafletMap';
 import { enhanceBidMessageStream, translateText } from './services/geminiService';
 import { getDeviceLocation, calculateDistance } from './utils/geo';
+import { signInWithGoogle, completeProfile } from './services/authService';
+import { supabase } from './lib/supabase';
 import { 
   MapPin, LayoutGrid, Plus, Wallet, UserCircle, Search, SlidersHorizontal, 
   ArrowLeftRight, Bell, MessageCircle, Languages, Loader2, Navigation, 
@@ -21,25 +23,24 @@ import {
 } from 'lucide-react';
 
 const AppContent: React.FC = () => {
-  const { 
-    user, setUser, role, setRole, language, setLanguage, isLoggedIn, setIsLoggedIn, 
-    transactions, setTransactions, notifications, setNotifications, messages, setMessages, 
-    addNotification, checkFreeLimit, incrementAiUsage, logout, t, 
+  const {
+    user, setUser, role, setRole, language, setLanguage, isLoggedIn, setIsLoggedIn, isAuthLoading,
+    loadingMessage, retryAuth,
+    transactions, setTransactions, notifications, setNotifications, messages, setMessages,
+    addNotification, checkFreeLimit, incrementAiUsage, logout, t,
     showSubscriptionModal, setShowSubscriptionModal,
-    showAlert, currentAlert
+    showAlert, currentAlert, updateUserInDB
   } = useUser();
   
   const { jobs, setJobs, updateJob, deleteJob } = useJobs();
 
   // --- Auth State ---
-  const [authView, setAuthView] = useState<'signin' | 'signup'>('signin');
-  const [mobileNumber, setMobileNumber] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [enteredOtp, setEnteredOtp] = useState('');
-  const [regName, setRegName] = useState('');
-  const [regLocation, setRegLocation] = useState('');
-  const [regCoords, setRegCoords] = useState<Coordinates | undefined>(undefined);
+  const [showProfileCompletion, setShowProfileCompletion] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [profileLocation, setProfileLocation] = useState('');
+  const [profileCoords, setProfileCoords] = useState<Coordinates | undefined>(undefined);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [isSigningIn, setIsSigningIn] = useState(false);
 
   // --- UI State ---
   const [activeTab, setActiveTab] = useState<'home' | 'post' | 'wallet' | 'profile'>('home');
@@ -99,48 +100,56 @@ const AppContent: React.FC = () => {
   const unreadCount = notifications.filter(n => n.userId === user.id && !n.read).length;
   const postedJobsCount = jobs.filter(j => j.posterId === user.id).length;
 
+  useEffect(() => {
+    if (isLoggedIn && user.id && (!user.phone || user.location === 'Not set')) {
+      setShowProfileCompletion(true);
+    }
+  }, [isLoggedIn, user.id, user.phone, user.location]);
+
+  // Reset signing in state when auth completes
+  useEffect(() => {
+    if (isLoggedIn) {
+      setIsSigningIn(false);
+    }
+  }, [isLoggedIn]);
+
   // --- Handlers ---
-  const handleSendOtp = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (mobileNumber.length >= 10) setOtpSent(true);
-    else showAlert(t.alertInvalidMobile, 'error');
+  const handleGoogleSignIn = async () => {
+    console.log('[UI] Starting Google sign-in...');
+    setIsSigningIn(true);
+    const result = await signInWithGoogle();
+    if (!result.success) {
+      console.error('[UI] Sign-in failed:', result.error);
+      showAlert(result.error || 'Failed to sign in', 'error');
+      setIsSigningIn(false);
+    }
   };
 
-  const handleVerifyOtp = (e: React.FormEvent) => {
+  const handleCompleteProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (enteredOtp === '123456') {
-      if (authView === 'signup') {
-        const newUser: User = {
-            id: `u${Date.now()}`,
-            name: regName || 'New User',
-            phone: mobileNumber,
-            location: regLocation || 'India',
-            coordinates: regCoords,
-            walletBalance: 100,
-            rating: 5.0,
-            jobsCompleted: 0,
-            skills: [],
-            isPremium: false,
-            aiUsageCount: 0,
-            joinDate: Date.now(),
-            reviews: []
-        };
-        setUser(newUser);
-        setTransactions([{ id: `t${Date.now()}`, userId: newUser.id, amount: 100, type: 'CREDIT', description: 'Welcome Bonus', timestamp: Date.now() }]);
-        addNotification(newUser.id, t.notifWelcome, t.notifWelcomeBody, "SUCCESS");
-      }
-      setIsLoggedIn(true);
+    if (!phoneNumber || !profileLocation) {
+      showAlert('Please fill in all required fields', 'error');
+      return;
+    }
+
+    const result = await completeProfile(user.id, phoneNumber, profileLocation, profileCoords);
+    if (result.success) {
+      setShowProfileCompletion(false);
+      setUser(prev => ({
+        ...prev,
+        phone: phoneNumber,
+        location: profileLocation,
+        coordinates: profileCoords
+      }));
+      await addNotification(user.id, t.notifWelcome, t.notifWelcomeBody, "SUCCESS");
+      showAlert('Profile completed successfully!', 'success');
     } else {
-      showAlert(t.alertInvalidOtp, 'error');
+      showAlert(result.error || 'Failed to complete profile', 'error');
     }
   };
 
   const handleLogout = () => {
       logout();
-      setAuthView('signin');
-      setOtpSent(false);
-      setEnteredOtp('');
-      setMobileNumber('');
   };
 
   const handleEnhanceBid = async () => {
@@ -160,14 +169,14 @@ const AppContent: React.FC = () => {
     incrementAiUsage();
   };
 
-  const handlePlaceBid = () => {
+  const handlePlaceBid = async () => {
     if (!bidModalOpen.jobId || !bidAmount) return;
     const commission = Math.ceil(parseInt(bidAmount) * WORKER_COMMISSION_RATE);
     if (user.walletBalance < commission) {
         showAlert(`${t.alertInsufficientBalance}${commission}`, 'error');
         return;
     }
-    
+
     const job = jobs.find(j => j.id === bidModalOpen.jobId);
     if (!job) return;
 
@@ -192,17 +201,22 @@ const AppContent: React.FC = () => {
         }]
     };
 
-    updateJob({ ...job, bids: [...job.bids, newBid] });
-    setBidModalOpen({ isOpen: false, jobId: null });
-    setBidAmount('');
-    setBidMessage('');
-    if (selectedJob) setSelectedJob(null);
-    
-    addNotification(job.posterId, t.notifBidReceived, `${user.name}: ₹${bidAmount}`, "INFO", job.id);
-    showAlert(t.alertBidPlaced, 'success');
+    try {
+      await updateJob({ ...job, bids: [...job.bids, newBid] });
+      setBidModalOpen({ isOpen: false, jobId: null });
+      setBidAmount('');
+      setBidMessage('');
+      if (selectedJob) setSelectedJob(null);
+
+      await addNotification(job.posterId, t.notifBidReceived, `${user.name}: ₹${bidAmount}`, "INFO", job.id);
+      showAlert(t.alertBidPlaced, 'success');
+    } catch (error) {
+      console.error('Error placing bid:', error);
+      showAlert('Failed to place bid. Please try again.', 'error');
+    }
   };
 
-  const handleAcceptBid = (jobId: string, bidId: string, bidAmount: number, workerId: string) => {
+  const handleAcceptBid = async (jobId: string, bidId: string, bidAmount: number, workerId: string) => {
     if (user.walletBalance < POSTER_FEE) {
         showAlert(`${t.alertInsufficientBalance}${POSTER_FEE}`, 'error');
         return;
@@ -211,22 +225,34 @@ const AppContent: React.FC = () => {
     const job = jobs.find(j => j.id === jobId);
     if (!job) return;
 
-    const updatedBids = job.bids.map(b => 
-        b.id === bidId ? { ...b, status: 'ACCEPTED' as const } : { ...b, status: 'REJECTED' as const }
-    );
-    updateJob({ ...job, status: JobStatus.IN_PROGRESS, acceptedBidId: bidId, bids: updatedBids });
+    try {
+      const updatedBids = job.bids.map(b =>
+          b.id === bidId ? { ...b, status: 'ACCEPTED' as const } : { ...b, status: 'REJECTED' as const }
+      );
+      await updateJob({ ...job, status: JobStatus.IN_PROGRESS, acceptedBidId: bidId, bids: updatedBids });
 
-    const posterTx: Transaction = { id: `tx${Date.now()}p`, userId: user.id, amount: POSTER_FEE, type: 'DEBIT', description: t.alertBookingFee, timestamp: Date.now() };
-    const workerTx: Transaction = { id: `tx${Date.now()}w`, userId: workerId, amount: Math.ceil(bidAmount * WORKER_COMMISSION_RATE), type: 'DEBIT', description: 'Success Fee', timestamp: Date.now() };
-    
-    setUser(prev => ({ ...prev, walletBalance: prev.walletBalance - POSTER_FEE }));
-    setTransactions(prev => [posterTx, workerTx, ...prev]);
-    
-    setViewBidsModal({ isOpen: false, job: null });
-    if(selectedJob) setSelectedJob(null);
-    
-    addNotification(workerId, t.notifBidAccepted, t.notifBidAcceptedBody, "SUCCESS", jobId);
-    showAlert(t.contactUnlocked, 'success');
+      const newBalance = user.walletBalance - POSTER_FEE;
+
+      const posterTx: Transaction = { id: `tx${Date.now()}p`, userId: user.id, amount: POSTER_FEE, type: 'DEBIT', description: t.alertBookingFee, timestamp: Date.now() };
+      const workerTx: Transaction = { id: `tx${Date.now()}w`, userId: workerId, amount: Math.ceil(bidAmount * WORKER_COMMISSION_RATE), type: 'DEBIT', description: 'Success Fee', timestamp: Date.now() };
+
+      await supabase.from('transactions').insert([
+        { user_id: user.id, amount: POSTER_FEE, type: 'DEBIT', description: t.alertBookingFee },
+        { user_id: workerId, amount: Math.ceil(bidAmount * WORKER_COMMISSION_RATE), type: 'DEBIT', description: 'Success Fee' }
+      ]);
+
+      setUser(prev => ({ ...prev, walletBalance: newBalance }));
+      setTransactions(prev => [posterTx, workerTx, ...prev]);
+
+      setViewBidsModal({ isOpen: false, job: null });
+      if(selectedJob) setSelectedJob(null);
+
+      await addNotification(workerId, t.notifBidAccepted, t.notifBidAcceptedBody, "SUCCESS", jobId);
+      showAlert(t.contactUnlocked, 'success');
+    } catch (error) {
+      console.error('Error accepting bid:', error);
+      showAlert('Failed to accept bid. Please try again.', 'error');
+    }
   };
 
   const handleChatOpen = (job: Job) => {
@@ -247,54 +273,64 @@ const AppContent: React.FC = () => {
     ));
   };
 
-  const handleCounterByPoster = () => {
+  const handleCounterByPoster = async () => {
       if (!counterModalOpen.jobId || !counterModalOpen.bidId || !counterInputAmount) return;
       const newAmount = parseInt(counterInputAmount);
-      
+
       const job = jobs.find(j => j.id === counterModalOpen.jobId);
       if(job) {
-          const updatedBids = job.bids.map(b => {
-              if(b.id === counterModalOpen.bidId) {
-                  return {
-                      ...b,
-                      amount: newAmount,
-                      negotiationHistory: [...(b.negotiationHistory || []), {
-                          amount: newAmount,
-                          by: UserRole.POSTER,
-                          timestamp: Date.now()
-                      }]
-                  }
-              }
-              return b;
-          });
-          const updatedJob = { ...job, bids: updatedBids };
-          updateJob(updatedJob);
-          
-          if(viewBidsModal.isOpen) setViewBidsModal({ ...viewBidsModal, job: updatedJob });
-          const workerId = job.bids.find(b => b.id === counterModalOpen.bidId)?.workerId;
-          if(workerId) addNotification(workerId, t.notifCounterOffer, `${t.posterCountered}: ₹${newAmount}`, "INFO", job.id);
+          try {
+            const updatedBids = job.bids.map(b => {
+                if(b.id === counterModalOpen.bidId) {
+                    return {
+                        ...b,
+                        amount: newAmount,
+                        negotiationHistory: [...(b.negotiationHistory || []), {
+                            amount: newAmount,
+                            by: UserRole.POSTER,
+                            timestamp: Date.now()
+                        }]
+                    }
+                }
+                return b;
+            });
+            const updatedJob = { ...job, bids: updatedBids };
+            await updateJob(updatedJob);
+
+            if(viewBidsModal.isOpen) setViewBidsModal({ ...viewBidsModal, job: updatedJob });
+            const workerId = job.bids.find(b => b.id === counterModalOpen.bidId)?.workerId;
+            if(workerId) await addNotification(workerId, t.notifCounterOffer, `${t.posterCountered}: ₹${newAmount}`, "INFO", job.id);
+          } catch (error) {
+            console.error('Error making counter offer:', error);
+            showAlert('Failed to send counter offer. Please try again.', 'error');
+          }
       }
-      
+
       setCounterModalOpen({ isOpen: false, bidId: null, jobId: null });
       setCounterInputAmount('');
   };
 
-  const handleWorkerReplyToCounter = (jobId: string, bidId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', amount?: number) => {
+  const handleWorkerReplyToCounter = async (jobId: string, bidId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', amount?: number) => {
       const job = jobs.find(j => j.id === jobId);
       if(!job) return;
 
-      let updatedBids = job.bids;
-      if (action === 'ACCEPT') {
-          updatedBids = job.bids.map(b => b.id === bidId ? { ...b, negotiationHistory: [...(b.negotiationHistory || []), { amount: b.amount, by: UserRole.WORKER, timestamp: Date.now(), message: "Accepted Counter Offer" }] } : b);
-          addNotification(job.posterId, "Counter Accepted", "Worker accepted your offer. Please finalize hiring.", "SUCCESS", jobId);
-      } else if (action === 'REJECT') {
-          updatedBids = job.bids.filter(b => b.id !== bidId);
-          showAlert(t.alertJobDeleted, 'info'); 
-      } else if (action === 'COUNTER' && amount) {
-          updatedBids = job.bids.map(b => b.id === bidId ? { ...b, amount, negotiationHistory: [...(b.negotiationHistory || []), { amount, by: UserRole.WORKER, timestamp: Date.now() }] } : b);
-          addNotification(job.posterId, t.notifCounterOffer, `Worker countered: ₹${amount}`, "INFO", jobId);
+      try {
+        let updatedBids = job.bids;
+        if (action === 'ACCEPT') {
+            updatedBids = job.bids.map(b => b.id === bidId ? { ...b, negotiationHistory: [...(b.negotiationHistory || []), { amount: b.amount, by: UserRole.WORKER, timestamp: Date.now(), message: "Accepted Counter Offer" }] } : b);
+            await addNotification(job.posterId, "Counter Accepted", "Worker accepted your offer. Please finalize hiring.", "SUCCESS", jobId);
+        } else if (action === 'REJECT') {
+            updatedBids = job.bids.filter(b => b.id !== bidId);
+            showAlert(t.alertJobDeleted, 'info');
+        } else if (action === 'COUNTER' && amount) {
+            updatedBids = job.bids.map(b => b.id === bidId ? { ...b, amount, negotiationHistory: [...(b.negotiationHistory || []), { amount, by: UserRole.WORKER, timestamp: Date.now() }] } : b);
+            await addNotification(job.posterId, t.notifCounterOffer, `Worker countered: ₹${amount}`, "INFO", jobId);
+        }
+        await updateJob({ ...job, bids: updatedBids });
+      } catch (error) {
+        console.error('Error replying to counter offer:', error);
+        showAlert('Failed to process counter offer. Please try again.', 'error');
       }
-      updateJob({ ...job, bids: updatedBids });
   };
 
   const toggleVoiceInput = (mode: 'description' | 'search') => {
@@ -334,19 +370,34 @@ const AppContent: React.FC = () => {
     setSelectedJob(null);
   };
 
-  const handleUpdateJob = () => {
+  const handleUpdateJob = async () => {
     if (!editingJob || !editTitle || !editDesc || !editBudget) return;
-    updateJob({ ...editingJob, title: editTitle, description: editDesc, category: editCategory, jobDate: editDate, duration: editDuration, budget: parseInt(editBudget) });
-    setEditingJob(null);
-    addNotification(user.id, t.alertJobUpdated, t.alertJobUpdated, "SUCCESS");
+    try {
+      await updateJob({ ...editingJob, title: editTitle, description: editDesc, category: editCategory, jobDate: editDate, duration: editDuration, budget: parseInt(editBudget) });
+      setEditingJob(null);
+      await addNotification(user.id, t.alertJobUpdated, t.alertJobUpdated, "SUCCESS");
+      showAlert(t.alertJobUpdated, 'success');
+    } catch (error) {
+      console.error('Error updating job:', error);
+      showAlert('Failed to update job. Please try again.', 'error');
+    }
   };
 
-  const handleDeleteJob = (e: React.MouseEvent, jobId: string) => {
+  const handleDeleteJob = async (e: React.MouseEvent, jobId: string) => {
     e.stopPropagation();
     const job = jobs.find(j => j.id === jobId);
     if (!job) return;
     if (job.status !== JobStatus.OPEN) { showAlert(t.alertCantDeleteProgress, 'error'); return; }
-    if (window.confirm(t.alertConfirmDelete)) { deleteJob(jobId); setSelectedJob(null); showAlert(t.alertJobDeleted, 'success'); }
+    if (window.confirm(t.alertConfirmDelete)) {
+      try {
+        await deleteJob(jobId);
+        setSelectedJob(null);
+        showAlert(t.alertJobDeleted, 'success');
+      } catch (error) {
+        console.error('Error deleting job:', error);
+        showAlert('Failed to delete job. Please try again.', 'error');
+      }
+    }
   };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -358,18 +409,79 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const handleSubmitReview = () => {
+  const handleSubmitReview = async () => {
      if (reviewRating === 0) { showAlert("Please select a rating.", 'error'); return; }
-     const newReview: Review = { id: `rev${Date.now()}`, reviewerId: user.id, reviewerName: user.name, rating: reviewRating, comment: reviewComment, date: Date.now(), tags: reviewTags };
-     if (reviewTarget && reviewTarget.id === user.id) { setUser(prev => ({ ...prev, reviews: [newReview, ...(prev.reviews || [])] })); }
-     addNotification(reviewTarget!.id, "New Review", `You received a ${reviewRating} star review from ${user.name}!`, "SUCCESS");
-     setReviewModalOpen(false); showAlert(t.reviewSubmitted, 'success');
+     if (!reviewTarget) { showAlert("No review target selected.", 'error'); return; }
+
+     try {
+       // Insert review into database
+       const { error } = await supabase
+         .from('reviews')
+         .insert({
+           reviewer_id: user.id,
+           reviewee_id: reviewTarget.id,
+           job_id: selectedJob?.id || null,
+           rating: reviewRating,
+           comment: reviewComment || null,
+           tags: reviewTags.length > 0 ? reviewTags : null
+         });
+
+       if (error) throw error;
+
+       await addNotification(reviewTarget.id, "New Review", `You received a ${reviewRating} star review from ${user.name}!`, "SUCCESS");
+       setReviewModalOpen(false);
+       showAlert(t.reviewSubmitted, 'success');
+     } catch (error) {
+       console.error('Error submitting review:', error);
+       showAlert('Failed to submit review. Please try again.', 'error');
+     }
   };
   
-  const handleSaveProfile = () => {
-    setUser({ ...user, name: editProfileName, phone: editProfilePhone, location: editProfileLocation, bio: editProfileBio, experience: editProfileExp, skills: editProfileSkills.split(',').map(s => s.trim()).filter(s => s), profilePhoto: editProfilePhoto });
-    setShowEditProfile(false); addNotification(user.id, t.notifProfileUpdated, t.notifProfileUpdatedBody, "SUCCESS");
+  const handleSaveProfile = async () => {
+    try {
+      const updates = {
+        name: editProfileName,
+        phone: editProfilePhone,
+        location: editProfileLocation,
+        bio: editProfileBio,
+        experience: editProfileExp,
+        skills: editProfileSkills.split(',').map(s => s.trim()).filter(s => s),
+        profilePhoto: editProfilePhoto
+      };
+
+      await updateUserInDB(updates);
+      setShowEditProfile(false);
+      await addNotification(user.id, t.notifProfileUpdated, t.notifProfileUpdatedBody, "SUCCESS");
+      showAlert(t.notifProfileUpdated, 'success');
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      showAlert('Failed to update profile. Please try again.', 'error');
+    }
   };
+
+  // --- Loading Screen ---
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-green-50 to-teal-100 flex flex-col items-center justify-center p-6 font-sans text-gray-900">
+        <div className="flex flex-col items-center max-w-md w-full">
+          <div className="w-20 h-20 bg-gradient-to-tr from-emerald-100 to-green-50 rounded-full flex items-center justify-center mb-6 shadow-inner ring-4 ring-white animate-pulse">
+            <MapPin size={40} className="text-emerald-600 drop-shadow-sm" fill="#10b981" />
+          </div>
+          <h1 className="text-4xl font-black text-emerald-950 tracking-tighter drop-shadow-sm mb-2">CHOWKAR</h1>
+          <p className="text-sm text-emerald-700 font-medium mb-6">{loadingMessage}</p>
+          <Loader2 size={32} className="text-emerald-600 animate-spin mb-6" />
+          {loadingMessage.includes('timeout') || loadingMessage.includes('Error') || loadingMessage.includes('failed') ? (
+            <button
+              onClick={retryAuth}
+              className="mt-4 px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition-colors shadow-lg"
+            >
+              Retry Connection
+            </button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
 
   // --- Auth View ---
   if (!isLoggedIn) {
@@ -380,18 +492,17 @@ const AppContent: React.FC = () => {
           input::placeholder, textarea::placeholder { color: #9ca3af !important; }
           input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus, input:-webkit-autofill:active{ -webkit-box-shadow: 0 0 0 30px white inset !important; -webkit-text-fill-color: black !important; }
          `}</style>
-         
+
          <div className="absolute top-6 right-6 z-10">
             <button onClick={() => setLanguage(l => l === 'en' ? 'hi' : 'en')} className="flex items-center gap-1.5 bg-white/60 backdrop-blur-sm px-4 py-2 rounded-full border border-emerald-100 shadow-sm text-xs font-bold text-emerald-800 hover:bg-white transition-all">
                 <Languages size={14} /> {language === 'en' ? 'हिन्दी' : 'English'}
             </button>
         </div>
 
-        {/* Global Alert Toast */}
         {currentAlert && (
             <div className={`fixed top-20 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-full shadow-2xl font-bold text-sm flex items-center gap-3 animate-slide-down backdrop-blur-md border border-white/20 ${
-                currentAlert.type === 'error' ? 'bg-red-500/90 text-white' : 
-                currentAlert.type === 'success' ? 'bg-emerald-600/90 text-white' : 
+                currentAlert.type === 'error' ? 'bg-red-500/90 text-white' :
+                currentAlert.type === 'success' ? 'bg-emerald-600/90 text-white' :
                 'bg-gray-800/90 text-white'
             }`}>
                 {currentAlert.type === 'error' && <XCircle size={18} className="text-white/80"/>}
@@ -408,54 +519,29 @@ const AppContent: React.FC = () => {
                </div>
                <h1 className="text-4xl font-black text-emerald-950 tracking-tighter drop-shadow-sm">CHOWKAR</h1>
             </div>
-            
-            <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">{authView === 'signin' ? t.signIn : t.joinTitle}</h2>
-            
-            {!otpSent ? (
-                <form onSubmit={handleSendOtp} className="space-y-4">
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wide ml-1">{t.mobileNumber}</label>
-                        <div className="relative group">
-                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-700 font-bold border-r border-emerald-100 pr-3">+91</span>
-                            <input type="tel" required maxLength={10} className="w-full bg-white border-2 border-emerald-100/80 rounded-2xl p-4 pl-16 text-lg font-semibold outline-none focus:border-emerald-500 transition-all placeholder-gray-300 shadow-sm" value={mobileNumber} onChange={e => setMobileNumber(e.target.value.replace(/\D/g, ''))} placeholder="98765 43210" />
-                            <Phone size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                        </div>
-                    </div>
 
-                    {authView === 'signup' && (
-                        <div className="space-y-4 animate-slide-down">
-                            <div className="relative group">
-                                <UserCircle size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                                <input type="text" required className="w-full bg-white border-2 border-emerald-100/80 rounded-2xl p-4 pl-12 font-medium outline-none focus:border-emerald-500 transition-all placeholder-gray-400 shadow-sm" placeholder={t.fullName} value={regName} onChange={e => setRegName(e.target.value)} />
-                            </div>
-                            <div className="relative group">
-                                <MapPin size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                                <input type="text" required className="w-full bg-white border-2 border-emerald-100/80 rounded-2xl p-4 pl-12 font-medium outline-none focus:border-emerald-500 transition-all placeholder-gray-400 shadow-sm" placeholder={t.cityVillage} value={regLocation} onChange={e => setRegLocation(e.target.value)} />
-                            </div>
-                            <button type="button" onClick={() => { setIsGettingLocation(true); getDeviceLocation(setRegCoords, () => setIsGettingLocation(false)); }} className={`w-full py-3 rounded-2xl border-2 border-dashed flex items-center justify-center gap-2 text-sm font-bold transition-all ${regCoords ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'border-gray-300 text-gray-500 hover:bg-gray-50'}`}>
-                                {isGettingLocation ? <Loader2 size={16} className="animate-spin" /> : <Navigation size={16} />} {regCoords ? t.locationCaptured : t.useGps}
-                            </button>
-                        </div>
-                    )}
+            <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">{t.signIn}</h2>
+            <p className="text-center text-gray-600 text-sm mb-6">
+              {language === 'en' ? 'Sign in with your Google account to get started' : 'शुरू करने के लिए अपने Google खाते से साइन इन करें'}
+            </p>
 
-                    <button type="submit" className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold text-lg shadow-lg hover:translate-y-[-2px] transition-all mt-4">
-                        {t.getOtp} <ArrowUpRight size={20} className="inline ml-2" />
-                    </button>
-                </form>
-            ) : (
-                <form onSubmit={handleVerifyOtp} className="space-y-6 animate-slide-in-right">
-                    <div className="text-center"><p className="text-sm text-gray-500 font-medium mb-1">{t.otpSentTo}</p><p className="text-lg font-bold text-gray-800 tracking-wide">+91 {mobileNumber}</p></div>
-                    <div className="relative"><input type="text" maxLength={6} className="w-full bg-gray-50 border-2 border-emerald-100 rounded-2xl p-4 text-center text-3xl font-bold tracking-[0.5em] text-emerald-800 outline-none focus:bg-white focus:border-emerald-500 transition-all" placeholder="••••••" value={enteredOtp} onChange={e => setEnteredOtp(e.target.value.replace(/\D/g, ''))} /></div>
-                    <button type="submit" className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold text-lg shadow-lg hover:bg-emerald-700 transition-all">{authView === 'signin' ? t.verifyLogin : t.verifyRegister}</button>
-                    <button type="button" onClick={() => setOtpSent(false)} className="w-full text-sm text-emerald-600 font-bold hover:underline">Change Mobile Number</button>
-                </form>
-            )}
-            
-            <div className="text-center mt-8 pt-6 border-t border-gray-100">
-                <button onClick={() => { setAuthView(authView === 'signin' ? 'signup' : 'signin'); setOtpSent(false); }} className="text-gray-500 font-medium hover:text-emerald-700 transition-colors text-sm">
-                    {authView === 'signin' ? t.newHere : t.alreadyHaveAccount} <span className="font-bold text-emerald-700 underline decoration-2 underline-offset-4 ml-1">{authView === 'signin' ? t.createAccount : t.signIn}</span>
-                </button>
-            </div>
+            <button
+              onClick={handleGoogleSignIn}
+              disabled={isSigningIn}
+              className="w-full bg-white text-gray-700 py-4 rounded-2xl font-bold text-lg shadow-lg hover:shadow-xl transition-all border-2 border-gray-200 flex items-center justify-center gap-3 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSigningIn ? (
+                <Loader2 size={24} className="animate-spin" />
+              ) : (
+                <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+              )}
+              {language === 'en' ? 'Continue with Google' : 'Google के साथ जारी रखें'}
+            </button>
         </div>
       </div>
     );
@@ -647,6 +733,73 @@ const AppContent: React.FC = () => {
             <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-1 ${activeTab === 'profile' ? 'text-emerald-700' : 'text-gray-400'}`}><UserCircle size={24} /><span className="text-xs font-medium">{t.navProfile}</span></button>
         </nav>
 
+        {/* Profile Completion Modal */}
+        {showProfileCompletion && (
+            <div className="fixed inset-0 bg-black/70 z-[70] flex items-center justify-center p-4 backdrop-blur-sm">
+                <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl animate-pop">
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">{language === 'en' ? 'Complete Your Profile' : 'अपनी प्रोफ़ाइल पूर्ण करें'}</h2>
+                    <p className="text-gray-600 text-sm mb-6">
+                      {language === 'en' ? 'Please provide your phone number and location to continue' : 'जारी रखने के लिए कृपया अपना फ़ोन नंबर और स्थान प्रदान करें'}
+                    </p>
+
+                    <form onSubmit={handleCompleteProfile} className="space-y-4">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wide ml-1">{t.mobileNumber}</label>
+                            <div className="relative group">
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-700 font-bold border-r border-emerald-100 pr-3">+91</span>
+                                <input
+                                  type="tel"
+                                  required
+                                  maxLength={10}
+                                  className="w-full bg-white border-2 border-emerald-100/80 rounded-2xl p-4 pl-16 text-lg font-semibold outline-none focus:border-emerald-500 transition-all placeholder-gray-300 shadow-sm"
+                                  value={phoneNumber}
+                                  onChange={e => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
+                                  placeholder="98765 43210"
+                                />
+                                <Phone size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wide ml-1">{t.cityVillage}</label>
+                            <div className="relative group">
+                                <MapPin size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                                <input
+                                  type="text"
+                                  required
+                                  className="w-full bg-white border-2 border-emerald-100/80 rounded-2xl p-4 pl-12 font-medium outline-none focus:border-emerald-500 transition-all placeholder-gray-400 shadow-sm"
+                                  placeholder={t.cityVillage}
+                                  value={profileLocation}
+                                  onChange={e => setProfileLocation(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsGettingLocation(true);
+                            getDeviceLocation(setProfileCoords, () => setIsGettingLocation(false));
+                          }}
+                          className={`w-full py-3 rounded-2xl border-2 border-dashed flex items-center justify-center gap-2 text-sm font-bold transition-all ${
+                            profileCoords ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'border-gray-300 text-gray-500 hover:bg-gray-50'
+                          }`}
+                        >
+                          {isGettingLocation ? <Loader2 size={16} className="animate-spin" /> : <Navigation size={16} />}
+                          {profileCoords ? t.locationCaptured : t.useGps}
+                        </button>
+
+                        <button
+                          type="submit"
+                          className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold text-lg shadow-lg hover:bg-emerald-700 transition-all"
+                        >
+                          {language === 'en' ? 'Continue' : 'जारी रखें'}
+                        </button>
+                    </form>
+                </div>
+            </div>
+        )}
+
         {/* Global Modals */}
         {showSubscriptionModal && (
             <div className="fixed inset-0 bg-black/70 z-[60] flex items-end sm:items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
@@ -662,7 +815,47 @@ const AppContent: React.FC = () => {
                 </div>
             </div>
         )}
-        
+
+        {/* Filter Modal */}
+        {showFilterModal && (
+            <div className="fixed inset-0 bg-black/70 z-[60] flex items-end sm:items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
+                <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-pop relative">
+                    <button onClick={() => setShowFilterModal(false)} className="absolute top-3 right-3 bg-black/10 p-1.5 rounded-full hover:bg-black/20 transition-colors z-20"><X size={20}/></button>
+                    <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 p-6 text-white relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+                        <h2 className="text-xl font-bold mb-1 flex items-center gap-2"><SlidersHorizontal size={24} /> Filter Jobs</h2>
+                        <p className="text-sm text-emerald-100">Refine your job search</p>
+                    </div>
+                    <div className="p-5 space-y-4">
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">Location</label>
+                            <input
+                                type="text"
+                                value={filterLocation}
+                                onChange={(e) => setFilterLocation(e.target.value)}
+                                placeholder="Enter location..."
+                                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                            />
+                        </div>
+                        <div className="flex gap-3 pt-2">
+                            <button
+                                onClick={() => { setFilterLocation(''); setShowFilterModal(false); }}
+                                className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-200 transition-colors"
+                            >
+                                Clear Filters
+                            </button>
+                            <button
+                                onClick={() => setShowFilterModal(false)}
+                                className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white py-3 rounded-xl font-semibold hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg"
+                            >
+                                Apply Filters
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {/* Chat Interface */}
         {chatOpen.isOpen && chatOpen.job && (
             <ChatInterface 
@@ -670,16 +863,33 @@ const AppContent: React.FC = () => {
                 currentUser={user} 
                 onClose={() => setChatOpen({ isOpen: false, job: null })}
                 messages={messages.filter(m => m.jobId === chatOpen.job!.id)}
-                onSendMessage={(text) => {
+                onSendMessage={async (text) => {
                     const msg: ChatMessage = { id: `m${Date.now()}`, jobId: chatOpen.job!.id, senderId: user.id, text, timestamp: Date.now() };
-                    setMessages(prev => [...prev, msg]);
-                    setTimeout(() => setMessages(prev => [...prev, { id: `r${Date.now()}`, jobId: chatOpen.job!.id, senderId: 'other', text: 'Got it, thanks!', timestamp: Date.now() }]), 1500);
+
+                    try {
+                      await supabase.from('chat_messages').insert({
+                        id: msg.id,
+                        job_id: msg.jobId,
+                        sender_id: msg.senderId,
+                        text: msg.text
+                      });
+
+                      setMessages(prev => [...prev, msg]);
+                    } catch (error) {
+                      console.error('Error saving message:', error);
+                      showAlert('Failed to send message. Please try again.', 'error');
+                    }
                 }}
-                onCompleteJob={() => {
+                onCompleteJob={async () => {
                     if (!chatOpen.job) return;
-                    updateJob({ ...chatOpen.job, status: JobStatus.COMPLETED });
-                    setChatOpen({ isOpen: false, job: null });
-                    showAlert(t.jobCompletedAlert, 'success');
+                    try {
+                      await updateJob({ ...chatOpen.job, status: JobStatus.COMPLETED });
+                      setChatOpen({ isOpen: false, job: null });
+                      showAlert(t.jobCompletedAlert, 'success');
+                    } catch (error) {
+                      console.error('Error completing job:', error);
+                      showAlert('Failed to complete job. Please try again.', 'error');
+                    }
                 }}
                 onTranslateMessage={handleTranslateChat}
             />
@@ -726,13 +936,18 @@ const AppContent: React.FC = () => {
                                         </div>
                                     ) : (
                                         <div className="flex gap-2">
-                                            <button onClick={() => {
+                                            <button onClick={async () => {
                                                 const updatedJob = jobs.find(j => j.id === viewBidsModal.job!.id);
                                                 if (updatedJob) {
-                                                    const updatedBids = updatedJob.bids.map(b => b.id === bid.id ? { ...b, status: 'REJECTED' as const } : b);
-                                                    updateJob({ ...updatedJob, bids: updatedBids });
-                                                    setViewBidsModal({ ...viewBidsModal, job: { ...updatedJob, bids: updatedBids } });
-                                                    addNotification(bid.workerId, t.notifBidRejected, t.notifBidRejectedBody, "WARNING", updatedJob.id);
+                                                    try {
+                                                      const updatedBids = updatedJob.bids.map(b => b.id === bid.id ? { ...b, status: 'REJECTED' as const } : b);
+                                                      await updateJob({ ...updatedJob, bids: updatedBids });
+                                                      setViewBidsModal({ ...viewBidsModal, job: { ...updatedJob, bids: updatedBids } });
+                                                      await addNotification(bid.workerId, t.notifBidRejected, t.notifBidRejectedBody, "WARNING", updatedJob.id);
+                                                    } catch (error) {
+                                                      console.error('Error rejecting bid:', error);
+                                                      showAlert('Failed to reject bid. Please try again.', 'error');
+                                                    }
                                                 }
                                             }} className="flex-1 py-2 border border-red-200 text-red-600 rounded-lg font-bold text-sm">{t.rejectBid}</button>
                                             <button onClick={() => setCounterModalOpen({ isOpen: true, bidId: bid.id, jobId: viewBidsModal.job!.id })} className="flex-1 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg font-bold text-sm">{t.counterOffer}</button>

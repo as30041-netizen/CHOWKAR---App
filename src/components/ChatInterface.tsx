@@ -1,1 +1,0 @@
-// Duplicate file removed. Use components/ChatInterface.tsx in the root directory.

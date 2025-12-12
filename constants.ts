@@ -33,14 +33,14 @@ export const REVIEW_TAGS = [
   'Reliable'
 ];
 
-export const REVIEW_TAGS_TRANSLATIONS: Record<string, string> = {
-  'Punctual': 'समयनिष्ठ',
-  'Hardworking': 'मेहनती',
-  'Skilled': 'कुशल',
-  'Polite': 'विनम्र',
-  'Fast': 'तेज़',
-  'Safe': 'सुरक्षित',
-  'Reliable': 'भरोसेमंद'
+export const REVIEW_TAGS_TRANSLATIONS: Record<string, Record<string, string>> = {
+  'Punctual': { en: 'Punctual', hi: 'समयनिष्ठ' },
+  'Hardworking': { en: 'Hardworking', hi: 'मेहनती' },
+  'Skilled': { en: 'Skilled', hi: 'कुशल' },
+  'Polite': { en: 'Polite', hi: 'विनम्र' },
+  'Fast': { en: 'Fast', hi: 'तेज़' },
+  'Safe': { en: 'Safe', hi: 'सुरक्षित' },
+  'Reliable': { en: 'Reliable', hi: 'भरोसेमंद' }
 };
 
 export const TRANSLATIONS = {

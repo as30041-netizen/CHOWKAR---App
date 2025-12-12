@@ -1,1 +1,0 @@
-// Duplicate file removed. Use components/JobCard.tsx in the root directory.

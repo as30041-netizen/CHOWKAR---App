@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { useUser } from '../contexts/UserContext';
-import { useJobs } from '../contexts/JobContext';
+import { useUser } from '../contexts/UserContextDB';
+import { useJobs } from '../contexts/JobContextDB';
 import { Job, JobStatus, Coordinates } from '../types';
 import { CATEGORIES, CATEGORY_TRANSLATIONS, FREE_AI_USAGE_LIMIT } from '../constants';
 import { enhanceJobDescriptionStream, estimateWage, analyzeImageForJob } from '../services/geminiService';
@@ -34,7 +34,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess }) => 
   const remainingFreeTries = FREE_AI_USAGE_LIMIT - (user.aiUsageCount || 0);
   const showLockIcon = !user.isPremium && remainingFreeTries <= 0;
 
-  const handlePostJob = () => {
+  const handlePostJob = async () => {
     // Robust validation with feedback
     const missingFields = [];
     if (!newJobTitle.trim()) missingFields.push(t.jobTitleLabel);
@@ -66,20 +66,21 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess }) => 
             location: user.location,
             coordinates: newJobCoords || user.coordinates,
             jobDate: newJobDate,
-            duration: newJobDuration || 'Flexible', // Default duration if empty
+            duration: newJobDuration || 'Flexible',
             budget: budgetValue,
             status: JobStatus.OPEN,
             createdAt: Date.now(),
             bids: [],
             image: newJobImage
         };
-        
-        addJob(newJob);
-        
+
+        await addJob(newJob);
+
         // Reset form
         setNewJobTitle(''); setNewJobDesc(''); setNewJobBudget(''); setNewJobDate(''); setNewJobDuration(''); setNewJobCoords(undefined); setNewJobImage(undefined);
-        
-        addNotification(user.id, t.notifJobPosted, `${t.notifJobPostedBody}: "${newJobTitle}"`, "SUCCESS", newJob.id);
+
+        await addNotification(user.id, t.notifJobPosted, `${t.notifJobPostedBody}: "${newJobTitle}"`, "SUCCESS", newJob.id);
+        showAlert('Job posted successfully!', 'success');
         onSuccess();
     } catch (error) {
         console.error("Failed to post job:", error);

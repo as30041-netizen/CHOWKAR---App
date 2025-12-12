@@ -1,1 +1,0 @@
-// Duplicate file removed. Use index.tsx in the root directory.

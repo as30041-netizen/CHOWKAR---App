@@ -1,1 +1,0 @@
-// Duplicate file removed. Use App.tsx in the root directory.
