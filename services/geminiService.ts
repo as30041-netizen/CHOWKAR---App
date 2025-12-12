@@ -1,6 +1,18 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+let aiInstance: GoogleGenAI | null = null;
+
+const getAI = (): GoogleGenAI => {
+  if (!aiInstance) {
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
+      console.error('[GeminiService] Missing VITE_GEMINI_API_KEY environment variable');
+      throw new Error('Gemini API key not configured');
+    }
+    aiInstance = new GoogleGenAI({ apiKey });
+  }
+  return aiInstance;
+};
 
 export const enhanceJobDescriptionStream = async (
   shortInput: string, 
@@ -22,7 +34,7 @@ export const enhanceJobDescriptionStream = async (
       Keep it under 60 words. Do not add formatting like markdown bolding. Just plain text.
     `;
 
-    const response = await ai.models.generateContentStream({
+    const response = await getAI().models.generateContentStream({
       model: model,
       contents: prompt,
     });
@@ -49,7 +61,7 @@ export const estimateWage = async (title: string, category: string, location: st
       Return ONLY a single number representing the average (e.g. 500). Do not provide a range, do not add text, do not add currency symbols.
     `;
 
-    const response = await ai.models.generateContent({
+    const response = await getAI().models.generateContent({
       model: model,
       contents: prompt,
     });
@@ -85,7 +97,7 @@ export const enhanceBidMessageStream = async (
       Do not add placeholders like [Your Name]. Just the message content.
     `;
 
-    const response = await ai.models.generateContentStream({
+    const response = await getAI().models.generateContentStream({
       model: model,
       contents: prompt,
     });
@@ -114,7 +126,7 @@ export const translateText = async (text: string, targetLanguage: 'en' | 'hi' = 
       Return ONLY the translated text. No explanations.
     `;
 
-    const response = await ai.models.generateContent({
+    const response = await getAI().models.generateContent({
       model: model,
       contents: prompt,
     });
@@ -145,7 +157,7 @@ export const analyzeImageForJob = async (
       If unsure, default to 'Other'.
     `;
 
-    const response = await ai.models.generateContent({
+    const response = await getAI().models.generateContent({
       model: model,
       contents: {
         parts: [

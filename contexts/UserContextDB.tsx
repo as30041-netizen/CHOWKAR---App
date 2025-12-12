@@ -68,13 +68,25 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const { user: currentUser } = await getCurrentUser();
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Auth check timeout')), 10000)
+        );
+
+        const { user: currentUser } = await Promise.race([
+          getCurrentUser(),
+          timeoutPromise
+        ]) as { user: User | null };
+
         if (currentUser) {
           setUser(currentUser);
           setIsLoggedIn(true);
         }
       } catch (error) {
-        console.error('Error checking session:', error);
+        if (error instanceof Error && error.message === 'Auth check timeout') {
+          console.warn('[Auth] Session check timed out - continuing without authentication');
+        } else {
+          console.error('[Auth] Error checking session:', error);
+        }
       } finally {
         setIsAuthLoading(false);
       }
