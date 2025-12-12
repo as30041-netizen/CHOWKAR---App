@@ -105,11 +105,20 @@ const AppContent: React.FC = () => {
     }
   }, [isLoggedIn, user.id, user.phone, user.location]);
 
+  // Reset signing in state when auth completes
+  useEffect(() => {
+    if (isLoggedIn) {
+      setIsSigningIn(false);
+    }
+  }, [isLoggedIn]);
+
   // --- Handlers ---
   const handleGoogleSignIn = async () => {
+    console.log('[UI] Starting Google sign-in...');
     setIsSigningIn(true);
     const result = await signInWithGoogle();
     if (!result.success) {
+      console.error('[UI] Sign-in failed:', result.error);
       showAlert(result.error || 'Failed to sign in', 'error');
       setIsSigningIn(false);
     }

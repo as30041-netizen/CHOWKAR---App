@@ -3,6 +3,7 @@ import { User, Coordinates } from '../types';
 
 export const signInWithGoogle = async (): Promise<{ success: boolean; error?: string }> => {
   try {
+    console.log('[Auth] Initiating Google OAuth, redirect URL:', window.location.origin);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -14,10 +15,15 @@ export const signInWithGoogle = async (): Promise<{ success: boolean; error?: st
       }
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error('[Auth] OAuth initialization error:', error);
+      throw error;
+    }
+
+    console.log('[Auth] OAuth redirect initiated successfully');
     return { success: true };
   } catch (error) {
-    console.error('Error signing in with Google:', error);
+    console.error('[Auth] Error signing in with Google:', error);
     return { success: false, error: 'Failed to sign in with Google' };
   }
 };
@@ -47,7 +53,61 @@ export const getCurrentUser = async (): Promise<{ user: User | null; error?: str
       .maybeSingle();
 
     if (profileError) throw profileError;
-    if (!profile) return { user: null };
+
+    if (!profile) {
+      console.log('[Auth] Profile not found, creating one for auth user:', authUser.id);
+
+      const userName = authUser.user_metadata?.full_name ||
+                      authUser.user_metadata?.name ||
+                      authUser.email?.split('@')[0] ||
+                      'User';
+
+      const { data: newProfile, error: createError } = await supabase
+        .from('profiles')
+        .insert({
+          auth_user_id: authUser.id,
+          name: userName,
+          email: authUser.email || '',
+          location: 'Not set',
+          wallet_balance: 0,
+          rating: 5.0,
+          profile_photo: authUser.user_metadata?.avatar_url || null,
+          is_premium: false,
+          ai_usage_count: 0,
+          jobs_completed: 0,
+          join_date: new Date().toISOString(),
+          skills: []
+        })
+        .select()
+        .single();
+
+      if (createError) {
+        console.error('[Auth] Error creating profile:', createError);
+        return { user: null, error: 'Failed to create user profile' };
+      }
+
+      const user: User = {
+        id: newProfile.id,
+        name: newProfile.name,
+        phone: newProfile.phone || '',
+        email: newProfile.email || authUser.email || '',
+        location: newProfile.location,
+        coordinates: undefined,
+        walletBalance: newProfile.wallet_balance,
+        rating: Number(newProfile.rating),
+        profilePhoto: newProfile.profile_photo || undefined,
+        isPremium: newProfile.is_premium,
+        aiUsageCount: newProfile.ai_usage_count,
+        bio: newProfile.bio || undefined,
+        skills: newProfile.skills || [],
+        experience: newProfile.experience || undefined,
+        jobsCompleted: newProfile.jobs_completed,
+        joinDate: new Date(newProfile.join_date).getTime(),
+        reviews: []
+      };
+
+      return { user };
+    }
 
     const user: User = {
       id: profile.id,

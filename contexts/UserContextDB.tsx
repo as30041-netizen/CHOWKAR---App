@@ -68,6 +68,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     const checkSession = async () => {
       try {
+        console.log('[Auth] Checking for existing session...');
         const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Auth check timeout')), 10000)
         );
@@ -78,8 +79,11 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         ]) as { user: User | null };
 
         if (currentUser) {
+          console.log('[Auth] Found existing session for user:', currentUser.name);
           setUser(currentUser);
           setIsLoggedIn(true);
+        } else {
+          console.log('[Auth] No existing session found');
         }
       } catch (error) {
         if (error instanceof Error && error.message === 'Auth check timeout') {
@@ -95,18 +99,48 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     checkSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[Auth] State change event:', event, 'Session exists:', !!session);
+
       if (event === 'SIGNED_IN' && session?.user) {
-        const { user: currentUser } = await getCurrentUser();
-        if (currentUser) {
-          setUser(currentUser);
-          setIsLoggedIn(true);
+        console.log('[Auth] User signed in, fetching profile...');
+        setIsAuthLoading(true);
+
+        try {
+          const { user: currentUser, error } = await getCurrentUser();
+
+          if (error) {
+            console.error('[Auth] Error fetching user profile:', error);
+            setIsAuthLoading(false);
+            return;
+          }
+
+          if (currentUser) {
+            console.log('[Auth] Profile loaded successfully:', currentUser.name);
+            setUser(currentUser);
+            setIsLoggedIn(true);
+          } else {
+            console.warn('[Auth] No user profile returned after sign in');
+          }
+        } catch (err) {
+          console.error('[Auth] Exception while fetching profile:', err);
+        } finally {
+          setIsAuthLoading(false);
         }
       } else if (event === 'SIGNED_OUT') {
+        console.log('[Auth] User signed out');
         setUser(MOCK_USER);
         setIsLoggedIn(false);
         setTransactions([]);
         setNotifications([]);
         setMessages([]);
+      } else if (event === 'TOKEN_REFRESHED') {
+        console.log('[Auth] Token refreshed');
+      } else if (event === 'USER_UPDATED') {
+        console.log('[Auth] User updated, refreshing profile...');
+        const { user: currentUser } = await getCurrentUser();
+        if (currentUser) {
+          setUser(currentUser);
+        }
       }
     });
 
