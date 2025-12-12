@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { UserProvider, useUser } from './contexts/UserContext';
-import { JobProvider, useJobs } from './contexts/JobContext';
+import { UserProvider, useUser } from './contexts/UserContextDB';
+import { JobProvider, useJobs } from './contexts/JobContextDB';
 import { Job, Bid, ChatMessage, UserRole, JobStatus, Transaction, Coordinates, Notification, Review, User } from './types';
 import { CATEGORIES, POSTER_FEE, WORKER_COMMISSION_RATE, CATEGORY_TRANSLATIONS, REVIEW_TAGS, REVIEW_TAGS_TRANSLATIONS } from './constants';
 import { JobCard } from './components/JobCard';
@@ -10,6 +10,8 @@ import { WalletView } from './components/WalletView';
 import { LeafletMap } from './components/LeafletMap';
 import { enhanceBidMessageStream, translateText } from './services/geminiService';
 import { getDeviceLocation, calculateDistance } from './utils/geo';
+import { sendOTP, verifyOTP, SignUpData } from './services/authService';
+import { supabase } from './lib/supabase';
 import { 
   MapPin, LayoutGrid, Plus, Wallet, UserCircle, Search, SlidersHorizontal, 
   ArrowLeftRight, Bell, MessageCircle, Languages, Loader2, Navigation, 
@@ -21,12 +23,12 @@ import {
 } from 'lucide-react';
 
 const AppContent: React.FC = () => {
-  const { 
-    user, setUser, role, setRole, language, setLanguage, isLoggedIn, setIsLoggedIn, 
-    transactions, setTransactions, notifications, setNotifications, messages, setMessages, 
-    addNotification, checkFreeLimit, incrementAiUsage, logout, t, 
+  const {
+    user, setUser, role, setRole, language, setLanguage, isLoggedIn, setIsLoggedIn,
+    transactions, setTransactions, notifications, setNotifications, messages, setMessages,
+    addNotification, checkFreeLimit, incrementAiUsage, logout, t,
     showSubscriptionModal, setShowSubscriptionModal,
-    showAlert, currentAlert
+    showAlert, currentAlert, updateUserInDB
   } = useUser();
   
   const { jobs, setJobs, updateJob, deleteJob } = useJobs();
@@ -100,38 +102,41 @@ const AppContent: React.FC = () => {
   const postedJobsCount = jobs.filter(j => j.posterId === user.id).length;
 
   // --- Handlers ---
-  const handleSendOtp = (e: React.FormEvent) => {
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (mobileNumber.length >= 10) setOtpSent(true);
-    else showAlert(t.alertInvalidMobile, 'error');
+    if (mobileNumber.length >= 10) {
+      const result = await sendOTP(mobileNumber);
+      if (result.success) {
+        setOtpSent(true);
+      } else {
+        showAlert(result.error || t.alertInvalidMobile, 'error');
+      }
+    } else {
+      showAlert(t.alertInvalidMobile, 'error');
+    }
   };
 
-  const handleVerifyOtp = (e: React.FormEvent) => {
+  const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (enteredOtp === '123456') {
-      if (authView === 'signup') {
-        const newUser: User = {
-            id: `u${Date.now()}`,
-            name: regName || 'New User',
-            phone: mobileNumber,
-            location: regLocation || 'India',
-            coordinates: regCoords,
-            walletBalance: 100,
-            rating: 5.0,
-            jobsCompleted: 0,
-            skills: [],
-            isPremium: false,
-            aiUsageCount: 0,
-            joinDate: Date.now(),
-            reviews: []
-        };
-        setUser(newUser);
-        setTransactions([{ id: `t${Date.now()}`, userId: newUser.id, amount: 100, type: 'CREDIT', description: 'Welcome Bonus', timestamp: Date.now() }]);
-        addNotification(newUser.id, t.notifWelcome, t.notifWelcomeBody, "SUCCESS");
-      }
+
+    const signUpData: SignUpData | undefined = authView === 'signup' ? {
+      phone: mobileNumber,
+      name: regName || 'New User',
+      location: regLocation || 'India',
+      coordinates: regCoords
+    } : undefined;
+
+    const result = await verifyOTP(mobileNumber, enteredOtp, signUpData);
+
+    if (result.success && result.user) {
+      setUser(result.user);
       setIsLoggedIn(true);
+
+      if (authView === 'signup') {
+        await addNotification(result.user.id, t.notifWelcome, t.notifWelcomeBody, "SUCCESS");
+      }
     } else {
-      showAlert(t.alertInvalidOtp, 'error');
+      showAlert(result.error || t.alertInvalidOtp, 'error');
     }
   };
 
@@ -160,14 +165,14 @@ const AppContent: React.FC = () => {
     incrementAiUsage();
   };
 
-  const handlePlaceBid = () => {
+  const handlePlaceBid = async () => {
     if (!bidModalOpen.jobId || !bidAmount) return;
     const commission = Math.ceil(parseInt(bidAmount) * WORKER_COMMISSION_RATE);
     if (user.walletBalance < commission) {
         showAlert(`${t.alertInsufficientBalance}${commission}`, 'error');
         return;
     }
-    
+
     const job = jobs.find(j => j.id === bidModalOpen.jobId);
     if (!job) return;
 
@@ -192,17 +197,22 @@ const AppContent: React.FC = () => {
         }]
     };
 
-    updateJob({ ...job, bids: [...job.bids, newBid] });
-    setBidModalOpen({ isOpen: false, jobId: null });
-    setBidAmount('');
-    setBidMessage('');
-    if (selectedJob) setSelectedJob(null);
-    
-    addNotification(job.posterId, t.notifBidReceived, `${user.name}: ₹${bidAmount}`, "INFO", job.id);
-    showAlert(t.alertBidPlaced, 'success');
+    try {
+      await updateJob({ ...job, bids: [...job.bids, newBid] });
+      setBidModalOpen({ isOpen: false, jobId: null });
+      setBidAmount('');
+      setBidMessage('');
+      if (selectedJob) setSelectedJob(null);
+
+      await addNotification(job.posterId, t.notifBidReceived, `${user.name}: ₹${bidAmount}`, "INFO", job.id);
+      showAlert(t.alertBidPlaced, 'success');
+    } catch (error) {
+      console.error('Error placing bid:', error);
+      showAlert('Failed to place bid. Please try again.', 'error');
+    }
   };
 
-  const handleAcceptBid = (jobId: string, bidId: string, bidAmount: number, workerId: string) => {
+  const handleAcceptBid = async (jobId: string, bidId: string, bidAmount: number, workerId: string) => {
     if (user.walletBalance < POSTER_FEE) {
         showAlert(`${t.alertInsufficientBalance}${POSTER_FEE}`, 'error');
         return;
@@ -211,22 +221,34 @@ const AppContent: React.FC = () => {
     const job = jobs.find(j => j.id === jobId);
     if (!job) return;
 
-    const updatedBids = job.bids.map(b => 
-        b.id === bidId ? { ...b, status: 'ACCEPTED' as const } : { ...b, status: 'REJECTED' as const }
-    );
-    updateJob({ ...job, status: JobStatus.IN_PROGRESS, acceptedBidId: bidId, bids: updatedBids });
+    try {
+      const updatedBids = job.bids.map(b =>
+          b.id === bidId ? { ...b, status: 'ACCEPTED' as const } : { ...b, status: 'REJECTED' as const }
+      );
+      await updateJob({ ...job, status: JobStatus.IN_PROGRESS, acceptedBidId: bidId, bids: updatedBids });
 
-    const posterTx: Transaction = { id: `tx${Date.now()}p`, userId: user.id, amount: POSTER_FEE, type: 'DEBIT', description: t.alertBookingFee, timestamp: Date.now() };
-    const workerTx: Transaction = { id: `tx${Date.now()}w`, userId: workerId, amount: Math.ceil(bidAmount * WORKER_COMMISSION_RATE), type: 'DEBIT', description: 'Success Fee', timestamp: Date.now() };
-    
-    setUser(prev => ({ ...prev, walletBalance: prev.walletBalance - POSTER_FEE }));
-    setTransactions(prev => [posterTx, workerTx, ...prev]);
-    
-    setViewBidsModal({ isOpen: false, job: null });
-    if(selectedJob) setSelectedJob(null);
-    
-    addNotification(workerId, t.notifBidAccepted, t.notifBidAcceptedBody, "SUCCESS", jobId);
-    showAlert(t.contactUnlocked, 'success');
+      const newBalance = user.walletBalance - POSTER_FEE;
+
+      const posterTx: Transaction = { id: `tx${Date.now()}p`, userId: user.id, amount: POSTER_FEE, type: 'DEBIT', description: t.alertBookingFee, timestamp: Date.now() };
+      const workerTx: Transaction = { id: `tx${Date.now()}w`, userId: workerId, amount: Math.ceil(bidAmount * WORKER_COMMISSION_RATE), type: 'DEBIT', description: 'Success Fee', timestamp: Date.now() };
+
+      await supabase.from('transactions').insert([
+        { user_id: user.id, amount: POSTER_FEE, type: 'DEBIT', description: t.alertBookingFee },
+        { user_id: workerId, amount: Math.ceil(bidAmount * WORKER_COMMISSION_RATE), type: 'DEBIT', description: 'Success Fee' }
+      ]);
+
+      setUser(prev => ({ ...prev, walletBalance: newBalance }));
+      setTransactions(prev => [posterTx, workerTx, ...prev]);
+
+      setViewBidsModal({ isOpen: false, job: null });
+      if(selectedJob) setSelectedJob(null);
+
+      await addNotification(workerId, t.notifBidAccepted, t.notifBidAcceptedBody, "SUCCESS", jobId);
+      showAlert(t.contactUnlocked, 'success');
+    } catch (error) {
+      console.error('Error accepting bid:', error);
+      showAlert('Failed to accept bid. Please try again.', 'error');
+    }
   };
 
   const handleChatOpen = (job: Job) => {
@@ -247,54 +269,64 @@ const AppContent: React.FC = () => {
     ));
   };
 
-  const handleCounterByPoster = () => {
+  const handleCounterByPoster = async () => {
       if (!counterModalOpen.jobId || !counterModalOpen.bidId || !counterInputAmount) return;
       const newAmount = parseInt(counterInputAmount);
-      
+
       const job = jobs.find(j => j.id === counterModalOpen.jobId);
       if(job) {
-          const updatedBids = job.bids.map(b => {
-              if(b.id === counterModalOpen.bidId) {
-                  return {
-                      ...b,
-                      amount: newAmount,
-                      negotiationHistory: [...(b.negotiationHistory || []), {
-                          amount: newAmount,
-                          by: UserRole.POSTER,
-                          timestamp: Date.now()
-                      }]
-                  }
-              }
-              return b;
-          });
-          const updatedJob = { ...job, bids: updatedBids };
-          updateJob(updatedJob);
-          
-          if(viewBidsModal.isOpen) setViewBidsModal({ ...viewBidsModal, job: updatedJob });
-          const workerId = job.bids.find(b => b.id === counterModalOpen.bidId)?.workerId;
-          if(workerId) addNotification(workerId, t.notifCounterOffer, `${t.posterCountered}: ₹${newAmount}`, "INFO", job.id);
+          try {
+            const updatedBids = job.bids.map(b => {
+                if(b.id === counterModalOpen.bidId) {
+                    return {
+                        ...b,
+                        amount: newAmount,
+                        negotiationHistory: [...(b.negotiationHistory || []), {
+                            amount: newAmount,
+                            by: UserRole.POSTER,
+                            timestamp: Date.now()
+                        }]
+                    }
+                }
+                return b;
+            });
+            const updatedJob = { ...job, bids: updatedBids };
+            await updateJob(updatedJob);
+
+            if(viewBidsModal.isOpen) setViewBidsModal({ ...viewBidsModal, job: updatedJob });
+            const workerId = job.bids.find(b => b.id === counterModalOpen.bidId)?.workerId;
+            if(workerId) await addNotification(workerId, t.notifCounterOffer, `${t.posterCountered}: ₹${newAmount}`, "INFO", job.id);
+          } catch (error) {
+            console.error('Error making counter offer:', error);
+            showAlert('Failed to send counter offer. Please try again.', 'error');
+          }
       }
-      
+
       setCounterModalOpen({ isOpen: false, bidId: null, jobId: null });
       setCounterInputAmount('');
   };
 
-  const handleWorkerReplyToCounter = (jobId: string, bidId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', amount?: number) => {
+  const handleWorkerReplyToCounter = async (jobId: string, bidId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', amount?: number) => {
       const job = jobs.find(j => j.id === jobId);
       if(!job) return;
 
-      let updatedBids = job.bids;
-      if (action === 'ACCEPT') {
-          updatedBids = job.bids.map(b => b.id === bidId ? { ...b, negotiationHistory: [...(b.negotiationHistory || []), { amount: b.amount, by: UserRole.WORKER, timestamp: Date.now(), message: "Accepted Counter Offer" }] } : b);
-          addNotification(job.posterId, "Counter Accepted", "Worker accepted your offer. Please finalize hiring.", "SUCCESS", jobId);
-      } else if (action === 'REJECT') {
-          updatedBids = job.bids.filter(b => b.id !== bidId);
-          showAlert(t.alertJobDeleted, 'info'); 
-      } else if (action === 'COUNTER' && amount) {
-          updatedBids = job.bids.map(b => b.id === bidId ? { ...b, amount, negotiationHistory: [...(b.negotiationHistory || []), { amount, by: UserRole.WORKER, timestamp: Date.now() }] } : b);
-          addNotification(job.posterId, t.notifCounterOffer, `Worker countered: ₹${amount}`, "INFO", jobId);
+      try {
+        let updatedBids = job.bids;
+        if (action === 'ACCEPT') {
+            updatedBids = job.bids.map(b => b.id === bidId ? { ...b, negotiationHistory: [...(b.negotiationHistory || []), { amount: b.amount, by: UserRole.WORKER, timestamp: Date.now(), message: "Accepted Counter Offer" }] } : b);
+            await addNotification(job.posterId, "Counter Accepted", "Worker accepted your offer. Please finalize hiring.", "SUCCESS", jobId);
+        } else if (action === 'REJECT') {
+            updatedBids = job.bids.filter(b => b.id !== bidId);
+            showAlert(t.alertJobDeleted, 'info');
+        } else if (action === 'COUNTER' && amount) {
+            updatedBids = job.bids.map(b => b.id === bidId ? { ...b, amount, negotiationHistory: [...(b.negotiationHistory || []), { amount, by: UserRole.WORKER, timestamp: Date.now() }] } : b);
+            await addNotification(job.posterId, t.notifCounterOffer, `Worker countered: ₹${amount}`, "INFO", jobId);
+        }
+        await updateJob({ ...job, bids: updatedBids });
+      } catch (error) {
+        console.error('Error replying to counter offer:', error);
+        showAlert('Failed to process counter offer. Please try again.', 'error');
       }
-      updateJob({ ...job, bids: updatedBids });
   };
 
   const toggleVoiceInput = (mode: 'description' | 'search') => {
@@ -334,19 +366,34 @@ const AppContent: React.FC = () => {
     setSelectedJob(null);
   };
 
-  const handleUpdateJob = () => {
+  const handleUpdateJob = async () => {
     if (!editingJob || !editTitle || !editDesc || !editBudget) return;
-    updateJob({ ...editingJob, title: editTitle, description: editDesc, category: editCategory, jobDate: editDate, duration: editDuration, budget: parseInt(editBudget) });
-    setEditingJob(null);
-    addNotification(user.id, t.alertJobUpdated, t.alertJobUpdated, "SUCCESS");
+    try {
+      await updateJob({ ...editingJob, title: editTitle, description: editDesc, category: editCategory, jobDate: editDate, duration: editDuration, budget: parseInt(editBudget) });
+      setEditingJob(null);
+      await addNotification(user.id, t.alertJobUpdated, t.alertJobUpdated, "SUCCESS");
+      showAlert(t.alertJobUpdated, 'success');
+    } catch (error) {
+      console.error('Error updating job:', error);
+      showAlert('Failed to update job. Please try again.', 'error');
+    }
   };
 
-  const handleDeleteJob = (e: React.MouseEvent, jobId: string) => {
+  const handleDeleteJob = async (e: React.MouseEvent, jobId: string) => {
     e.stopPropagation();
     const job = jobs.find(j => j.id === jobId);
     if (!job) return;
     if (job.status !== JobStatus.OPEN) { showAlert(t.alertCantDeleteProgress, 'error'); return; }
-    if (window.confirm(t.alertConfirmDelete)) { deleteJob(jobId); setSelectedJob(null); showAlert(t.alertJobDeleted, 'success'); }
+    if (window.confirm(t.alertConfirmDelete)) {
+      try {
+        await deleteJob(jobId);
+        setSelectedJob(null);
+        showAlert(t.alertJobDeleted, 'success');
+      } catch (error) {
+        console.error('Error deleting job:', error);
+        showAlert('Failed to delete job. Please try again.', 'error');
+      }
+    }
   };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -366,9 +413,26 @@ const AppContent: React.FC = () => {
      setReviewModalOpen(false); showAlert(t.reviewSubmitted, 'success');
   };
   
-  const handleSaveProfile = () => {
-    setUser({ ...user, name: editProfileName, phone: editProfilePhone, location: editProfileLocation, bio: editProfileBio, experience: editProfileExp, skills: editProfileSkills.split(',').map(s => s.trim()).filter(s => s), profilePhoto: editProfilePhoto });
-    setShowEditProfile(false); addNotification(user.id, t.notifProfileUpdated, t.notifProfileUpdatedBody, "SUCCESS");
+  const handleSaveProfile = async () => {
+    try {
+      const updates = {
+        name: editProfileName,
+        phone: editProfilePhone,
+        location: editProfileLocation,
+        bio: editProfileBio,
+        experience: editProfileExp,
+        skills: editProfileSkills.split(',').map(s => s.trim()).filter(s => s),
+        profilePhoto: editProfilePhoto
+      };
+
+      await updateUserInDB(updates);
+      setShowEditProfile(false);
+      await addNotification(user.id, t.notifProfileUpdated, t.notifProfileUpdatedBody, "SUCCESS");
+      showAlert(t.notifProfileUpdated, 'success');
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      showAlert('Failed to update profile. Please try again.', 'error');
+    }
   };
 
   // --- Auth View ---
@@ -670,16 +734,49 @@ const AppContent: React.FC = () => {
                 currentUser={user} 
                 onClose={() => setChatOpen({ isOpen: false, job: null })}
                 messages={messages.filter(m => m.jobId === chatOpen.job!.id)}
-                onSendMessage={(text) => {
+                onSendMessage={async (text) => {
                     const msg: ChatMessage = { id: `m${Date.now()}`, jobId: chatOpen.job!.id, senderId: user.id, text, timestamp: Date.now() };
-                    setMessages(prev => [...prev, msg]);
-                    setTimeout(() => setMessages(prev => [...prev, { id: `r${Date.now()}`, jobId: chatOpen.job!.id, senderId: 'other', text: 'Got it, thanks!', timestamp: Date.now() }]), 1500);
+
+                    try {
+                      await supabase.from('chat_messages').insert({
+                        id: msg.id,
+                        job_id: msg.jobId,
+                        sender_id: msg.senderId,
+                        text: msg.text
+                      });
+
+                      setMessages(prev => [...prev, msg]);
+
+                      setTimeout(async () => {
+                        const autoReply: ChatMessage = { id: `r${Date.now()}`, jobId: chatOpen.job!.id, senderId: 'other', text: 'Got it, thanks!', timestamp: Date.now() };
+
+                        try {
+                          await supabase.from('chat_messages').insert({
+                            id: autoReply.id,
+                            job_id: autoReply.jobId,
+                            sender_id: autoReply.senderId,
+                            text: autoReply.text
+                          });
+                          setMessages(prev => [...prev, autoReply]);
+                        } catch (error) {
+                          console.error('Error saving auto reply:', error);
+                        }
+                      }, 1500);
+                    } catch (error) {
+                      console.error('Error saving message:', error);
+                      showAlert('Failed to send message. Please try again.', 'error');
+                    }
                 }}
-                onCompleteJob={() => {
+                onCompleteJob={async () => {
                     if (!chatOpen.job) return;
-                    updateJob({ ...chatOpen.job, status: JobStatus.COMPLETED });
-                    setChatOpen({ isOpen: false, job: null });
-                    showAlert(t.jobCompletedAlert, 'success');
+                    try {
+                      await updateJob({ ...chatOpen.job, status: JobStatus.COMPLETED });
+                      setChatOpen({ isOpen: false, job: null });
+                      showAlert(t.jobCompletedAlert, 'success');
+                    } catch (error) {
+                      console.error('Error completing job:', error);
+                      showAlert('Failed to complete job. Please try again.', 'error');
+                    }
                 }}
                 onTranslateMessage={handleTranslateChat}
             />
@@ -726,13 +823,18 @@ const AppContent: React.FC = () => {
                                         </div>
                                     ) : (
                                         <div className="flex gap-2">
-                                            <button onClick={() => {
+                                            <button onClick={async () => {
                                                 const updatedJob = jobs.find(j => j.id === viewBidsModal.job!.id);
                                                 if (updatedJob) {
-                                                    const updatedBids = updatedJob.bids.map(b => b.id === bid.id ? { ...b, status: 'REJECTED' as const } : b);
-                                                    updateJob({ ...updatedJob, bids: updatedBids });
-                                                    setViewBidsModal({ ...viewBidsModal, job: { ...updatedJob, bids: updatedBids } });
-                                                    addNotification(bid.workerId, t.notifBidRejected, t.notifBidRejectedBody, "WARNING", updatedJob.id);
+                                                    try {
+                                                      const updatedBids = updatedJob.bids.map(b => b.id === bid.id ? { ...b, status: 'REJECTED' as const } : b);
+                                                      await updateJob({ ...updatedJob, bids: updatedBids });
+                                                      setViewBidsModal({ ...viewBidsModal, job: { ...updatedJob, bids: updatedBids } });
+                                                      await addNotification(bid.workerId, t.notifBidRejected, t.notifBidRejectedBody, "WARNING", updatedJob.id);
+                                                    } catch (error) {
+                                                      console.error('Error rejecting bid:', error);
+                                                      showAlert('Failed to reject bid. Please try again.', 'error');
+                                                    }
                                                 }
                                             }} className="flex-1 py-2 border border-red-200 text-red-600 rounded-lg font-bold text-sm">{t.rejectBid}</button>
                                             <button onClick={() => setCounterModalOpen({ isOpen: true, bidId: bid.id, jobId: viewBidsModal.job!.id })} className="flex-1 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg font-bold text-sm">{t.counterOffer}</button>

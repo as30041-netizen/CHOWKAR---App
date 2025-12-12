@@ -34,7 +34,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess }) => 
   const remainingFreeTries = FREE_AI_USAGE_LIMIT - (user.aiUsageCount || 0);
   const showLockIcon = !user.isPremium && remainingFreeTries <= 0;
 
-  const handlePostJob = () => {
+  const handlePostJob = async () => {
     // Robust validation with feedback
     const missingFields = [];
     if (!newJobTitle.trim()) missingFields.push(t.jobTitleLabel);
@@ -66,20 +66,21 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess }) => 
             location: user.location,
             coordinates: newJobCoords || user.coordinates,
             jobDate: newJobDate,
-            duration: newJobDuration || 'Flexible', // Default duration if empty
+            duration: newJobDuration || 'Flexible',
             budget: budgetValue,
             status: JobStatus.OPEN,
             createdAt: Date.now(),
             bids: [],
             image: newJobImage
         };
-        
-        addJob(newJob);
-        
+
+        await addJob(newJob);
+
         // Reset form
         setNewJobTitle(''); setNewJobDesc(''); setNewJobBudget(''); setNewJobDate(''); setNewJobDuration(''); setNewJobCoords(undefined); setNewJobImage(undefined);
-        
-        addNotification(user.id, t.notifJobPosted, `${t.notifJobPostedBody}: "${newJobTitle}"`, "SUCCESS", newJob.id);
+
+        await addNotification(user.id, t.notifJobPosted, `${t.notifJobPostedBody}: "${newJobTitle}"`, "SUCCESS", newJob.id);
+        showAlert('Job posted successfully!', 'success');
         onSuccess();
     } catch (error) {
         console.error("Failed to post job:", error);
