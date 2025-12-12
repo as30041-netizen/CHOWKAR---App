@@ -14,6 +14,7 @@ interface UserContextType {
   isLoggedIn: boolean;
   setIsLoggedIn: React.Dispatch<React.SetStateAction<boolean>>;
   isAuthLoading: boolean;
+  loadingMessage: string;
   transactions: Transaction[];
   setTransactions: React.Dispatch<React.SetStateAction<Transaction[]>>;
   notifications: Notification[];
@@ -30,6 +31,7 @@ interface UserContextType {
   showAlert: (message: string, type?: 'success' | 'error' | 'info') => void;
   currentAlert: { message: string; type: 'success' | 'error' | 'info' } | null;
   updateUserInDB: (updates: Partial<User>) => Promise<void>;
+  retryAuth: () => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -58,6 +60,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [currentAlert, setCurrentAlert] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [loadingMessage, setLoadingMessage] = useState('Initializing...');
   const [hasInitialized, setHasInitialized] = useState(false);
 
   // Persistence Effects (only for preferences, NOT auth state)
@@ -101,25 +104,39 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (session?.user) {
           console.log('[Auth] Initial session detected, fetching profile...');
           setIsAuthLoading(true);
+          setLoadingMessage('Loading your profile...');
+
+          // Add timeout to prevent infinite loading
+          const timeoutId = setTimeout(() => {
+            console.error('[Auth] Profile fetch timeout - forcing auth completion');
+            setLoadingMessage('Connection timeout. Please refresh the page.');
+            setIsAuthLoading(false);
+          }, 10000); // 10 second timeout
 
           try {
-            const { user: currentUser, error } = await getCurrentUser();
+            const { user: currentUser, error} = await getCurrentUser();
+            clearTimeout(timeoutId);
 
             if (error) {
               console.error('[Auth] Error fetching user profile:', error);
+              setLoadingMessage('Error loading profile. Please try again.');
               setIsAuthLoading(false);
               return;
             }
 
             if (currentUser) {
               console.log('[Auth] Profile loaded successfully:', currentUser.name);
+              setLoadingMessage('Setting up your account...');
               setUser(currentUser);
               setIsLoggedIn(true);
             } else {
               console.warn('[Auth] No user profile returned');
+              setLoadingMessage('Profile not found. Please try again.');
             }
           } catch (err) {
+            clearTimeout(timeoutId);
             console.error('[Auth] Exception while fetching profile:', err);
+            setLoadingMessage('Something went wrong. Please refresh.');
           } finally {
             setIsAuthLoading(false);
           }
@@ -130,25 +147,39 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } else if (event === 'SIGNED_IN' && session?.user) {
         console.log('[Auth] User signed in, fetching profile...');
         setIsAuthLoading(true);
+        setLoadingMessage('Creating your profile...');
+
+        // Add timeout to prevent infinite loading
+        const timeoutId = setTimeout(() => {
+          console.error('[Auth] Profile fetch timeout after sign in - forcing auth completion');
+          setLoadingMessage('Connection timeout. Please refresh the page.');
+          setIsAuthLoading(false);
+        }, 10000); // 10 second timeout
 
         try {
           const { user: currentUser, error } = await getCurrentUser();
+          clearTimeout(timeoutId);
 
           if (error) {
             console.error('[Auth] Error fetching user profile:', error);
+            setLoadingMessage('Error creating profile. Please try again.');
             setIsAuthLoading(false);
             return;
           }
 
           if (currentUser) {
             console.log('[Auth] Profile loaded successfully:', currentUser.name);
+            setLoadingMessage('Welcome! Setting up your account...');
             setUser(currentUser);
             setIsLoggedIn(true);
           } else {
             console.warn('[Auth] No user profile returned after sign in');
+            setLoadingMessage('Profile creation failed. Please try again.');
           }
         } catch (err) {
+          clearTimeout(timeoutId);
           console.error('[Auth] Exception while fetching profile:', err);
+          setLoadingMessage('Something went wrong. Please refresh.');
         } finally {
           setIsAuthLoading(false);
         }
@@ -189,15 +220,20 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [isLoggedIn, user.id]);
 
   const fetchUserData = async () => {
+    console.log('[Data] Starting to fetch user data...');
     try {
       // Fetch transactions
+      console.log('[Data] Fetching transactions...');
       const { data: transactionsData, error: transError } = await supabase
         .from('transactions')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (transError) throw transError;
+      if (transError) {
+        console.error('[Data] Error fetching transactions:', transError);
+        throw transError;
+      }
 
       const txs: Transaction[] = transactionsData?.map(tx => ({
         id: tx.id,
@@ -209,15 +245,20 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       })) || [];
 
       setTransactions(txs);
+      console.log('[Data] Transactions loaded:', txs.length);
 
       // Fetch notifications
+      console.log('[Data] Fetching notifications...');
       const { data: notificationsData, error: notifError } = await supabase
         .from('notifications')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (notifError) throw notifError;
+      if (notifError) {
+        console.error('[Data] Error fetching notifications:', notifError);
+        throw notifError;
+      }
 
       const notifs: Notification[] = notificationsData?.map(notif => ({
         id: notif.id,
@@ -231,18 +272,28 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       })) || [];
 
       setNotifications(notifs);
+      console.log('[Data] Notifications loaded:', notifs.length);
 
       // Fetch chat messages for all jobs where user is involved (as poster or worker)
-      const { data: userJobs } = await supabase
+      console.log('[Data] Fetching chat messages...');
+      const { data: userJobs, error: jobsError } = await supabase
         .from('jobs')
         .select('id')
         .eq('user_id', user.id);
 
-      const { data: userBids } = await supabase
+      if (jobsError) {
+        console.error('[Data] Error fetching user jobs:', jobsError);
+      }
+
+      const { data: userBids, error: bidsError } = await supabase
         .from('bids')
         .select('job_id')
         .eq('worker_id', user.id)
         .eq('status', 'ACCEPTED');
+
+      if (bidsError) {
+        console.error('[Data] Error fetching user bids:', bidsError);
+      }
 
       const jobIds = [
         ...(userJobs?.map(j => j.id) || []),
@@ -269,9 +320,12 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       })) || [];
 
       setMessages(msgs);
+      console.log('[Data] Chat messages loaded:', msgs.length);
+      console.log('[Data] All user data loaded successfully');
 
     } catch (error) {
-      console.error('Error fetching user data:', error);
+      console.error('[Data] Error fetching user data:', error);
+      // Don't block the app if data fetch fails - user can still use basic features
     }
   };
 
@@ -434,6 +488,37 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setMessages([]);
   };
 
+  const retryAuth = async () => {
+    console.log('[Auth] Retrying authentication...');
+    setIsAuthLoading(true);
+    setLoadingMessage('Retrying...');
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (session?.user) {
+        setLoadingMessage('Loading your profile...');
+        const { user: currentUser, error } = await getCurrentUser();
+
+        if (error || !currentUser) {
+          throw new Error('Failed to load profile');
+        }
+
+        setUser(currentUser);
+        setIsLoggedIn(true);
+        setLoadingMessage('Success!');
+      } else {
+        setIsLoggedIn(false);
+        setLoadingMessage('No active session found');
+      }
+    } catch (error) {
+      console.error('[Auth] Retry failed:', error);
+      setLoadingMessage('Retry failed. Please refresh the page.');
+    } finally {
+      setTimeout(() => setIsAuthLoading(false), 500);
+    }
+  };
+
   return (
     <UserContext.Provider value={{
       user, setUser,
@@ -441,6 +526,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       language, setLanguage,
       isLoggedIn, setIsLoggedIn,
       isAuthLoading,
+      loadingMessage,
       transactions, setTransactions,
       notifications, setNotifications,
       messages, setMessages,
@@ -451,7 +537,8 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       t,
       showSubscriptionModal, setShowSubscriptionModal,
       showAlert, currentAlert,
-      updateUserInDB
+      updateUserInDB,
+      retryAuth
     }}>
       {children}
     </UserContext.Provider>

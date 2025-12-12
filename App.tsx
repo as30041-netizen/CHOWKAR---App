@@ -25,6 +25,7 @@ import {
 const AppContent: React.FC = () => {
   const {
     user, setUser, role, setRole, language, setLanguage, isLoggedIn, setIsLoggedIn, isAuthLoading,
+    loadingMessage, retryAuth,
     transactions, setTransactions, notifications, setNotifications, messages, setMessages,
     addNotification, checkFreeLimit, incrementAiUsage, logout, t,
     showSubscriptionModal, setShowSubscriptionModal,
@@ -462,12 +463,21 @@ const AppContent: React.FC = () => {
   if (isAuthLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-green-50 to-teal-100 flex flex-col items-center justify-center p-6 font-sans text-gray-900">
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center max-w-md w-full">
           <div className="w-20 h-20 bg-gradient-to-tr from-emerald-100 to-green-50 rounded-full flex items-center justify-center mb-6 shadow-inner ring-4 ring-white animate-pulse">
             <MapPin size={40} className="text-emerald-600 drop-shadow-sm" fill="#10b981" />
           </div>
-          <h1 className="text-4xl font-black text-emerald-950 tracking-tighter drop-shadow-sm mb-4">CHOWKAR</h1>
-          <Loader2 size={32} className="text-emerald-600 animate-spin" />
+          <h1 className="text-4xl font-black text-emerald-950 tracking-tighter drop-shadow-sm mb-2">CHOWKAR</h1>
+          <p className="text-sm text-emerald-700 font-medium mb-6">{loadingMessage}</p>
+          <Loader2 size={32} className="text-emerald-600 animate-spin mb-6" />
+          {loadingMessage.includes('timeout') || loadingMessage.includes('Error') || loadingMessage.includes('failed') ? (
+            <button
+              onClick={retryAuth}
+              className="mt-4 px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition-colors shadow-lg"
+            >
+              Retry Connection
+            </button>
+          ) : null}
         </div>
       </div>
     );
