@@ -47,10 +47,10 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const [user, setUser] = useState<User>(() => getInitialState('chowkar_user', MOCK_USER));
+  const [user, setUser] = useState<User>(MOCK_USER);
   const [role, setRole] = useState<UserRole>(() => getInitialState('chowkar_role', UserRole.WORKER));
   const [language, setLanguage] = useState<'en' | 'hi'>(() => getInitialState('chowkar_language', 'en'));
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => getInitialState('chowkar_isLoggedIn', false));
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -59,49 +59,55 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [currentAlert, setCurrentAlert] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
-  // Persistence Effects (only for preferences)
-  useEffect(() => localStorage.setItem('chowkar_user', JSON.stringify(user)), [user]);
+  // Persistence Effects (only for preferences, NOT auth state)
   useEffect(() => localStorage.setItem('chowkar_role', JSON.stringify(role)), [role]);
   useEffect(() => localStorage.setItem('chowkar_language', JSON.stringify(language)), [language]);
-  useEffect(() => localStorage.setItem('chowkar_isLoggedIn', JSON.stringify(isLoggedIn)), [isLoggedIn]);
 
   useEffect(() => {
-    const checkSession = async () => {
-      try {
-        console.log('[Auth] Checking for existing session...');
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Auth check timeout')), 10000)
-        );
+    console.log('[Auth] Initializing authentication...');
 
-        const { user: currentUser } = await Promise.race([
-          getCurrentUser(),
-          timeoutPromise
-        ]) as { user: User | null };
-
-        if (currentUser) {
-          console.log('[Auth] Found existing session for user:', currentUser.name);
-          setUser(currentUser);
-          setIsLoggedIn(true);
-        } else {
-          console.log('[Auth] No existing session found');
-        }
-      } catch (error) {
-        if (error instanceof Error && error.message === 'Auth check timeout') {
-          console.warn('[Auth] Session check timed out - continuing without authentication');
-        } else {
-          console.error('[Auth] Error checking session:', error);
-        }
-      } finally {
-        setIsAuthLoading(false);
-      }
-    };
-
-    checkSession();
+    // Clean up old localStorage auth data that may interfere
+    try {
+      localStorage.removeItem('chowkar_isLoggedIn');
+      localStorage.removeItem('chowkar_user');
+    } catch (e) {
+      console.warn('[Auth] Could not clean localStorage:', e);
+    }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('[Auth] State change event:', event, 'Session exists:', !!session);
 
-      if (event === 'SIGNED_IN' && session?.user) {
+      if (event === 'INITIAL_SESSION') {
+        if (session?.user) {
+          console.log('[Auth] Initial session detected, fetching profile...');
+          setIsAuthLoading(true);
+
+          try {
+            const { user: currentUser, error } = await getCurrentUser();
+
+            if (error) {
+              console.error('[Auth] Error fetching user profile:', error);
+              setIsAuthLoading(false);
+              return;
+            }
+
+            if (currentUser) {
+              console.log('[Auth] Profile loaded successfully:', currentUser.name);
+              setUser(currentUser);
+              setIsLoggedIn(true);
+            } else {
+              console.warn('[Auth] No user profile returned');
+            }
+          } catch (err) {
+            console.error('[Auth] Exception while fetching profile:', err);
+          } finally {
+            setIsAuthLoading(false);
+          }
+        } else {
+          console.log('[Auth] No initial session found');
+          setIsAuthLoading(false);
+        }
+      } else if (event === 'SIGNED_IN' && session?.user) {
         console.log('[Auth] User signed in, fetching profile...');
         setIsAuthLoading(true);
 
@@ -133,6 +139,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setTransactions([]);
         setNotifications([]);
         setMessages([]);
+        setIsAuthLoading(false);
       } else if (event === 'TOKEN_REFRESHED') {
         console.log('[Auth] Token refreshed');
       } else if (event === 'USER_UPDATED') {
