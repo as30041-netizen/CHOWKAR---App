@@ -23,7 +23,9 @@ export type Database = {
         Row: {
           id: string;
           name: string;
-          phone: string;
+          phone: string | null;
+          email: string | null;
+          auth_user_id: string | null;
           location: string;
           latitude: number | null;
           longitude: number | null;
@@ -43,7 +45,9 @@ export type Database = {
         Insert: {
           id: string;
           name: string;
-          phone: string;
+          phone?: string | null;
+          email?: string | null;
+          auth_user_id?: string | null;
           location: string;
           latitude?: number | null;
           longitude?: number | null;
@@ -61,7 +65,8 @@ export type Database = {
         Update: {
           id?: string;
           name?: string;
-          phone?: string;
+          phone?: string | null;
+          email?: string | null;
           location?: string;
           latitude?: number | null;
           longitude?: number | null;
