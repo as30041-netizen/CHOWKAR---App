@@ -948,6 +948,22 @@ const AppContent: React.FC = () => {
                       <div className="flex items-center text-xs text-gray-500 mb-3"><Star size={12} className="text-orange-400 fill-orange-400 mr-1" /> {bid.workerRating} • {bid.workerLocation}</div>
                       <p className="text-sm bg-gray-50 p-2 rounded mb-3 italic">"{bid.message}"</p>
 
+                      {bid.negotiationHistory && bid.negotiationHistory.length > 0 && (
+                        <div className="mb-3 bg-gray-50 rounded-lg p-3 text-xs border border-gray-100">
+                          <p className="font-bold text-gray-400 uppercase tracking-wider mb-2 text-[10px]">History</p>
+                          <div className="space-y-1.5">
+                            {bid.negotiationHistory.map((h, i) => (
+                              <div key={i} className="flex justify-between items-center">
+                                <span className={h.by === UserRole.POSTER ? "text-emerald-700 font-bold" : "text-gray-600"}>
+                                  {h.by === UserRole.POSTER ? t.you : t.worker}
+                                </span>
+                                <span className="font-mono font-medium">₹{h.amount}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {isWaitingForWorker ? (
                         <div className="text-center text-xs text-gray-400 font-medium py-2 border-t border-dashed">
                           {t.youCountered} ₹{bid.amount}
@@ -958,10 +974,19 @@ const AppContent: React.FC = () => {
                             const updatedJob = jobs.find(j => j.id === viewBidsModal.job!.id);
                             if (updatedJob) {
                               try {
-                                const updatedBids = updatedJob.bids.map(b => b.id === bid.id ? { ...b, status: 'REJECTED' as const } : b);
-                                await updateJob({ ...updatedJob, bids: updatedBids });
-                                setViewBidsModal({ ...viewBidsModal, job: { ...updatedJob, bids: updatedBids } });
-                                await addNotification(bid.workerId, t.notifBidRejected, t.notifBidRejectedBody, "WARNING", updatedJob.id);
+                                const bidToReject = updatedJob.bids.find(b => b.id === bid.id);
+                                if (bidToReject) {
+                                  const updatedBid = { ...bidToReject, status: 'REJECTED' as const };
+                                  await updateBid(updatedBid);
+
+                                  // Update local modal
+                                  setViewBidsModal(prev => ({
+                                    ...prev,
+                                    job: { ...prev.job!, bids: prev.job!.bids.map(b => b.id === bid.id ? updatedBid : b) }
+                                  }));
+
+                                  await addNotification(bid.workerId, t.notifBidRejected, t.notifBidRejectedBody, "WARNING", updatedJob.id);
+                                }
                               } catch (error) {
                                 console.error('Error rejecting bid:', error);
                                 showAlert('Failed to reject bid. Please try again.', 'error');
