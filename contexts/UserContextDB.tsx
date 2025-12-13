@@ -32,6 +32,7 @@ interface UserContextType {
   currentAlert: { message: string; type: 'success' | 'error' | 'info' } | null;
   updateUserInDB: (updates: Partial<User>) => Promise<void>;
   retryAuth: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -231,6 +232,12 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const fetchUserData = async () => {
     console.log('[Data] Starting to fetch user data...');
     try {
+      // 1. Fetch latest profile data (to capture trigger updates e.g. rating, wallet)
+      const { user: refreshedUser, error: profileError } = await getCurrentUser();
+      if (!profileError && refreshedUser) {
+        setUser(refreshedUser);
+      }
+
       // Fetch transactions
       console.log('[Data] Fetching transactions...');
       const { data: transactionsData, error: transError } = await supabase
@@ -560,7 +567,8 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       showSubscriptionModal, setShowSubscriptionModal,
       showAlert, currentAlert,
       updateUserInDB,
-      retryAuth
+      retryAuth,
+      refreshUser: fetchUserData
     }}>
       {children}
     </UserContext.Provider>

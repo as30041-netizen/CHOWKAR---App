@@ -12,6 +12,7 @@ import { enhanceBidMessageStream, translateText } from './services/geminiService
 import { getDeviceLocation, calculateDistance } from './utils/geo';
 import { signInWithGoogle, completeProfile } from './services/authService';
 import { supabase } from './lib/supabase';
+import { ReviewModal } from './components/ReviewModal';
 import {
   MapPin, LayoutGrid, Plus, Wallet, UserCircle, Search, SlidersHorizontal,
   ArrowLeftRight, Bell, MessageCircle, Languages, Loader2, Navigation,
@@ -54,8 +55,8 @@ const AppContent: React.FC = () => {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [chatOpen, setChatOpen] = useState<{ isOpen: boolean; job: Job | null }>({ isOpen: false, job: null });
   const [bidModalOpen, setBidModalOpen] = useState<{ isOpen: boolean; jobId: string | null }>({ isOpen: false, jobId: null });
+  const [reviewModalData, setReviewModalData] = useState<{ isOpen: boolean, revieweeId: string, revieweeName: string, jobId: string } | null>(null);
   const [viewBidsModal, setViewBidsModal] = useState<{ isOpen: boolean; job: Job | null }>({ isOpen: false, job: null });
-  const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [counterModalOpen, setCounterModalOpen] = useState<{ isOpen: boolean; bidId: string | null; jobId: string | null }>({ isOpen: false, bidId: null, jobId: null });
   const [counterInputAmount, setCounterInputAmount] = useState('');
 
@@ -92,10 +93,7 @@ const AppContent: React.FC = () => {
   const [editProfilePhoto, setEditProfilePhoto] = useState('');
 
   // --- Review State ---
-  const [reviewTarget, setReviewTarget] = useState<{ id: string, name: string } | null>(null);
-  const [reviewRating, setReviewRating] = useState(0);
-  const [reviewComment, setReviewComment] = useState('');
-  const [reviewTags, setReviewTags] = useState<string[]>([]);
+  // Removed reviewTarget, reviewRating, reviewComment, reviewTags as they are now handled by reviewModalData and handleSubmitReview arguments.
 
   const unreadCount = notifications.filter(n => n.userId === user.id && !n.read).length;
   const postedJobsCount = jobs.filter(j => j.posterId === user.id).length;
@@ -239,23 +237,18 @@ const AppContent: React.FC = () => {
     if (!job) return;
 
     try {
-      const updatedBids = job.bids.map(b =>
-        b.id === bidId ? { ...b, status: 'ACCEPTED' as const } : { ...b, status: 'REJECTED' as const }
-      );
-      await updateJob({ ...job, status: JobStatus.IN_PROGRESS, acceptedBidId: bidId, bids: updatedBids });
+      const { error } = await supabase.rpc('accept_bid', {
+        p_job_id: jobId,
+        p_bid_id: bidId,
+        p_poster_id: user.id,
+        p_worker_id: workerId,
+        p_amount: bidAmount,
+        p_poster_fee: POSTER_FEE
+      });
 
-      const newBalance = user.walletBalance - POSTER_FEE;
+      if (error) throw error;
 
-      const posterTx: Transaction = { id: `tx${Date.now()}p`, userId: user.id, amount: POSTER_FEE, type: 'DEBIT', description: t.alertBookingFee, timestamp: Date.now() };
-      const workerTx: Transaction = { id: `tx${Date.now()}w`, userId: workerId, amount: Math.ceil(bidAmount * WORKER_COMMISSION_RATE), type: 'DEBIT', description: 'Success Fee', timestamp: Date.now() };
-
-      await supabase.from('transactions').insert([
-        { user_id: user.id, amount: POSTER_FEE, type: 'DEBIT', description: t.alertBookingFee },
-        { user_id: workerId, amount: Math.ceil(bidAmount * WORKER_COMMISSION_RATE), type: 'DEBIT', description: 'Success Fee' }
-      ]);
-
-      setUser(prev => ({ ...prev, walletBalance: newBalance }));
-      setTransactions(prev => [posterTx, workerTx, ...prev]);
+      await refreshUser(); // Update wallet and transactions from DB
 
       setViewBidsModal({ isOpen: false, job: null });
       if (selectedJob) setSelectedJob(null);
@@ -364,6 +357,43 @@ const AppContent: React.FC = () => {
     } catch (error) {
       console.error('Error replying to counter offer:', error);
       showAlert('Failed to process counter offer. Please try again.', 'error');
+    }
+  };
+
+  const handleWithdrawBid = async (jobId: string, bidId: string) => {
+    if (!confirm(language === 'en' ? 'Are you sure you want to withdraw your bid?' : 'क्या आप अपनी बोली वापस लेना चाहते हैं?')) return;
+    try {
+      const job = jobs.find(j => j.id === jobId);
+      if (!job) return;
+      const updatedJob = { ...job, bids: job.bids.filter(b => b.id !== bidId) };
+      await updateJob(updatedJob);
+      showAlert(language === 'en' ? 'Bid withdrawn' : 'बोली वापस ली गई', 'info');
+    } catch (e) {
+      console.error(e);
+      showAlert('Error withdrawing bid', 'error');
+    }
+  };
+
+  const handleCompleteJob = async (job: Job) => {
+    try {
+      await updateJob({ ...job, status: JobStatus.COMPLETED });
+
+      const acceptedBid = job.bids.find(b => b.id === job.acceptedBidId);
+      if (acceptedBid) {
+        await addNotification(acceptedBid.workerId, "Job Completed", "Poster marked the job as completed.", "SUCCESS", job.id);
+        // Open review modal for Worker
+        setReviewModalData({
+          isOpen: true,
+          revieweeId: acceptedBid.workerId,
+          revieweeName: acceptedBid.workerName,
+          jobId: job.id
+        });
+      }
+      showAlert("Job marked as completed!", "success");
+      setSelectedJob(null);
+    } catch (e) {
+      console.error(e);
+      showAlert("Error updating job.", "error");
     }
   };
 
@@ -672,6 +702,7 @@ const AppContent: React.FC = () => {
                     }}
                     onClick={() => setSelectedJob(job)}
                     onReplyToCounter={handleWorkerReplyToCounter}
+                    onWithdrawBid={handleWithdrawBid}
                   />
                 ))}
               {jobs.length === 0 && <div className="text-center py-10 text-gray-400"><Briefcase size={48} className="mx-auto mb-2 opacity-50" /><p>{t.noJobsFound}</p></div>}
@@ -962,17 +993,19 @@ const AppContent: React.FC = () => {
                       <p className="text-sm bg-gray-50 p-2 rounded mb-3 italic">"{bid.message}"</p>
 
                       {bid.negotiationHistory && bid.negotiationHistory.length > 0 && (
-                        <div className="mb-3 bg-gray-50 rounded-lg p-3 text-xs border border-gray-100">
-                          <p className="font-bold text-gray-400 uppercase tracking-wider mb-2 text-[10px]">History</p>
-                          <div className="space-y-1.5">
-                            {bid.negotiationHistory.map((h, i) => (
-                              <div key={i} className="flex justify-between items-center">
-                                <span className={h.by === UserRole.POSTER ? "text-emerald-700 font-bold" : "text-gray-600"}>
-                                  {h.by === UserRole.POSTER ? t.you : t.worker}
-                                </span>
-                                <span className="font-mono font-medium">₹{h.amount}</span>
-                              </div>
-                            ))}
+                        <div className="mb-3 bg-gray-50/50 rounded-lg p-2 text-xs border border-gray-100/50 max-h-40 overflow-y-auto no-scrollbar flex flex-col gap-2">
+                          <div className="space-y-2">
+                            {bid.negotiationHistory.map((h, i) => {
+                              const isMe = h.by === UserRole.POSTER;
+                              return (
+                                <div key={i} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                  <div className={`px-3 py-1.5 rounded-2xl shadow-sm ${isMe ? 'bg-emerald-100 text-emerald-900 rounded-br-none border border-emerald-200' : 'bg-white text-gray-900 rounded-bl-none border border-gray-200'}`}>
+                                    <div className="font-bold">₹{h.amount}</div>
+                                    <div className="text-[9px] opacity-70 mt-0.5">{h.message || (isMe ? 'Counter Offer' : 'Bid')} • {getTimeAgo(h.timestamp)}</div>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       )}
@@ -1122,18 +1155,36 @@ const AppContent: React.FC = () => {
               </div>
               <div className="p-4 border-t bg-white">
                 {role === UserRole.WORKER && selectedJob.posterId !== user.id ? (
-                  !selectedJob.bids.find(b => b.workerId === user.id) && selectedJob.status === JobStatus.OPEN ?
-                    <button onClick={() => setBidModalOpen({ isOpen: true, jobId: selectedJob.id })} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold">{t.bidNow}</button> :
-                    <div className="text-center font-bold text-emerald-600">{t.pending}</div>
+                  selectedJob.status === JobStatus.COMPLETED && selectedJob.acceptedBidId === selectedJob.bids.find(b => b.workerId === user.id)?.id ? (
+                    <button onClick={() => setReviewModalData({ isOpen: true, revieweeId: selectedJob.posterId, revieweeName: selectedJob.posterName, jobId: selectedJob.id })} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"><Star size={20} /> Rate Poster</button>
+                  ) :
+                    !selectedJob.bids.find(b => b.workerId === user.id) && selectedJob.status === JobStatus.OPEN ?
+                      <button onClick={() => setBidModalOpen({ isOpen: true, jobId: selectedJob.id })} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold">{t.bidNow}</button> :
+                      <div className="text-center font-bold text-emerald-600">{t.pending}</div>
                 ) : (
                   selectedJob.posterId === user.id && selectedJob.status === JobStatus.OPEN ?
                     <button onClick={() => setViewBidsModal({ isOpen: true, job: selectedJob })} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold">{t.viewBids} ({selectedJob.bids.length})</button> :
                     ((selectedJob.status === 'IN_PROGRESS' || selectedJob.status === 'COMPLETED') && (selectedJob.posterId === user.id || selectedJob.acceptedBidId === selectedJob.bids.find(b => b.workerId === user.id)?.id)) ?
-                      <button onClick={() => handleChatOpen(selectedJob)} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"><MessageCircle size={20} /> {t.chat}</button> : null
+                      <div className="flex gap-2 w-full">
+                        <button onClick={() => handleChatOpen(selectedJob)} className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"><MessageCircle size={20} /> {t.chat}</button>
+                        {selectedJob.status === 'IN_PROGRESS' && selectedJob.posterId === user.id && (
+                          <button onClick={() => handleCompleteJob(selectedJob)} className="flex-1 bg-black text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"><CheckCircle2 size={20} /> Complete</button>
+                        )}
+                      </div> : null
                 )}
               </div>
             </div>
           </div>
+        )}
+
+        {/* Review Modal */}
+        {reviewModalData && (
+          <ReviewModal
+            isOpen={reviewModalData.isOpen}
+            onClose={() => setReviewModalData(null)}
+            onSubmit={handleSubmitReview}
+            revieweeName={reviewModalData.revieweeName}
+          />
         )}
 
       </div>
