@@ -113,6 +113,18 @@ const AppContent: React.FC = () => {
     }
   }, [isLoggedIn]);
 
+  // --- Real-time Sync for Modals ---
+  // When 'jobs' update in background (from Realtime), update the open Modal view
+  useEffect(() => {
+    if (viewBidsModal.isOpen && viewBidsModal.job) {
+      const liveJob = jobs.find(j => j.id === viewBidsModal.job!.id);
+      // Only update if data actually changed (prevent loops)
+      if (liveJob && JSON.stringify(liveJob.bids) !== JSON.stringify(viewBidsModal.job.bids)) {
+        setViewBidsModal(prev => ({ ...prev, job: liveJob }));
+      }
+    }
+  }, [jobs, viewBidsModal.isOpen, viewBidsModal.job]);
+
   // --- Handlers ---
   const handleGoogleSignIn = async () => {
     console.log('[UI] Starting Google sign-in...');
@@ -1138,4 +1150,3 @@ export const App: React.FC = () => {
     </UserProvider>
   );
 };
-// Final Sync Trigger
