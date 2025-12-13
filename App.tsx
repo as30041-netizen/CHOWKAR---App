@@ -183,6 +183,7 @@ const AppContent: React.FC = () => {
     const newBid: Bid = {
       id: `b${Date.now()}`,
       jobId: job.id,
+      posterId: job.posterId,
       workerId: user.id,
       workerName: user.name,
       workerPhone: user.phone,

@@ -45,7 +45,9 @@ const dbBidToApp = (dbBid: any): Bid => {
     message: dbBid.message,
     status: dbBid.status as 'PENDING' | 'ACCEPTED' | 'REJECTED',
     negotiationHistory: dbBid.negotiation_history || [],
-    createdAt: new Date(dbBid.created_at).getTime()
+    negotiationHistory: dbBid.negotiation_history || [],
+    createdAt: new Date(dbBid.created_at).getTime(),
+    posterId: dbBid.poster_id
   };
 };
 
@@ -196,6 +198,7 @@ export const createBid = async (bid: Bid): Promise<{ success: boolean; error?: s
       .insert({
         // Let DB generate UUID for id
         job_id: bid.jobId,
+        poster_id: bid.posterId, // Added for Realtime RLS
         worker_id: bid.workerId,
         worker_name: bid.workerName,
         worker_phone: bid.workerPhone,

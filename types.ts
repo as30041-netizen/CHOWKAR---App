@@ -67,6 +67,7 @@ export interface Bid {
   createdAt: number;
   status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
   negotiationHistory: NegotiationEntry[]; // Track the back and forth
+  posterId?: string; // Denormalized for simpler RLS/Realtime
 }
 
 export interface Job {
