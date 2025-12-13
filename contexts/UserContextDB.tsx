@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useEffect, useRef } from 'react';
 import { User, UserRole, Transaction, Notification, ChatMessage } from '../types';
 import { MOCK_USER, TRANSLATIONS, FREE_AI_USAGE_LIMIT } from '../constants';
 import { supabase } from '../lib/supabase';
@@ -62,6 +62,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [loadingMessage, setLoadingMessage] = useState('Initializing...');
   const [hasInitialized, setHasInitialized] = useState(false);
+  const currentUserIdRef = useRef<string | null>(null);
 
   // Persistence Effects (only for preferences, NOT auth state)
   useEffect(() => localStorage.setItem('chowkar_role', JSON.stringify(role)), [role]);
@@ -129,6 +130,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               setLoadingMessage('Setting up your account...');
               setUser(currentUser);
               setIsLoggedIn(true);
+              currentUserIdRef.current = currentUser.id;
             } else {
               console.warn('[Auth] No user profile returned');
               setLoadingMessage('Profile not found. Please try again.');
@@ -145,6 +147,11 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setIsAuthLoading(false);
         }
       } else if (event === 'SIGNED_IN' && session?.user) {
+        if (currentUserIdRef.current === session.user.id) {
+          console.log('[Auth] Already signed in as correct user (skipping redundant fetch)');
+          setIsAuthLoading(false);
+          return;
+        }
         console.log('[Auth] User signed in, fetching profile...');
         setIsAuthLoading(true);
         setLoadingMessage('Creating your profile...');
@@ -172,6 +179,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setLoadingMessage('Welcome! Setting up your account...');
             setUser(currentUser);
             setIsLoggedIn(true);
+            currentUserIdRef.current = currentUser.id;
           } else {
             console.warn('[Auth] No user profile returned after sign in');
             setLoadingMessage('Profile creation failed. Please try again.');
@@ -189,6 +197,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.log('[Auth] User signed out, clearing state');
           setUser(MOCK_USER);
           setIsLoggedIn(false);
+          currentUserIdRef.current = null;
           setTransactions([]);
           setNotifications([]);
           setMessages([]);
