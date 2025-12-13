@@ -59,6 +59,7 @@ const AppContent: React.FC = () => {
   const [viewBidsModal, setViewBidsModal] = useState<{ isOpen: boolean; job: Job | null }>({ isOpen: false, job: null });
   const [counterModalOpen, setCounterModalOpen] = useState<{ isOpen: boolean; bidId: string | null; jobId: string | null }>({ isOpen: false, bidId: null, jobId: null });
   const [counterInputAmount, setCounterInputAmount] = useState('');
+  const [isAcceptingBid, setIsAcceptingBid] = useState(false);
 
   // --- Job Editing State ---
   const [editingJob, setEditingJob] = useState<Job | null>(null);
@@ -236,6 +237,7 @@ const AppContent: React.FC = () => {
     const job = jobs.find(j => j.id === jobId);
     if (!job) return;
 
+    setIsAcceptingBid(true);
     try {
       const { error } = await supabase.rpc('accept_bid', {
         p_job_id: jobId,
@@ -258,6 +260,8 @@ const AppContent: React.FC = () => {
     } catch (error) {
       console.error('Error accepting bid:', error);
       showAlert('Failed to accept bid. Please try again.', 'error');
+    } finally {
+      setIsAcceptingBid(false);
     }
   };
 
@@ -1040,7 +1044,9 @@ const AppContent: React.FC = () => {
                             }
                           }} className="flex-1 py-2 border border-red-200 text-red-600 rounded-lg font-bold text-sm">{t.rejectBid}</button>
                           <button onClick={() => setCounterModalOpen({ isOpen: true, bidId: bid.id, jobId: viewBidsModal.job!.id })} className="flex-1 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg font-bold text-sm">{t.counterOffer}</button>
-                          <button onClick={() => handleAcceptBid(viewBidsModal.job!.id, bid.id, bid.amount, bid.workerId)} className="flex-[1.5] py-2 bg-emerald-600 text-white rounded-lg font-bold text-sm">{t.acceptFor} {bid.amount}</button>
+                          <button disabled={isAcceptingBid} onClick={() => handleAcceptBid(viewBidsModal.job!.id, bid.id, bid.amount, bid.workerId)} className="flex-[1.5] py-2 bg-emerald-600 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed">
+                            {isAcceptingBid ? <><Loader2 size={16} className="animate-spin" /> Processing</> : <>{t.acceptFor} {bid.amount}</>}
+                          </button>
                         </div>
                       )}
                     </div>
@@ -1169,6 +1175,12 @@ const AppContent: React.FC = () => {
                         <button onClick={() => handleChatOpen(selectedJob)} className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"><MessageCircle size={20} /> {t.chat}</button>
                         {selectedJob.status === 'IN_PROGRESS' && selectedJob.posterId === user.id && (
                           <button onClick={() => handleCompleteJob(selectedJob)} className="flex-1 bg-black text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"><CheckCircle2 size={20} /> Complete</button>
+                        )}
+                        {selectedJob.status === JobStatus.COMPLETED && selectedJob.posterId === user.id && (
+                          <button onClick={() => {
+                            const workerToRate = selectedJob.bids.find(b => b.id === selectedJob.acceptedBidId);
+                            if (workerToRate) setReviewModalData({ isOpen: true, revieweeId: workerToRate.workerId, revieweeName: workerToRate.workerName, jobId: selectedJob.id });
+                          }} className="flex-1 bg-amber-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"><Star size={20} /> Rate Worker</button>
                         )}
                       </div> : null
                 )}
