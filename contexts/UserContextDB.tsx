@@ -484,9 +484,8 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.log('[Auth] Logging out...');
       const result = await signOut();
       if (result.error) {
-        console.error('[Auth] Sign out error:', result.error);
-        showAlert('Failed to sign out. Please try again.', 'error');
-        return;
+        console.error('[Auth] Sign out error (forcing local logout):', result.error);
+        // We continue to clear local state even if server logout fails
       }
       console.log('[Auth] Sign out successful');
       // State will be cleared by the SIGNED_OUT event handler

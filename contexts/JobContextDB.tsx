@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 interface JobContextType {
   jobs: Job[];
   setJobs: React.Dispatch<React.SetStateAction<Job[]>>;
-  addJob: (job: Job) => Promise<void>;
+  addJob: (job: Job) => Promise<string | undefined>;
   updateJob: (job: Job) => Promise<void>;
   deleteJob: (jobId: string) => Promise<void>;
   loading: boolean;
@@ -87,13 +87,16 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setJobs(prev => [job, ...prev]);
 
       // Save to database
-      const { success, error } = await createJobDB(job);
+      const { success, error, data } = await createJobDB(job);
 
       if (!success || error) {
         // Rollback on error
         setJobs(prev => prev.filter(j => j.id !== job.id));
         throw new Error(error || 'Failed to create job');
       }
+
+      // Return the real DB ID
+      return data?.id;
     } catch (err) {
       console.error('Error adding job:', err);
       throw err;

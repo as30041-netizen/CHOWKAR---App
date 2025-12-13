@@ -91,7 +91,7 @@ export const fetchJobs = async (): Promise<{ jobs: Job[]; error?: string }> => {
 };
 
 // Create a new job
-export const createJob = async (job: Job): Promise<{ success: boolean; error?: string }> => {
+export const createJob = async (job: Job): Promise<{ success: boolean; error?: string; data?: { id: string } }> => {
   try {
     console.log('[JobService] Creating job:', job.title);
     const { data, error } = await supabase
@@ -123,7 +123,7 @@ export const createJob = async (job: Job): Promise<{ success: boolean; error?: s
     }
 
     console.log('[JobService] Job created successfully with ID:', data.id);
-    return { success: true };
+    return { success: true, data: { id: data.id } };
   } catch (error: any) {
     console.error('[JobService] Error creating job:', error);
     const errorMessage = error?.message || error?.toString() || 'Failed to create job';
