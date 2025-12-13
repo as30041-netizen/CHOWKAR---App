@@ -194,7 +194,7 @@ export const createBid = async (bid: Bid): Promise<{ success: boolean; error?: s
     const { error } = await supabase
       .from('bids')
       .insert({
-        id: bid.id,
+        // Let DB generate UUID for id
         job_id: bid.jobId,
         worker_id: bid.workerId,
         worker_name: bid.workerName,
