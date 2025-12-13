@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { Job } from '../types';
-import { fetchJobs, createJob as createJobDB, updateJob as updateJobDB, deleteJob as deleteJobDB, createBid as createBidDB } from '../services/jobService';
+import { fetchJobs, createJob as createJobDB, updateJob as updateJobDB, deleteJob as deleteJobDB, createBid as createBidDB, updateBid as updateBidDB } from '../services/jobService';
 import { supabase } from '../lib/supabase';
 
 interface JobContextType {
@@ -10,6 +10,7 @@ interface JobContextType {
   updateJob: (job: Job) => Promise<void>;
   deleteJob: (jobId: string) => Promise<void>;
   addBid: (bid: Bid) => Promise<void>;
+  updateBid: (bid: Bid) => Promise<void>;
   loading: boolean;
   error: string | null;
 }
@@ -177,8 +178,30 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
+  const updateBid = async (bid: Bid) => {
+    try {
+      // Optimistically update UI
+      setJobs(prev => prev.map(j => {
+        if (j.id === bid.jobId) {
+          return { ...j, bids: j.bids.map(b => b.id === bid.id ? bid : b) };
+        }
+        return j;
+      }));
+
+      const { success, error } = await updateBidDB(bid);
+
+      if (!success || error) {
+        loadJobs();
+        throw new Error(error || 'Failed to update bid');
+      }
+    } catch (err) {
+      console.error('Error updating bid:', err);
+      throw err;
+    }
+  };
+
   return (
-    <JobContext.Provider value={{ jobs, setJobs, addJob, updateJob, deleteJob, addBid, loading, error }}>
+    <JobContext.Provider value={{ jobs, setJobs, addJob, updateJob, deleteJob, addBid, updateBid, loading, error }}>
       {children}
     </JobContext.Provider>
   );

@@ -32,7 +32,7 @@ const AppContent: React.FC = () => {
     showAlert, currentAlert, updateUserInDB
   } = useUser();
 
-  const { jobs, setJobs, updateJob, deleteJob, addBid } = useJobs();
+  const { jobs, setJobs, updateJob, deleteJob, addBid, updateBid } = useJobs();
 
   // --- Auth State ---
   const [showProfileCompletion, setShowProfileCompletion] = useState(false);
@@ -280,24 +280,24 @@ const AppContent: React.FC = () => {
     const job = jobs.find(j => j.id === counterModalOpen.jobId);
     if (job) {
       try {
-        const updatedBids = job.bids.map(b => {
-          if (b.id === counterModalOpen.bidId) {
-            return {
-              ...b,
+        const bid = job.bids.find(b => b.id === counterModalOpen.bidId);
+        if (bid) {
+          const updatedBid = {
+            ...bid,
+            amount: newAmount,
+            negotiationHistory: [...(bid.negotiationHistory || []), {
               amount: newAmount,
-              negotiationHistory: [...(b.negotiationHistory || []), {
-                amount: newAmount,
-                by: UserRole.POSTER,
-                timestamp: Date.now()
-              }]
-            }
-          }
-          return b;
-        });
-        const updatedJob = { ...job, bids: updatedBids };
-        await updateJob(updatedJob);
+              by: UserRole.POSTER,
+              timestamp: Date.now()
+            }]
+          };
+          await updateBid(updatedBid);
 
-        if (viewBidsModal.isOpen) setViewBidsModal({ ...viewBidsModal, job: updatedJob });
+          // Update local view modal if open
+          if (viewBidsModal.isOpen) {
+            setViewBidsModal(prev => ({ ...prev, job: { ...prev.job!, bids: prev.job!.bids.map(b => b.id === bid.id ? updatedBid : b) } }));
+          }
+        }
         const workerId = job.bids.find(b => b.id === counterModalOpen.bidId)?.workerId;
         if (workerId) await addNotification(workerId, t.notifCounterOffer, `${t.posterCountered}: ₹${newAmount}`, "INFO", job.id);
       } catch (error) {
@@ -315,18 +315,39 @@ const AppContent: React.FC = () => {
     if (!job) return;
 
     try {
-      let updatedBids = job.bids;
+      const bid = job.bids.find(b => b.id === bidId);
+      if (!bid) return;
+
       if (action === 'ACCEPT') {
-        updatedBids = job.bids.map(b => b.id === bidId ? { ...b, negotiationHistory: [...(b.negotiationHistory || []), { amount: b.amount, by: UserRole.WORKER, timestamp: Date.now(), message: "Accepted Counter Offer" }] } : b);
+        const updatedBid = { ...bid, negotiationHistory: [...(bid.negotiationHistory || []), { amount: bid.amount, by: UserRole.WORKER, timestamp: Date.now(), message: "Accepted Counter Offer" }] };
+        await updateBid(updatedBid);
         await addNotification(job.posterId, "Counter Accepted", "Worker accepted your offer. Please finalize hiring.", "SUCCESS", jobId);
       } else if (action === 'REJECT') {
-        updatedBids = job.bids.filter(b => b.id !== bidId);
+        // Rejecting usually deletes the bid or sets status REJECTED
+        // Current logic deleted it.
+        // If DELETE, updateBid doesn't support DELETE. 
+        // We need deleteBid? Or update status to REJECTED.
+        // Original logic: updatedBids = job.bids.filter(...) -> calls updateJob -> DELETES bid from array.
+        // To delete a bid, we should use deleteBid? Or update status?
+        // Let's set status to REJECTED for better history?
+        // But original logic removed it.
+        // Let's assume we maintain original behavior: Remove it.
+        // Wait, context has deleteBid? NO. context has deleteJob.
+        // jobService has deleteJob.
+        // Does jobService have deleteBid? No.
+        // Okay, for REJECT, we will keep using updateJob (removal from array) OR implement deleteBid.
+        // BUT, actually if we just set status to REJECTED it's better.
+        // User's code: updatedBids = job.bids.filter(b => b.id !== bidId);
+        // This implies DELETING.
+        // Since I don't have deleteBid exposed, I'll stick to updateJob for DELETE only.
+        const updatedJob = { ...job, bids: job.bids.filter(b => b.id !== bidId) };
+        await updateJob(updatedJob);
         showAlert(t.alertJobDeleted, 'info');
       } else if (action === 'COUNTER' && amount) {
-        updatedBids = job.bids.map(b => b.id === bidId ? { ...b, amount, negotiationHistory: [...(b.negotiationHistory || []), { amount, by: UserRole.WORKER, timestamp: Date.now() }] } : b);
+        const updatedBid = { ...bid, amount, negotiationHistory: [...(bid.negotiationHistory || []), { amount, by: UserRole.WORKER, timestamp: Date.now() }] };
+        await updateBid(updatedBid);
         await addNotification(job.posterId, t.notifCounterOffer, `Worker countered: ₹${amount}`, "INFO", jobId);
       }
-      await updateJob({ ...job, bids: updatedBids });
     } catch (error) {
       console.error('Error replying to counter offer:', error);
       showAlert('Failed to process counter offer. Please try again.', 'error');
