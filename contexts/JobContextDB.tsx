@@ -11,6 +11,7 @@ interface JobContextType {
   deleteJob: (jobId: string) => Promise<void>;
   addBid: (bid: Bid) => Promise<void>;
   updateBid: (bid: Bid) => Promise<void>;
+  refreshJobs: () => Promise<void>;
   loading: boolean;
   error: string | null;
 }
@@ -24,7 +25,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Fetch jobs on mount
   useEffect(() => {
-    loadJobs();
+    refreshJobs();
   }, []);
 
   // Real-time subscription for jobs
@@ -40,8 +41,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         },
         (payload) => {
           // Reload jobs on any change
-          // For production, optimize this to update only affected job
-          loadJobs();
+          refreshJobs();
         }
       )
       .on(
@@ -53,7 +53,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         },
         (payload) => {
           // Reload jobs when bids change
-          loadJobs();
+          refreshJobs();
         }
       )
       .subscribe();
@@ -63,7 +63,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
   }, []);
 
-  const loadJobs = async () => {
+  const refreshJobs = async () => {
     try {
       setLoading(true);
       const { jobs: fetchedJobs, error: fetchError } = await fetchJobs();
@@ -201,7 +201,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   return (
-    <JobContext.Provider value={{ jobs, setJobs, addJob, updateJob, deleteJob, addBid, updateBid, loading, error }}>
+    <JobContext.Provider value={{ jobs, setJobs, addJob, updateJob, deleteJob, addBid, updateBid, refreshJobs, loading, error }}>
       {children}
     </JobContext.Provider>
   );

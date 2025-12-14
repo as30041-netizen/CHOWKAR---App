@@ -5,7 +5,7 @@ import { JobCard } from '../components/JobCard';
 import { Job, UserRole, JobStatus } from '../types';
 import { calculateDistance } from '../utils/geo';
 import { CATEGORIES, CATEGORY_TRANSLATIONS } from '../constants';
-import { Search, SlidersHorizontal, CheckCircle2, Mic, MicOff, Briefcase } from 'lucide-react';
+import { Search, SlidersHorizontal, CheckCircle2, Mic, MicOff, Briefcase, RotateCw } from 'lucide-react';
 
 interface HomeProps {
     onBid: (jobId: string) => void;
@@ -24,7 +24,7 @@ export const Home: React.FC<HomeProps> = ({
     setShowFilterModal, showAlert
 }) => {
     const { user, role, t, language } = useUser();
-    const { jobs } = useJobs();
+    const { jobs, loading, error, refreshJobs } = useJobs();
 
     // Local state for search/filter within Home
     const [searchQuery, setSearchQuery] = useState('');
@@ -61,10 +61,20 @@ export const Home: React.FC<HomeProps> = ({
     return (
         <div className="p-4 animate-fade-in pb-24">
             <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold text-emerald-900">
+                <h2 className="text-xl font-bold text-emerald-900 flex items-center gap-2">
                     {role === UserRole.POSTER ? t.myJobPosts : (showMyBidsOnly ? t.myApplications : t.jobsNearMe)}
+                    <button onClick={refreshJobs} className="p-1 text-emerald-600 hover:bg-emerald-50 rounded-full" title="Refresh Jobs">
+                        <div className={loading ? 'animate-spin' : ''}><RotateCw size={16} /></div>
+                    </button>
                 </h2>
             </div>
+
+            {error && (
+                <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm mb-4 flex justify-between items-center">
+                    <span>{error}</span>
+                    <button onClick={refreshJobs} className="font-bold underline">Retry</button>
+                </div>
+            )}
 
             {/* Search/Filter Bar */}
             <div className="mb-4 space-y-3">
