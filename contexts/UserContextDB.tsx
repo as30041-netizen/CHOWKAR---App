@@ -2,7 +2,7 @@ import React, { createContext, useState, useContext, ReactNode, useEffect, useRe
 import { User, UserRole, Transaction, Notification, ChatMessage } from '../types';
 import { MOCK_USER, TRANSLATIONS, FREE_AI_USAGE_LIMIT } from '../constants';
 import { supabase } from '../lib/supabase';
-import { updateWalletBalance, incrementAIUsage as incrementAIUsageDB, updateUserProfile, getCurrentUser, signOut } from '../services/authService';
+import { updateWalletBalance, incrementAIUsage as incrementAIUsageDB, updateUserProfile, getCurrentUser, getUserProfile, signOut } from '../services/authService';
 
 interface UserContextType {
   user: User;
@@ -262,8 +262,9 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const fetchUserData = async () => {
     console.log('[Data] Starting to fetch user data...');
     try {
-      // 1. Fetch latest profile data (to capture trigger updates e.g. rating, wallet)
-      const { user: refreshedUser, error: profileError } = await getCurrentUser();
+      // 1. Fetch latest profile data directly (skip auth check for speed)
+      // We already have the user.id from the optimistic state
+      const { user: refreshedUser, error: profileError } = await getUserProfile(user.id);
       if (!profileError && refreshedUser) {
         setUser(refreshedUser);
       }
@@ -371,6 +372,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     } catch (error) {
       console.error('[Data] Error fetching user data:', error);
+      showAlert('Failed to refresh data. Please check your connection.', 'error');
       // Don't block the app if data fetch fails - user can still use basic features
     }
   };

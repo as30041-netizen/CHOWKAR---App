@@ -229,6 +229,49 @@ export const updateWalletBalance = async (
   }
 };
 
+// Direct profile fetch by ID (skips auth check)
+export const getUserProfile = async (userId: string): Promise<{ user: User | null; error?: string }> => {
+  try {
+    console.log('[AuthService] Fetching profile directly for:', userId);
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (!profile) return { user: null };
+
+    const user: User = {
+      id: profile.id,
+      name: profile.name,
+      phone: profile.phone || '',
+      email: profile.email || '',
+      location: profile.location,
+      coordinates: profile.latitude && profile.longitude
+        ? { lat: Number(profile.latitude), lng: Number(profile.longitude) }
+        : undefined,
+      walletBalance: profile.wallet_balance,
+      rating: Number(profile.rating),
+      profilePhoto: profile.profile_photo || undefined,
+      isPremium: profile.is_premium,
+      aiUsageCount: profile.ai_usage_count,
+      bio: profile.bio || undefined,
+      skills: profile.skills || [],
+      experience: profile.experience || undefined,
+      jobsCompleted: profile.jobs_completed,
+      joinDate: new Date(profile.join_date).getTime(),
+      reviews: []
+    };
+
+    return { user };
+  } catch (error) {
+    console.error('[AuthService] Error fetching profile direclty:', error);
+    return { user: null, error: 'Failed to fetch profile' };
+  }
+};
+
 // Increment AI usage count
 export const incrementAIUsage = async (
   userId: string,
