@@ -45,49 +45,66 @@ const dbBidToApp = (dbBid: any): Bid => {
     message: dbBid.message,
     status: dbBid.status as 'PENDING' | 'ACCEPTED' | 'REJECTED',
     negotiationHistory: dbBid.negotiation_history || [],
-    negotiationHistory: dbBid.negotiation_history || [],
     createdAt: new Date(dbBid.created_at).getTime(),
     posterId: dbBid.poster_id
   };
 };
 
 // Fetch all jobs with their bids
+// Fetch all jobs with their bids
 export const fetchJobs = async (): Promise<{ jobs: Job[]; error?: string }> => {
   try {
-    // Fetch all jobs
-    const { data: jobsData, error: jobsError } = await supabase
-      .from('jobs')
-      .select('*')
-      .order('created_at', { ascending: false });
+    console.log('[JobService] Fetching all jobs and bids...');
 
-    if (jobsError) throw jobsError;
+    // Fetch jobs and bids in parallel for speed
+    const [jobsResult, bidsResult] = await Promise.all([
+      supabase.from('jobs').select('*').order('created_at', { ascending: false }),
+      supabase.from('bids').select('*').order('created_at', { ascending: false })
+    ]);
 
-    // Fetch all bids
-    const { data: bidsData, error: bidsError } = await supabase
-      .from('bids')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const { data: jobsData, error: jobsError } = jobsResult;
+    const { data: bidsData, error: bidsError } = bidsResult;
 
-    if (bidsError) throw bidsError;
+    if (jobsError) {
+      console.error('[JobService] Error fetching jobs table:', jobsError);
+      throw jobsError;
+    }
+
+    if (bidsError) {
+      console.error('[JobService] Error fetching bids table:', bidsError);
+      // We can continue with 0 bids if bids fail, but strictly throwing is safer for consistency
+      throw bidsError;
+    }
+
+    console.log(`[JobService] Fetched ${jobsData?.length || 0} jobs and ${bidsData?.length || 0} bids.`);
 
     // Group bids by job_id
     const bidsByJob = new Map<string, Bid[]>();
     bidsData?.forEach(dbBid => {
-      const bid = dbBidToApp(dbBid);
-      if (!bidsByJob.has(bid.jobId)) {
-        bidsByJob.set(bid.jobId, []);
+      try {
+        const bid = dbBidToApp(dbBid);
+        if (!bidsByJob.has(bid.jobId)) {
+          bidsByJob.set(bid.jobId, []);
+        }
+        bidsByJob.get(bid.jobId)!.push(bid);
+      } catch (e) {
+        console.warn('Skipping invalid bid:', dbBid.id, e);
       }
-      bidsByJob.get(bid.jobId)!.push(bid);
     });
 
     // Combine jobs with their bids
-    const jobs = jobsData?.map(dbJob =>
-      dbJobToApp(dbJob, bidsByJob.get(dbJob.id) || [])
-    ) || [];
+    const jobs = jobsData?.map(dbJob => {
+      try {
+        return dbJobToApp(dbJob, bidsByJob.get(dbJob.id) || []);
+      } catch (e) {
+        console.error('Error mapping job:', dbJob.id, e);
+        return null; // Filter out bad jobs rather than breaking completely
+      }
+    }).filter(j => j !== null) as Job[];
 
     return { jobs };
   } catch (error) {
-    console.error('Error fetching jobs:', error);
+    console.error('[JobService] Critical error fetching jobs:', error);
     return { jobs: [], error: 'Failed to fetch jobs' };
   }
 };
