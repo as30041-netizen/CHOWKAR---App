@@ -113,7 +113,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.error('[Auth] Profile fetch timeout - forcing auth completion');
             setLoadingMessage('Connection timeout. Please refresh the page.');
             setIsAuthLoading(false);
-          }, 10000); // 10 second timeout
+          }, 30000); // 30 second timeout
 
           try {
             const { user: currentUser, error } = await getCurrentUser();
@@ -162,7 +162,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.error('[Auth] Profile fetch timeout after sign in - forcing auth completion');
           setLoadingMessage('Connection timeout. Please refresh the page.');
           setIsAuthLoading(false);
-        }, 10000); // 10 second timeout
+        }, 30000); // 30 second timeout
 
         try {
           const { user: currentUser, error } = await getCurrentUser();

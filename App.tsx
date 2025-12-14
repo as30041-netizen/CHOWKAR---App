@@ -13,7 +13,7 @@ import { ReviewModal } from './components/ReviewModal';
 import {
   MapPin, UserCircle, Search, SlidersHorizontal,
   ArrowLeftRight, Bell, MessageCircle, Languages, Loader2, Navigation,
-  LayoutGrid, Plus, Wallet, XCircle, CheckCircle2, AlertCircle
+  LayoutGrid, Plus, Wallet, XCircle, CheckCircle2, AlertCircle, Star
 } from 'lucide-react';
 
 // Import Pages
@@ -449,8 +449,128 @@ const AppContent: React.FC = () => {
         </div>
       )}
 
-      {/* --- Missing Pieces: ViewBidsModal, Counter, etc. --- */}
-      {/* Note: In a full refactor, these should be separate components. Keeping minimal for now. */}
+      {/* View Bids Modal */}
+      {viewBidsModal.isOpen && viewBidsModal.job && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setViewBidsModal({ isOpen: false, job: null })}></div>
+          <div className="bg-white w-full max-w-lg rounded-3xl p-0 relative z-10 max-h-[90vh] overflow-hidden flex flex-col animate-slide-up">
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="font-bold text-lg">Bids for {viewBidsModal.job.title}</h3>
+              <button onClick={() => setViewBidsModal({ isOpen: false, job: null })} className="p-2 hover:bg-gray-200 rounded-full transition-colors"><XCircle size={24} className="text-gray-500" /></button>
+            </div>
+            <div className="p-4 overflow-y-auto flex-1 space-y-4">
+              {viewBidsModal.job.bids && viewBidsModal.job.bids.length > 0 ? (
+                viewBidsModal.job.bids.map(bid => (
+                  <div key={bid.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm relative">
+                    <div className="flex items-start gap-3 mb-3">
+                      <div className="w-10 h-10 bg-gray-100 rounded-full overflow-hidden">
+                        {bid.workerPhoto ? <img src={bid.workerPhoto} className="w-full h-full object-cover" /> : <UserCircle size={40} className="text-gray-400" />}
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-gray-900">{bid.workerName}</h4>
+                        <div className="flex items-center gap-1 text-xs text-yellow-600 font-bold"><Star size={12} fill="currentColor" /> {bid.workerRating}</div>
+                      </div>
+                      <div className="ml-auto text-right">
+                        <div className="text-xl font-black text-emerald-600">₹{bid.amount}</div>
+                        <div className="text-[10px] text-gray-400">{new Date(bid.createdAt).toLocaleDateString()}</div>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg mb-3 italic">"{bid.message}"</p>
+
+                    {/* Negotiation History */}
+                    {bid.negotiationHistory && bid.negotiationHistory.length > 1 && (
+                      <div className="mb-3 pl-3 border-l-2 border-gray-200 space-y-2">
+                        {bid.negotiationHistory.map((h, i) => (
+                          <div key={i} className="text-xs">
+                            <span className={h.by === UserRole.WORKER ? "text-blue-600 font-bold" : "text-emerald-600 font-bold"}>{h.by}: </span>
+                            <span className="text-gray-700">₹{h.amount}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {user.id === viewBidsModal.job?.posterId && bid.status === 'PENDING' && (
+                      <div className="flex gap-2 mt-2">
+                        <button onClick={() => handleAcceptBid(viewBidsModal.job!.id, bid.id, bid.amount, bid.workerId)} disabled={isAcceptingBid} className="flex-1 bg-emerald-600 text-white py-2 rounded-lg font-bold text-sm shadow-md hover:bg-emerald-700">
+                          {isAcceptingBid ? 'Accepting...' : 'Accept Bid'}
+                        </button>
+                        <button onClick={() => { setCounterModalOpen({ isOpen: true, bidId: bid.id, jobId: viewBidsModal.job!.id }); setCounterInputAmount(bid.amount.toString()); }} className="flex-1 bg-white border border-emerald-600 text-emerald-600 py-2 rounded-lg font-bold text-sm hover:bg-emerald-50">
+                          Counter
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))
+              ) : <p className="text-center text-gray-400 py-8">No bids yet.</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Counter Modal */}
+      {counterModalOpen.isOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setCounterModalOpen({ isOpen: false, bidId: null, jobId: null })}></div>
+          <div className="bg-white w-full max-w-sm rounded-3xl p-6 relative z-10 animate-pop">
+            <h3 className="font-bold text-lg mb-4">{t.counterOffer}</h3>
+            <input type="number" value={counterInputAmount} onChange={(e) => setCounterInputAmount(e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 font-bold text-2xl mb-4 text-center" />
+            <button
+              onClick={async () => {
+                // Inline handler for counter - originally handleCounterByPoster in App.tsx
+                // I need to verify if I copied handleCounterByPoster logic. I didn't. 
+                // I need to restore that logic or define it. 
+                // Let's implement it inline for now or define a helper above.
+                // Actually, better to define it as `handleCounterByPoster` in AppContent.
+                // For now, I will assume it exists or call it.
+                // Wait, I missed copying `handleCounterByPoster` in the Refactor step!
+                // I will add a placeholder alert for now and fix it in next step or try to add it now?
+                // No, I should use `showAlert("Feature coming back next step", "info")` to be safe? 
+                // No, I should fix it. I will add the logic in a separate component refactor if needed.
+                // Let's try to grab the logic.
+                if (!counterModalOpen.jobId || !counterModalOpen.bidId || !counterInputAmount) return;
+                const newAmount = parseInt(counterInputAmount);
+                const job = jobs.find(j => j.id === counterModalOpen.jobId);
+                if (job) {
+                  try {
+                    const bid = job.bids.find(b => b.id === counterModalOpen.bidId);
+                    if (bid) {
+                      const updatedBid = { ...bid, amount: newAmount, negotiationHistory: [...(bid.negotiationHistory || []), { amount: newAmount, by: UserRole.POSTER, timestamp: Date.now() }] };
+                      await updateBid(updatedBid);
+                      if (viewBidsModal.isOpen) setViewBidsModal(prev => ({ ...prev, job: { ...prev.job!, bids: prev.job!.bids.map(b => b.id === bid.id ? updatedBid : b) } }));
+                    }
+                    const workerId = job.bids.find(b => b.id === counterModalOpen.bidId)?.workerId;
+                    if (workerId) await addNotification(workerId, t.notifCounterOffer, `${t.posterCountered}: ₹${newAmount}`, "INFO", job.id);
+                    showAlert("Counter offer sent!", "success");
+                  } catch { showAlert("Failed to send counter", "error"); }
+                }
+                setCounterModalOpen({ isOpen: false, bidId: null, jobId: null }); setCounterInputAmount('');
+              }}
+              className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg"
+            >
+              {t.sendCounter}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Legacy Review Modal (if used) */}
+      <ReviewModal
+        isOpen={reviewModalData?.isOpen || false}
+        onClose={() => setReviewModalData(null)}
+        onSubmit={async (rating, comment, tags) => {
+          // Inline handle submit review or restored logic
+          if (!reviewModalData) return;
+          try {
+            const { error } = await supabase.from('reviews').insert({ reviewer_id: user.id, reviewee_id: reviewModalData.revieweeId, job_id: reviewModalData.jobId, rating, comment, tags: tags.length > 0 ? tags : null });
+            if (error) throw error;
+            await addNotification(reviewModalData.revieweeId, "New Review", `You received a ${rating} star review!`, "SUCCESS");
+            setReviewModalData(null);
+            showAlert(t.reviewSubmitted, 'success');
+          } catch { showAlert('Failed to submit review', 'error'); }
+        }}
+        revieweeName={reviewModalData?.revieweeName || ''}
+      />
+
 
     </div>
   );
