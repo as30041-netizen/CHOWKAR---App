@@ -4,6 +4,10 @@ import { User, Coordinates } from '../types';
 export const signInWithGoogle = async (): Promise<{ success: boolean; error?: string }> => {
   try {
     console.log('[Auth] Initiating Google OAuth, redirect URL:', window.location.origin);
+
+    // Set optimistic flag so we expect a session on return
+    localStorage.setItem('chowkar_isLoggedIn', 'true');
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -17,6 +21,7 @@ export const signInWithGoogle = async (): Promise<{ success: boolean; error?: st
 
     if (error) {
       console.error('[Auth] OAuth initialization error:', error);
+      localStorage.removeItem('chowkar_isLoggedIn'); // Revert on immediate error
       throw error;
     }
 
@@ -24,6 +29,7 @@ export const signInWithGoogle = async (): Promise<{ success: boolean; error?: st
     return { success: true };
   } catch (error) {
     console.error('[Auth] Error signing in with Google:', error);
+    localStorage.removeItem('chowkar_isLoggedIn'); // Revert on error
     return { success: false, error: 'Failed to sign in with Google' };
   }
 };

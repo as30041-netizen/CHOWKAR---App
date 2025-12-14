@@ -137,6 +137,35 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (mounted && currentUser) setUser(currentUser);
           });
         } else if (mounted) {
+          // CHECK FOR OAUTH HASH: If we are returning from Google, session might not be ready yet.
+          const isOAuthRedirect = typeof window !== 'undefined' &&
+            (window.location.hash.includes('access_token') ||
+              window.location.hash.includes('type=recovery') ||
+              window.location.hash.includes('error_description'));
+
+          if (isOAuthRedirect) {
+            console.log('[Auth] OAuth redirect detected. Deferring failure decision...');
+            // We do NOT log out yet. We wait for onAuthStateChange or a second check.
+            // We can optionally check again in a few seconds to be safe.
+            setTimeout(async () => {
+              if (!mounted) return;
+              console.log('[Auth] Re-checking session after OAuth delay...');
+              const { data: { session: retrySession } } = await supabase.auth.getSession();
+
+              if (retrySession?.user) {
+                console.log('[Auth] Session verified after delay.');
+                // onAuthStateChange likely handled the state update already
+              } else {
+                console.log('[Auth] OAuth verification failed or timed out.');
+                localStorage.removeItem('chowkar_isLoggedIn');
+                setIsLoggedIn(false);
+                setHasInitialized(true);
+                setIsAuthLoading(false);
+              }
+            }, 4000); // 4 seconds grace period for token processing
+            return;
+          }
+
           console.log('[Auth] No direct session found.');
           // If we thought we were logged in (optimistic flag), we were wrong.
           localStorage.removeItem('chowkar_isLoggedIn');
