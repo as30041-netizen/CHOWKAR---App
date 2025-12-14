@@ -111,8 +111,8 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // Add timeout to prevent infinite loading
           const timeoutId = setTimeout(() => {
             console.error('[Auth] Profile fetch timeout - forcing auth completion');
-            setLoadingMessage('Connection timeout. Please refresh the page.');
-            setIsAuthLoading(false);
+            setLoadingMessage('Connection timeout. Click Retry to try again.');
+            // Do NOT set isAuthLoading(false) here
           }, 30000); // 30 second timeout
 
           try {
@@ -159,9 +159,10 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // Add timeout to prevent infinite loading
         const timeoutId = setTimeout(() => {
-          console.error('[Auth] Profile fetch timeout after sign in - forcing auth completion');
-          setLoadingMessage('Connection timeout. Please refresh the page.');
-          setIsAuthLoading(false);
+          console.error('[Auth] Profile fetch timeout - forcing auth completion');
+          setLoadingMessage('Connection timeout. Click Retry to try again.'); // "timeout" triggers Retry button in App.tsx
+          // Do NOT set isAuthLoading(false) here, so we stay on the loading screen with Retry button
+          // setIsAuthLoading(false); 
         }, 30000); // 30 second timeout
 
         try {
