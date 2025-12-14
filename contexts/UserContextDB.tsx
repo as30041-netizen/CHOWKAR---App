@@ -124,12 +124,14 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // Add timeout to prevent infinite loading
           const timeoutId = setTimeout(() => {
             console.error('[Auth] Profile fetch timeout - forcing auth completion');
-            setLoadingMessage('Connection timeout. Click Retry to try again.');
-            // Keep blocking UI with Retry button
-          }, 30000);
+            setLoadingMessage('Profile loading slow. Entering with basic access...');
+            // NON-BLOCKING: Let the user in with optimistic data
+            setIsAuthLoading(false);
+          }, 15000); // 15 second timeout
 
           try {
-            const { user: currentUser, error } = await getCurrentUser();
+            // Pass session.user to skip internal auth fetch
+            const { user: currentUser, error } = await getCurrentUser(session.user);
             clearTimeout(timeoutId);
 
             if (error) {
@@ -186,12 +188,14 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Add timeout to prevent infinite loading
         const timeoutId = setTimeout(() => {
           console.error('[Auth] Profile fetch timeout - forcing auth completion');
-          setLoadingMessage('Connection timeout. Click Retry to try again.');
-          // Keep blocked
-        }, 30000);
+          setLoadingMessage('Profile loading slow. Entering with basic access...');
+          // NON-BLOCKING: Let the user in with optimistic data
+          setIsAuthLoading(false);
+        }, 15000);
 
         try {
-          const { user: currentUser, error } = await getCurrentUser();
+          // Pass session.user to skip internal auth fetch
+          const { user: currentUser, error } = await getCurrentUser(session.user);
           clearTimeout(timeoutId);
 
           if (error) {

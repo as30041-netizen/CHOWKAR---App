@@ -39,28 +39,40 @@ export const signOut = async (): Promise<{ success: boolean; error?: string }> =
   }
 };
 
-export const getCurrentUser = async (): Promise<{ user: User | null; error?: string }> => {
+export const getCurrentUser = async (existingAuthUser?: any): Promise<{ user: User | null; error?: string }> => {
   try {
-    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+    let authUser = existingAuthUser;
 
-    if (authError) throw authError;
+    if (!authUser) {
+      console.log('[AuthService] Fetching auth user from Supabase...');
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
+      authUser = user;
+    } else {
+      console.log('[AuthService] Using provided auth user');
+    }
+
     if (!authUser) return { user: null };
 
+    console.log('[AuthService] Fetching profile from DB for:', authUser.id);
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', authUser.id)
       .maybeSingle();
 
-    if (profileError) throw profileError;
+    if (profileError) {
+      console.error('[AuthService] Profile fetch error:', profileError);
+      throw profileError;
+    }
 
     if (!profile) {
       console.log('[Auth] Profile not found, creating one for auth user:', authUser.id);
 
       const userName = authUser.user_metadata?.full_name ||
-                      authUser.user_metadata?.name ||
-                      authUser.email?.split('@')[0] ||
-                      'User';
+        authUser.user_metadata?.name ||
+        authUser.email?.split('@')[0] ||
+        'User';
 
       const { data: newProfile, error: createError } = await supabase
         .from('profiles')
@@ -111,6 +123,7 @@ export const getCurrentUser = async (): Promise<{ user: User | null; error?: str
       return { user };
     }
 
+    console.log('[AuthService] Profile found, processing...');
     const user: User = {
       id: profile.id,
       name: profile.name,
