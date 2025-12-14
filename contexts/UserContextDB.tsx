@@ -252,10 +252,12 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Fetch user data from database when logged in
   useEffect(() => {
-    if (isLoggedIn && user.id) {
+    // Only fetch data if logged in AND initial auth loading is complete
+    // This prevents race conditions with the initial profile fetch
+    if (isLoggedIn && user.id && !isAuthLoading) {
       fetchUserData();
     }
-  }, [isLoggedIn, user.id]);
+  }, [isLoggedIn, user.id, isAuthLoading]);
 
   const fetchUserData = async () => {
     console.log('[Data] Starting to fetch user data...');
