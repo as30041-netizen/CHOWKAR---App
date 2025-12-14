@@ -219,9 +219,9 @@ const AppContent: React.FC = () => {
       setViewBidsModal({ isOpen: false, job: null });
       await addNotification(workerId, t.notifBidAccepted, t.notifBidAcceptedBody, "SUCCESS", jobId);
       showAlert(t.contactUnlocked, 'success');
-    } catch (error) {
+    } catch (error: any) {
       console.error("Bid accept error:", error);
-      showAlert('Failed to accept bid. Please try again.', 'error');
+      showAlert(`Failed to accept bid: ${error.message || 'Unknown error'}`, 'error');
     } finally { setIsAcceptingBid(false); }
   };
 
