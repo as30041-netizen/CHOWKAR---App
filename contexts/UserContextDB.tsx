@@ -71,42 +71,74 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     console.log('[Auth] Initializing authentication...');
-    console.log('[Auth] Current URL:', window.location.href);
-    console.log('[Auth] URL Hash:', window.location.hash);
+    let mounted = true;
 
-    // Clean up old localStorage auth data that may interfere
-    // try {
-    //   localStorage.removeItem('chowkar_isLoggedIn');
-    //   localStorage.removeItem('chowkar_user');
-    // } catch (e) {
-    //   console.warn('[Auth] Could not clean localStorage:', e);
-    // }
-
-    // Check if there are OAuth parameters in the URL
-    const hashParams = new URLSearchParams(window.location.hash.substring(1));
-    const hasOAuthParams = hashParams.has('access_token') || hashParams.has('code');
-
-    if (hasOAuthParams) {
-      console.log('[Auth] OAuth parameters detected in URL, processing...');
-    }
-
-    // Set up auth state listener
-    // Note: onAuthStateChange handles OAuth callbacks automatically when detectSessionInUrl is true
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[Auth] State change event:', event, 'Session exists:', !!session);
-
-      // Additional debug logging for OAuth flow
-      if (session) {
-        console.log('[Auth] Session user email:', session.user.email);
-        console.log('[Auth] Session provider:', session.user.app_metadata.provider);
-      }
-
-      if (event === 'INITIAL_SESSION') {
+    // 1. SAFETY TIMEOUT: Force app to open if auth hangs for more than 3 seconds
+    const safetyTimeout = setTimeout(() => {
+      if (mounted && isAuthLoading) {
+        console.warn('[Auth] Safety timeout reached. Forcing app initialization.');
         setHasInitialized(true);
-        if (session?.user) {
-          console.log('[Auth] Initial session detected.');
+        setIsAuthLoading(false);
+      }
+    }, 3000);
 
-          // OPTIMISTIC LOGIN: Set logged in immediately if session exists
+    // 2. DIRECT SESSION CHECK (Primary Initialization)
+    const initAuth = async () => {
+      try {
+        console.log('[Auth] Checking session directly...');
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (error) throw error;
+
+        if (mounted && session?.user) {
+          console.log('[Auth] Direct session found:', session.user.email);
+          // OPTIMISTIC LOGIN
+          const optimisticUser: User = {
+            ...MOCK_USER,
+            id: session.user.id,
+            email: session.user.email || '',
+            name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User'
+          };
+
+          // BATCH UPDATES
+          setUser(optimisticUser);
+          setIsLoggedIn(true);
+          currentUserIdRef.current = session.user.id;
+          setHasInitialized(true);
+          setIsAuthLoading(false); // UNBLOCK UI IMMEDIATELY
+
+          // Background Profile Sync
+          getCurrentUser(session.user).then(({ user: currentUser }) => {
+            if (mounted && currentUser) setUser(currentUser);
+          });
+        } else if (mounted) {
+          console.log('[Auth] No direct session found.');
+          setHasInitialized(true);
+          setIsAuthLoading(false); // Show Login Screen
+        }
+      } catch (err) {
+        console.error('[Auth] Direct session check failed:', err);
+        // Fallback to event listener or safety timeout
+      }
+    };
+
+    initAuth();
+
+    // 3. EVENT LISTENER (Secondary / Updates)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+      console.log('[Auth] Event:', event);
+
+      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+        if (session?.user) {
+          // If we already have this user, minimal update
+          if (currentUserIdRef.current === session.user.id) {
+            // ensure loading is off
+            if (isAuthLoading) setIsAuthLoading(false);
+            return;
+          }
+
+          console.log('[Auth] Handling sign-in event.');
           setIsLoggedIn(true);
           const optimisticUser: User = {
             ...MOCK_USER,
@@ -116,89 +148,28 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           };
           setUser(optimisticUser);
           currentUserIdRef.current = session.user.id;
-
-          console.log('[Auth] Fetching detailed profile...');
-          // STOP LOADING SPINNER INSTANTLY
           setIsAuthLoading(false);
 
-          // Background Profile Fetch/Creation
-          console.log('[Auth] Fetching detailed profile in background...');
-
-          getCurrentUser(session.user).then(({ user: currentUser, error }) => {
-            if (error) {
-              console.error('[Auth] Background profile fetch failed:', error);
-            } else if (currentUser) {
-              console.log('[Auth] Background profile loaded:', currentUser.name);
-              setUser(currentUser);
-            }
+          // Background sync
+          getCurrentUser(session.user).then(({ user: currentUser }) => {
+            if (mounted && currentUser) setUser(currentUser);
           });
-          // Removed finally { setIsAuthLoading(false) } to prevent error fall-through to Login screen
-        } else {
-          console.log('[Auth] No initial session found');
-          setIsAuthLoading(false);
-          setIsLoggedIn(false);
         }
-      } else if (event === 'SIGNED_IN' && session?.user) {
-        if (currentUserIdRef.current === session.user.id) {
-          console.log('[Auth] Already signed in as correct user (skipping redundant fetch)');
-          setIsAuthLoading(false);
-          return;
-        }
-        console.log('[Auth] User signed in.');
-
-        // OPTIMISTIC LOGIN
-        setIsLoggedIn(true);
-        const optimisticUser: User = {
-          ...MOCK_USER,
-          id: session.user.id,
-          email: session.user.email || '',
-          name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User'
-        };
-        setUser(optimisticUser);
-        currentUserIdRef.current = session.user.id;
-
-        console.log('[Auth] Creating/Fetching profile...');
-        // STOP LOADING SPINNER INSTANTLY
-        setIsAuthLoading(false);
-
-        // Background Profile Fetch/Creation
-        console.log('[Auth] Fetching detailed profile in background...');
-
-        getCurrentUser(session.user).then(({ user: currentUser, error }) => {
-          if (error) {
-            console.error('[Auth] Background profile create/fetch failed:', error);
-          } else if (currentUser) {
-            console.log('[Auth] Profile loaded/created:', currentUser.name);
-            setUser(currentUser);
-          }
-        });
-        // Removed finally { setIsAuthLoading(false) }
       } else if (event === 'SIGNED_OUT') {
-        // Only process sign-out if we've initialized (to avoid processing during initial load)
-        if (hasInitialized) {
-          console.log('[Auth] User signed out, clearing state');
-          setUser(MOCK_USER);
-          setIsLoggedIn(false);
-          currentUserIdRef.current = null;
-          setTransactions([]);
-          setNotifications([]);
-          setMessages([]);
-        } else {
-          console.log('[Auth] Sign-out event ignored (app not initialized yet)');
-        }
+        console.log('[Auth] Signed out.');
+        setUser(MOCK_USER);
+        setIsLoggedIn(false);
+        currentUserIdRef.current = null;
+        setTransactions([]);
+        setNotifications([]);
+        setMessages([]);
         setIsAuthLoading(false);
-      } else if (event === 'TOKEN_REFRESHED') {
-        console.log('[Auth] Token refreshed');
-      } else if (event === 'USER_UPDATED') {
-        console.log('[Auth] User updated, refreshing profile...');
-        const { user: currentUser } = await getCurrentUser();
-        if (currentUser) {
-          setUser(currentUser);
-        }
       }
     });
 
     return () => {
+      mounted = false;
+      clearTimeout(safetyTimeout);
       subscription.unsubscribe();
     };
   }, []);
