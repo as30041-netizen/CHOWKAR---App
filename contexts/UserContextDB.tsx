@@ -53,14 +53,30 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User>(MOCK_USER);
   const [role, setRole] = useState<UserRole>(() => getInitialState('chowkar_role', UserRole.WORKER));
   const [language, setLanguage] = useState<'en' | 'hi'>(() => getInitialState('chowkar_language', 'en'));
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+
+  // STREAMLINED AUTH: Check localStorage flag for instant login
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('chowkar_isLoggedIn') === 'true';
+    }
+    return false;
+  });
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [currentAlert, setCurrentAlert] = useState<{ message: string, type: 'success' | 'error' | 'info' } | null>(null);
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
+
+  // If we have the persistent flag, we are NOT loading initially (Optimistic Success)
+  const [isAuthLoading, setIsAuthLoading] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('chowkar_isLoggedIn') !== 'true';
+    }
+    return true;
+  });
+
   const [loadingMessage, setLoadingMessage] = useState('Initializing...');
   const [hasInitialized, setHasInitialized] = useState(false);
   const currentUserIdRef = useRef<string | null>(null);
@@ -92,7 +108,9 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         if (mounted && session?.user) {
           console.log('[Auth] Direct session found:', session.user.email);
-          // OPTIMISTIC LOGIN
+          // VALID SESSION FOUND
+          localStorage.setItem('chowkar_isLoggedIn', 'true'); // Ensure flag is set
+
           const optimisticUser: User = {
             ...MOCK_USER,
             id: session.user.id,
@@ -113,12 +131,17 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           });
         } else if (mounted) {
           console.log('[Auth] No direct session found.');
+          // If we thought we were logged in (optimistic flag), we were wrong.
+          localStorage.removeItem('chowkar_isLoggedIn');
+          setIsLoggedIn(false);
           setHasInitialized(true);
           setIsAuthLoading(false); // Show Login Screen
         }
       } catch (err) {
         console.error('[Auth] Direct session check failed:', err);
-        // Fallback to event listener or safety timeout
+        // Fallback: If we have the flag, we probably shouldn't kick them out on network error alone?
+        // But for safety, if we can't verify, we might stop loading.
+        setIsAuthLoading(false);
       }
     };
 
@@ -139,6 +162,8 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
 
           console.log('[Auth] Handling sign-in event.');
+          localStorage.setItem('chowkar_isLoggedIn', 'true'); // Persist
+
           setIsLoggedIn(true);
           const optimisticUser: User = {
             ...MOCK_USER,
@@ -157,6 +182,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
       } else if (event === 'SIGNED_OUT') {
         console.log('[Auth] Signed out.');
+        localStorage.removeItem('chowkar_isLoggedIn'); // Clear persist
         setUser(MOCK_USER);
         setIsLoggedIn(false);
         currentUserIdRef.current = null;
@@ -460,8 +486,10 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // We continue to clear local state even if server logout fails
       }
       console.log('[Auth] Sign out successful');
-      // State will be cleared by the SIGNED_OUT event handler
-      // But we'll clear it here too for immediate feedback
+
+      // STREAMLINED AUTH: Clear persistent flag
+      localStorage.removeItem('chowkar_isLoggedIn');
+
       setIsLoggedIn(false);
       setUser(MOCK_USER);
       setTransactions([]);
