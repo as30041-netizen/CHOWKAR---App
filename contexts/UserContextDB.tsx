@@ -50,7 +50,8 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const [user, setUser] = useState<User>(MOCK_USER);
+  // Init user from storage to prevent flashing/empty state on reload
+  const [user, setUser] = useState<User>(() => getInitialState('chowkar_user', MOCK_USER));
   const [role, setRole] = useState<UserRole>(() => getInitialState('chowkar_role', UserRole.WORKER));
   const [language, setLanguage] = useState<'en' | 'hi'>(() => getInitialState('chowkar_language', 'en'));
 
@@ -84,6 +85,8 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Persistence Effects (only for preferences, NOT auth state)
   useEffect(() => localStorage.setItem('chowkar_role', JSON.stringify(role)), [role]);
   useEffect(() => localStorage.setItem('chowkar_language', JSON.stringify(language)), [language]);
+  // Persist User Object
+  useEffect(() => localStorage.setItem('chowkar_user', JSON.stringify(user)), [user]);
 
   useEffect(() => {
     console.log('[Auth] Initializing authentication...');
@@ -111,11 +114,15 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // VALID SESSION FOUND
           localStorage.setItem('chowkar_isLoggedIn', 'true'); // Ensure flag is set
 
+          // Use cached user if available and matches session, otherwise start fresh
+          // This prevents overwriting rich profile data with basic session data during reload
+          const baseUser = (user.id === session.user.id) ? user : MOCK_USER;
+
           const optimisticUser: User = {
-            ...MOCK_USER,
+            ...baseUser,
             id: session.user.id,
-            email: session.user.email || '',
-            name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User'
+            email: session.user.email || baseUser.email || '',
+            name: session.user.user_metadata?.full_name || baseUser.name || session.user.email?.split('@')[0] || 'User'
           };
 
           // BATCH UPDATES
