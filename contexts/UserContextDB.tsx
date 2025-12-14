@@ -75,12 +75,12 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     console.log('[Auth] URL Hash:', window.location.hash);
 
     // Clean up old localStorage auth data that may interfere
-    try {
-      localStorage.removeItem('chowkar_isLoggedIn');
-      localStorage.removeItem('chowkar_user');
-    } catch (e) {
-      console.warn('[Auth] Could not clean localStorage:', e);
-    }
+    // try {
+    //   localStorage.removeItem('chowkar_isLoggedIn');
+    //   localStorage.removeItem('chowkar_user');
+    // } catch (e) {
+    //   console.warn('[Auth] Could not clean localStorage:', e);
+    // }
 
     // Check if there are OAuth parameters in the URL
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
@@ -104,7 +104,20 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (event === 'INITIAL_SESSION') {
         setHasInitialized(true);
         if (session?.user) {
-          console.log('[Auth] Initial session detected, fetching profile...');
+          console.log('[Auth] Initial session detected.');
+
+          // OPTIMISTIC LOGIN: Set logged in immediately if session exists
+          setIsLoggedIn(true);
+          const optimisticUser: User = {
+            ...MOCK_USER,
+            id: session.user.id,
+            email: session.user.email || '',
+            name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User'
+          };
+          setUser(optimisticUser);
+          currentUserIdRef.current = session.user.id;
+
+          console.log('[Auth] Fetching detailed profile...');
           setIsAuthLoading(true);
           setLoadingMessage('Loading your profile...');
 
@@ -112,8 +125,8 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const timeoutId = setTimeout(() => {
             console.error('[Auth] Profile fetch timeout - forcing auth completion');
             setLoadingMessage('Connection timeout. Click Retry to try again.');
-            // Do NOT set isAuthLoading(false) here
-          }, 30000); // 30 second timeout
+            // Keep blocking UI with Retry button
+          }, 30000);
 
           try {
             const { user: currentUser, error } = await getCurrentUser();
@@ -121,8 +134,8 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             if (error) {
               console.error('[Auth] Error fetching user profile:', error);
-              setLoadingMessage('Error loading profile. Please try again.');
-              setIsAuthLoading(false);
+              setLoadingMessage('Error loading profile. Click Retry.');
+              // Do NOT log out. Keep loading screen with error message.
               return;
             }
 
@@ -130,22 +143,22 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               console.log('[Auth] Profile loaded successfully:', currentUser.name);
               setLoadingMessage('Setting up your account...');
               setUser(currentUser);
-              setIsLoggedIn(true);
-              currentUserIdRef.current = currentUser.id;
+              setIsAuthLoading(false); // Only stop loading on success
             } else {
               console.warn('[Auth] No user profile returned');
-              setLoadingMessage('Profile not found. Please try again.');
+              setLoadingMessage('Profile not found. Retrying...');
+              // Retry logic could go here, for now stick to loading state
             }
           } catch (err) {
             clearTimeout(timeoutId);
             console.error('[Auth] Exception while fetching profile:', err);
-            setLoadingMessage('Something went wrong. Please refresh.');
-          } finally {
-            setIsAuthLoading(false);
+            setLoadingMessage('Something went wrong. Click Retry.');
           }
+          // Removed finally { setIsAuthLoading(false) } to prevent error fall-through to Login screen
         } else {
           console.log('[Auth] No initial session found');
           setIsAuthLoading(false);
+          setIsLoggedIn(false);
         }
       } else if (event === 'SIGNED_IN' && session?.user) {
         if (currentUserIdRef.current === session.user.id) {
@@ -153,17 +166,29 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setIsAuthLoading(false);
           return;
         }
-        console.log('[Auth] User signed in, fetching profile...');
+        console.log('[Auth] User signed in.');
+
+        // OPTIMISTIC LOGIN
+        setIsLoggedIn(true);
+        const optimisticUser: User = {
+          ...MOCK_USER,
+          id: session.user.id,
+          email: session.user.email || '',
+          name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User'
+        };
+        setUser(optimisticUser);
+        currentUserIdRef.current = session.user.id;
+
+        console.log('[Auth] Creating/Fetching profile...');
         setIsAuthLoading(true);
         setLoadingMessage('Creating your profile...');
 
         // Add timeout to prevent infinite loading
         const timeoutId = setTimeout(() => {
           console.error('[Auth] Profile fetch timeout - forcing auth completion');
-          setLoadingMessage('Connection timeout. Click Retry to try again.'); // "timeout" triggers Retry button in App.tsx
-          // Do NOT set isAuthLoading(false) here, so we stay on the loading screen with Retry button
-          // setIsAuthLoading(false); 
-        }, 30000); // 30 second timeout
+          setLoadingMessage('Connection timeout. Click Retry to try again.');
+          // Keep blocked
+        }, 30000);
 
         try {
           const { user: currentUser, error } = await getCurrentUser();
@@ -171,8 +196,8 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
           if (error) {
             console.error('[Auth] Error fetching user profile:', error);
-            setLoadingMessage('Error creating profile. Please try again.');
-            setIsAuthLoading(false);
+            setLoadingMessage('Error creating profile. Click Retry.');
+            // Do NOT logout
             return;
           }
 
@@ -180,19 +205,17 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.log('[Auth] Profile loaded successfully:', currentUser.name);
             setLoadingMessage('Welcome! Setting up your account...');
             setUser(currentUser);
-            setIsLoggedIn(true);
-            currentUserIdRef.current = currentUser.id;
+            setIsAuthLoading(false);
           } else {
             console.warn('[Auth] No user profile returned after sign in');
-            setLoadingMessage('Profile creation failed. Please try again.');
+            setLoadingMessage('Profile creation failed. Click Retry.');
           }
         } catch (err) {
           clearTimeout(timeoutId);
           console.error('[Auth] Exception while fetching profile:', err);
-          setLoadingMessage('Something went wrong. Please refresh.');
-        } finally {
-          setIsAuthLoading(false);
+          setLoadingMessage('Something went wrong. Click Retry.');
         }
+        // Removed finally { setIsAuthLoading(false) }
       } else if (event === 'SIGNED_OUT') {
         // Only process sign-out if we've initialized (to avoid processing during initial load)
         if (hasInitialized) {
