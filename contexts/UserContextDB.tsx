@@ -118,44 +118,20 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           currentUserIdRef.current = session.user.id;
 
           console.log('[Auth] Fetching detailed profile...');
-          setIsAuthLoading(true);
-          setLoadingMessage('Loading your profile...');
+          // STOP LOADING SPINNER INSTANTLY
+          setIsAuthLoading(false);
 
-          // Add timeout to prevent infinite loading
-          const timeoutId = setTimeout(() => {
-            console.error('[Auth] Profile fetch timeout - forcing auth completion');
-            setLoadingMessage('Profile loading slow. Entering with basic access...');
-            // NON-BLOCKING: Let the user in with optimistic data
-            setIsAuthLoading(false);
-          }, 15000); // 15 second timeout
+          // Background Profile Fetch/Creation
+          console.log('[Auth] Fetching detailed profile in background...');
 
-          try {
-            // Pass session.user to skip internal auth fetch
-            const { user: currentUser, error } = await getCurrentUser(session.user);
-            clearTimeout(timeoutId);
-
+          getCurrentUser(session.user).then(({ user: currentUser, error }) => {
             if (error) {
-              console.error('[Auth] Error fetching user profile:', error);
-              setLoadingMessage('Error loading profile. Click Retry.');
-              // Do NOT log out. Keep loading screen with error message.
-              return;
-            }
-
-            if (currentUser) {
-              console.log('[Auth] Profile loaded successfully:', currentUser.name);
-              setLoadingMessage('Setting up your account...');
+              console.error('[Auth] Background profile fetch failed:', error);
+            } else if (currentUser) {
+              console.log('[Auth] Background profile loaded:', currentUser.name);
               setUser(currentUser);
-              setIsAuthLoading(false); // Only stop loading on success
-            } else {
-              console.warn('[Auth] No user profile returned');
-              setLoadingMessage('Profile not found. Retrying...');
-              // Retry logic could go here, for now stick to loading state
             }
-          } catch (err) {
-            clearTimeout(timeoutId);
-            console.error('[Auth] Exception while fetching profile:', err);
-            setLoadingMessage('Something went wrong. Click Retry.');
-          }
+          });
           // Removed finally { setIsAuthLoading(false) } to prevent error fall-through to Login screen
         } else {
           console.log('[Auth] No initial session found');
@@ -182,43 +158,20 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         currentUserIdRef.current = session.user.id;
 
         console.log('[Auth] Creating/Fetching profile...');
-        setIsAuthLoading(true);
-        setLoadingMessage('Creating your profile...');
+        // STOP LOADING SPINNER INSTANTLY
+        setIsAuthLoading(false);
 
-        // Add timeout to prevent infinite loading
-        const timeoutId = setTimeout(() => {
-          console.error('[Auth] Profile fetch timeout - forcing auth completion');
-          setLoadingMessage('Profile loading slow. Entering with basic access...');
-          // NON-BLOCKING: Let the user in with optimistic data
-          setIsAuthLoading(false);
-        }, 15000);
+        // Background Profile Fetch/Creation
+        console.log('[Auth] Fetching detailed profile in background...');
 
-        try {
-          // Pass session.user to skip internal auth fetch
-          const { user: currentUser, error } = await getCurrentUser(session.user);
-          clearTimeout(timeoutId);
-
+        getCurrentUser(session.user).then(({ user: currentUser, error }) => {
           if (error) {
-            console.error('[Auth] Error fetching user profile:', error);
-            setLoadingMessage('Error creating profile. Click Retry.');
-            // Do NOT logout
-            return;
-          }
-
-          if (currentUser) {
-            console.log('[Auth] Profile loaded successfully:', currentUser.name);
-            setLoadingMessage('Welcome! Setting up your account...');
+            console.error('[Auth] Background profile create/fetch failed:', error);
+          } else if (currentUser) {
+            console.log('[Auth] Profile loaded/created:', currentUser.name);
             setUser(currentUser);
-            setIsAuthLoading(false);
-          } else {
-            console.warn('[Auth] No user profile returned after sign in');
-            setLoadingMessage('Profile creation failed. Click Retry.');
           }
-        } catch (err) {
-          clearTimeout(timeoutId);
-          console.error('[Auth] Exception while fetching profile:', err);
-          setLoadingMessage('Something went wrong. Click Retry.');
-        }
+        });
         // Removed finally { setIsAuthLoading(false) }
       } else if (event === 'SIGNED_OUT') {
         // Only process sign-out if we've initialized (to avoid processing during initial load)
