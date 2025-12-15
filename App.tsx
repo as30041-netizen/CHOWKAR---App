@@ -72,7 +72,7 @@ const AppContent: React.FC = () => {
     transactions, setTransactions, notifications, setNotifications, messages, setMessages,
     addNotification, checkFreeLimit, incrementAiUsage, logout, t,
     showSubscriptionModal, setShowSubscriptionModal,
-    showAlert, currentAlert, updateUserInDB
+    showAlert, currentAlert, updateUserInDB, refreshUser
   } = useUser();
 
   const { jobs, setJobs, updateJob, deleteJob, addBid, updateBid } = useJobs();
@@ -214,8 +214,9 @@ const AppContent: React.FC = () => {
         p_job_id: jobId, p_bid_id: bidId, p_poster_id: user.id, p_worker_id: workerId, p_amount: bidAmount, p_poster_fee: POSTER_FEE
       });
       if (error) throw error;
-      // Refresh user wallet
-      // Note: UserContext updates via realtime usually, but forced refresh ensures sync
+      // Refresh user wallet immediately to show new balance
+      await refreshUser();
+
       setViewBidsModal({ isOpen: false, job: null });
       await addNotification(workerId, t.notifBidAccepted, t.notifBidAcceptedBody, "SUCCESS", jobId);
       showAlert(t.contactUnlocked, 'success');

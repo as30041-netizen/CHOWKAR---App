@@ -2,6 +2,8 @@ import React from 'react';
 import { useUser } from '../contexts/UserContextDB';
 import { UserRole } from '../types';
 import { Wallet, ClipboardList, ChevronRight, History, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { updateWalletBalance } from '../services/authService';
 
 interface WalletViewProps {
   onShowBidHistory: () => void;
@@ -17,11 +19,11 @@ export const WalletView: React.FC<WalletViewProps> = ({ onShowBidHistory }) => {
       const newBalance = user.walletBalance + amountToAdd;
 
       // 1. Update Profile in DB
-      const { success, error } = await import('../services/authService').then(m => m.updateWalletBalance(user.id, newBalance));
+      const { success, error } = await updateWalletBalance(user.id, newBalance);
       if (!success) throw new Error(error);
 
       // 2. Add Transaction to DB
-      const { data: txData, error: txError } = await import('../lib/supabase').then(m => m.supabase)
+      const { data: txData, error: txError } = await supabase
         .from('transactions')
         .insert({
           user_id: user.id,
@@ -48,16 +50,9 @@ export const WalletView: React.FC<WalletViewProps> = ({ onShowBidHistory }) => {
 
       setTransactions(prev => [newTx, ...prev]);
 
-      // Notify user (Optional, context might not have showAlert here unless passed or from hook if expanded)
-      // Since we don't have showAlert in props or context here (UserContext has it, but I didn't verify if it's destructured), 
-      // let's check imports.
-      // Ah, I need to check if useUser exposes showAlert. 
-      // UserContextDB.tsx lines 31: showAlert: (message: string, type?: 'success' | 'error' | 'info') => void;
-      // Yes it does.
-
     } catch (error) {
       console.error('Error adding money:', error);
-      alert('Failed to add money. Please check your internet connection.');
+      alert('Failed to add money. Please check your connection.');
     }
   };
 
