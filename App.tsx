@@ -13,7 +13,7 @@ import { ReviewModal } from './components/ReviewModal';
 import {
   MapPin, UserCircle, Search, SlidersHorizontal,
   ArrowLeftRight, Bell, MessageCircle, Languages, Loader2, Navigation,
-  LayoutGrid, Plus, Wallet, XCircle, CheckCircle2, AlertCircle, Star
+  LayoutGrid, Plus, Wallet, XCircle, CheckCircle2, AlertCircle, Star, Pencil
 } from 'lucide-react';
 
 // Import Pages
@@ -544,7 +544,8 @@ const AppContent: React.FC = () => {
             </div>
 
             {/* Actions */}
-            <div className="flex gap-3">
+            <div className="flex gap-3 flex-wrap">
+              {/* Worker: Bid button */}
               {role === UserRole.WORKER && selectedJob.status === JobStatus.OPEN && selectedJob.posterId !== user.id && (
                 <button
                   onClick={() => { setSelectedJob(null); setBidModalOpen({ isOpen: true, jobId: selectedJob.id }); }}
@@ -553,6 +554,8 @@ const AppContent: React.FC = () => {
                   {t.bidNow}
                 </button>
               )}
+
+              {/* Poster: View Bids button if there are bids */}
               {role === UserRole.POSTER && selectedJob.posterId === user.id && selectedJob.status === JobStatus.OPEN && selectedJob.bids.length > 0 && (
                 <button
                   onClick={() => { setSelectedJob(null); setViewBidsModal({ isOpen: true, job: selectedJob }); }}
@@ -561,12 +564,47 @@ const AppContent: React.FC = () => {
                   {t.viewBids} ({selectedJob.bids.length})
                 </button>
               )}
+
+              {/* Chat button for in-progress jobs */}
               {selectedJob.status === JobStatus.IN_PROGRESS && (
                 <button
                   onClick={() => { setSelectedJob(null); handleChatOpen(selectedJob); }}
                   className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-emerald-700"
                 >
                   {t.chat}
+                </button>
+              )}
+
+              {/* Poster: Edit button - only if OPEN and NO bids placed */}
+              {selectedJob.posterId === user.id && selectedJob.status === JobStatus.OPEN && selectedJob.bids.length === 0 && (
+                <button
+                  onClick={() => {
+                    setSelectedJob(null);
+                    handleEditJobLink(selectedJob);
+                  }}
+                  className="flex-1 bg-blue-500 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-blue-600 flex items-center justify-center gap-2"
+                >
+                  <Pencil size={16} /> {language === 'en' ? 'Edit' : 'संपादित करें'}
+                </button>
+              )}
+
+              {/* Poster: Delete button - only if OPEN and no bid accepted */}
+              {selectedJob.posterId === user.id && selectedJob.status === JobStatus.OPEN && !selectedJob.acceptedBidId && (
+                <button
+                  onClick={async () => {
+                    if (confirm(language === 'en' ? 'Are you sure you want to delete this job?' : 'क्या आप इस जॉब को हटाना चाहते हैं?')) {
+                      try {
+                        await deleteJob(selectedJob.id);
+                        setSelectedJob(null);
+                        showAlert(t.alertJobDeleted, 'success');
+                      } catch {
+                        showAlert('Failed to delete job', 'error');
+                      }
+                    }
+                  }}
+                  className="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-red-600 flex items-center justify-center gap-2"
+                >
+                  <XCircle size={16} /> {language === 'en' ? 'Delete' : 'हटाएं'}
                 </button>
               )}
             </div>
@@ -736,8 +774,120 @@ const AppContent: React.FC = () => {
         />
       )}
 
+      {/* Notifications Panel */}
+      {showNotifications && (
+        <div className="fixed inset-0 z-50 flex items-start justify-end">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowNotifications(false)}></div>
+          <div className="relative w-full max-w-sm bg-white h-full shadow-xl animate-slide-in-right overflow-y-auto">
+            <div className="sticky top-0 bg-white p-4 border-b flex justify-between items-center">
+              <h2 className="text-lg font-bold text-gray-900">{t.notifications}</h2>
+              <button onClick={() => setShowNotifications(false)} className="p-2 hover:bg-gray-100 rounded-full">
+                <XCircle size={20} className="text-gray-500" />
+              </button>
+            </div>
+            <div className="p-4 space-y-3">
+              {notifications.filter(n => n.userId === user.id).length === 0 ? (
+                <p className="text-center text-gray-400 py-8">{language === 'en' ? 'No notifications yet' : 'अभी तक कोई सूचना नहीं'}</p>
+              ) : (
+                notifications.filter(n => n.userId === user.id).map(notif => (
+                  <div
+                    key={notif.id}
+                    className={`p-4 rounded-xl border ${notif.read ? 'bg-white border-gray-100' : 'bg-emerald-50 border-emerald-200'}`}
+                    onClick={async () => {
+                      if (!notif.read) {
+                        await supabase.from('notifications').update({ read: true }).eq('id', notif.id);
+                        setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
+                      }
+                      if (notif.relatedJobId) {
+                        const job = jobs.find(j => j.id === notif.relatedJobId);
+                        if (job) {
+                          setShowNotifications(false);
+                          setSelectedJob(job);
+                        }
+                      }
+                    }}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${notif.type === 'SUCCESS' ? 'bg-green-100 text-green-600' :
+                          notif.type === 'ERROR' ? 'bg-red-100 text-red-600' :
+                            notif.type === 'WARNING' ? 'bg-yellow-100 text-yellow-600' :
+                              'bg-blue-100 text-blue-600'
+                        }`}>
+                        {notif.type === 'SUCCESS' ? <CheckCircle2 size={20} /> :
+                          notif.type === 'ERROR' ? <XCircle size={20} /> :
+                            <Bell size={20} />}
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-bold text-gray-900 text-sm">{notif.title}</h4>
+                        <p className="text-gray-600 text-sm mt-0.5">{notif.message}</p>
+                        <p className="text-xs text-gray-400 mt-1">{new Date(notif.timestamp).toLocaleString()}</p>
+                      </div>
+                      {!notif.read && <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
-    </div>
+      {/* Chat List Panel */}
+      {showChatList && (
+        <div className="fixed inset-0 z-50 flex items-start justify-end">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowChatList(false)}></div>
+          <div className="relative w-full max-w-sm bg-white h-full shadow-xl animate-slide-in-right overflow-y-auto">
+            <div className="sticky top-0 bg-white p-4 border-b flex justify-between items-center">
+              <h2 className="text-lg font-bold text-gray-900">{t.chats || 'Chats'}</h2>
+              <button onClick={() => setShowChatList(false)} className="p-2 hover:bg-gray-100 rounded-full">
+                <XCircle size={20} className="text-gray-500" />
+              </button>
+            </div>
+            <div className="p-4 space-y-3">
+              {(() => {
+                // Get jobs where user is poster or accepted worker
+                const chatJobs = jobs.filter(j =>
+                  j.status === 'IN_PROGRESS' &&
+                  (j.posterId === user.id || j.bids.some(b => b.workerId === user.id && b.status === 'ACCEPTED'))
+                );
+
+                if (chatJobs.length === 0) {
+                  return <p className="text-center text-gray-400 py-8">{language === 'en' ? 'No active chats' : 'कोई सक्रिय चैट नहीं'}</p>;
+                }
+
+                return chatJobs.map(job => {
+                  const lastMsg = messages.filter(m => m.jobId === job.id).slice(-1)[0];
+                  const otherPerson = job.posterId === user.id
+                    ? job.bids.find(b => b.status === 'ACCEPTED')?.workerName || 'Worker'
+                    : job.posterName;
+
+                  return (
+                    <button
+                      key={job.id}
+                      onClick={() => { setShowChatList(false); handleChatOpen(job); }}
+                      className="w-full p-4 bg-white rounded-xl border border-gray-100 hover:bg-gray-50 text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold">
+                          {otherPerson.charAt(0)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-baseline">
+                            <h4 className="font-bold text-gray-900 truncate">{otherPerson}</h4>
+                            {lastMsg && <span className="text-xs text-gray-400">{new Date(lastMsg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
+                          </div>
+                          <p className="text-sm text-gray-500 truncate">{job.title}</p>
+                          {lastMsg && <p className="text-sm text-gray-400 truncate">{lastMsg.text}</p>}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        </div>
+      )}    </div>
   );
 };
 

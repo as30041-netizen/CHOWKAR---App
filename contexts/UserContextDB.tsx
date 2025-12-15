@@ -247,6 +247,14 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const fetchUserData = async () => {
     console.log('[Data] Starting to fetch user data...');
+
+    // Guard: Only fetch if user.id is a valid UUID (not mock 'u1')
+    const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id);
+    if (!isValidUUID) {
+      console.log('[Data] Skipping fetch - user.id is not a valid UUID:', user.id);
+      return;
+    }
+
     try {
       // 1. Fetch latest profile data directly (skip auth check for speed)
       // We already have the user.id from the optimistic state
@@ -395,6 +403,83 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     return () => {
       subscription.unsubscribe();
+    };
+  }, [isLoggedIn, user.id]);
+
+  // Real-time subscription for chat messages
+  useEffect(() => {
+    if (!isLoggedIn || !user.id) return;
+
+    // Guard: Only subscribe if user.id is a valid UUID
+    const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id);
+    if (!isValidUUID) return;
+
+    const chatSubscription = supabase
+      .channel('chat_messages_realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_messages'
+        },
+        (payload) => {
+          // Only add if it's for a job this user is involved in
+          const newMsg: ChatMessage = {
+            id: payload.new.id,
+            jobId: payload.new.job_id,
+            senderId: payload.new.sender_id,
+            text: payload.new.text,
+            translatedText: payload.new.translated_text || undefined,
+            timestamp: new Date(payload.new.created_at).getTime()
+          };
+
+          // Avoid duplicates (in case we already added it optimistically)
+          setMessages(prev => {
+            if (prev.some(m => m.id === newMsg.id)) return prev;
+            return [...prev, newMsg];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      chatSubscription.unsubscribe();
+    };
+  }, [isLoggedIn, user.id]);
+
+  // Real-time subscription for wallet balance updates (profiles table)
+  useEffect(() => {
+    if (!isLoggedIn || !user.id) return;
+
+    const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id);
+    if (!isValidUUID) return;
+
+    const profileSubscription = supabase
+      .channel('profile_realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('[Realtime] Profile updated:', payload.new);
+          // Update wallet balance and other profile fields
+          setUser(prev => ({
+            ...prev,
+            walletBalance: payload.new.wallet_balance ?? prev.walletBalance,
+            rating: payload.new.rating ?? prev.rating,
+            isPremium: payload.new.is_premium ?? prev.isPremium
+          }));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      profileSubscription.unsubscribe();
     };
   }, [isLoggedIn, user.id]);
 
