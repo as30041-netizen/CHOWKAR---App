@@ -1,15 +1,15 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 
-let aiInstance: GoogleGenAI | null = null;
+let aiInstance: GoogleGenerativeAI | null = null;
 
-const getAI = (): GoogleGenAI | null => {
+const getAI = (): GoogleGenerativeAI | null => {
   if (!aiInstance) {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey || apiKey === 'your-api-key-here') {
       console.warn('[GeminiService] Gemini API key not configured - AI features will be disabled');
       return null;
     }
-    aiInstance = new GoogleGenAI({ apiKey });
+    aiInstance = new GoogleGenerativeAI(apiKey);
   }
   return aiInstance;
 };
@@ -28,7 +28,7 @@ export const enhanceJobDescriptionStream = async (
       return;
     }
 
-    const model = 'gemini-2.5-flash';
+    const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const langName = language === 'hi' ? 'Hindi' : 'English';
 
     const prompt = `
@@ -41,14 +41,11 @@ export const enhanceJobDescriptionStream = async (
       Keep it under 60 words. Do not add formatting like markdown bolding. Just plain text.
     `;
 
-    const response = await ai.models.generateContentStream({
-      model: model,
-      contents: prompt,
-    });
+    const result = await model.generateContentStream(prompt);
 
     let fullText = '';
-    for await (const chunk of response) {
-      const text = chunk.text || '';
+    for await (const chunk of result.stream) {
+      const text = chunk.text();
       fullText += text;
       onUpdate(fullText);
     }
@@ -66,7 +63,7 @@ export const estimateWage = async (title: string, category: string, location: st
       return '';
     }
 
-    const model = 'gemini-2.5-flash';
+    const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const prompt = `
       You are a labor market expert in India.
       Estimate the typical daily wage (8 hours) in Indian Rupees (INR) for a "${title}" job in the category "${category}" located in "${location}".
@@ -74,12 +71,10 @@ export const estimateWage = async (title: string, category: string, location: st
       Return ONLY a single number representing the average (e.g. 500). Do not provide a range, do not add text, do not add currency symbols.
     `;
 
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: prompt,
-    });
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
 
-    const text = response.text?.trim() || '';
+    const text = response.text().trim();
     // Extract number from response just in case
     const match = text.match(/\d+/);
     return match ? match[0] : '';
@@ -103,7 +98,7 @@ export const enhanceBidMessageStream = async (
       return;
     }
 
-    const model = 'gemini-2.5-flash';
+    const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const langName = language === 'hi' ? 'Hindi' : 'English';
 
     const prompt = `
@@ -117,14 +112,11 @@ export const enhanceBidMessageStream = async (
       Do not add placeholders like [Your Name]. Just the message content.
     `;
 
-    const response = await ai.models.generateContentStream({
-      model: model,
-      contents: prompt,
-    });
+    const result = await model.generateContentStream(prompt);
 
     let fullText = '';
-    for await (const chunk of response) {
-        const text = chunk.text || '';
+    for await (const chunk of result.stream) {
+        const text = chunk.text();
         fullText += text;
         onUpdate(fullText);
     }
@@ -142,7 +134,7 @@ export const translateText = async (text: string, targetLanguage: 'en' | 'hi' = 
       return text;
     }
 
-    const model = 'gemini-2.5-flash';
+    const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const langName = targetLanguage === 'hi' ? 'Hindi' : 'English';
 
     const prompt = `
@@ -152,12 +144,10 @@ export const translateText = async (text: string, targetLanguage: 'en' | 'hi' = 
       Return ONLY the translated text. No explanations.
     `;
 
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: prompt,
-    });
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
 
-    return response.text || text;
+    return response.text() || text;
   } catch (error) {
     console.error("Error translating text:", error);
     return text;
@@ -176,8 +166,19 @@ export const analyzeImageForJob = async (
       return null;
     }
 
-    // Use gemini-2.5-flash for multimodal analysis with JSON output support.
-    const model = 'gemini-2.5-flash';
+    const model = ai.getGenerativeModel({
+      model: 'gemini-1.5-flash',
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: SchemaType.OBJECT,
+          properties: {
+            description: { type: SchemaType.STRING },
+            category: { type: SchemaType.STRING }
+          }
+        }
+      }
+    });
     const langName = language === 'hi' ? 'Hindi' : 'English';
 
     const prompt = `
@@ -189,32 +190,18 @@ export const analyzeImageForJob = async (
       If unsure, default to 'Other'.
     `;
 
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: {
-        parts: [
-            {
-                inlineData: {
-                    mimeType: mimeType,
-                    data: base64Data
-                }
-            },
-            { text: prompt }
-        ]
-      },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-                description: { type: Type.STRING },
-                category: { type: Type.STRING }
-            }
+    const result = await model.generateContent([
+      {
+        inlineData: {
+          mimeType: mimeType,
+          data: base64Data
         }
-      }
-    });
+      },
+      { text: prompt }
+    ]);
 
-    const text = response.text;
+    const response = await result.response;
+    const text = response.text();
     if (!text) return null;
     return JSON.parse(text);
   } catch (e) {
