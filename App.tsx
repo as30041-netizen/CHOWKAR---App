@@ -376,10 +376,17 @@ const AppContent: React.FC = () => {
       <ReviewModal
         isOpen={reviewModalData?.isOpen || false}
         onClose={() => setReviewModalData(null)}
-        onSubmit={async (rating, comment, tags) => {
+        onSubmit={async (rating, comment) => {
           if (!reviewModalData) return;
           try {
-            const { error } = await supabase.from('reviews').insert({ reviewer_id: user.id, reviewee_id: reviewModalData.revieweeId, job_id: reviewModalData.jobId, rating, comment, tags: tags.length > 0 ? tags : null });
+            const { error } = await supabase.from('reviews').insert({
+              reviewer_id: user.id,
+              reviewee_id: reviewModalData.revieweeId,
+              job_id: reviewModalData.jobId,
+              rating,
+              comment,
+              tags: null
+            });
             if (error) throw error;
             await addNotification(reviewModalData.revieweeId, "New Review", `You received a ${rating} star review!`, "SUCCESS");
             setReviewModalData(null);
