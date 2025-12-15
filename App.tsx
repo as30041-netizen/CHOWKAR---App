@@ -26,6 +26,7 @@ import { ViewBidsModal } from './components/ViewBidsModal';
 import { CounterModal } from './components/CounterModal';
 import { NotificationsPanel } from './components/NotificationsPanel';
 import { ChatListPanel } from './components/ChatListPanel';
+import { LandingPage } from './components/LandingPage';
 
 // Services
 import { signInWithGoogle, completeProfile } from './services/authService';
@@ -242,23 +243,12 @@ const AppContent: React.FC = () => {
 
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen bg-green-50 flex flex-col items-center justify-center p-6 relative">
-        <div className="absolute top-6 right-6 z-10">
-          <button onClick={() => setLanguage(l => l === 'en' ? 'hi' : 'en')} className="bg-white/60 px-4 py-2 rounded-full text-xs font-bold text-emerald-800">
-            <Languages size={14} /> {language === 'en' ? 'हिन्दी' : 'English'}
-          </button>
-        </div>
-
-        {currentAlert && <div className={`fixed top-20 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full text-white font-bold bg-gray-800 z-50`}>{currentAlert.message}</div>}
-
-        <div className="w-full max-w-sm bg-white/80 p-8 rounded-3xl shadow-xl flex flex-col items-center">
-          <h1 className="text-4xl font-black text-emerald-950 mb-2">CHOWKAR</h1>
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">{t.signIn}</h2>
-          <button onClick={handleGoogleSignIn} disabled={isSigningIn} className="w-full bg-white py-4 rounded-2xl shadow-lg border flex justify-center gap-3 font-bold text-gray-700">
-            {isSigningIn ? <Loader2 className="animate-spin" /> : 'Continue with Google'}
-          </button>
-        </div>
-      </div>
+      <LandingPage
+        onGetStarted={handleGoogleSignIn}
+        language={language}
+        onLanguageToggle={() => setLanguage(l => l === 'en' ? 'hi' : 'en')}
+        isSigningIn={isSigningIn}
+      />
     );
   }
 
