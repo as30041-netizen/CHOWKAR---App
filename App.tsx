@@ -440,7 +440,7 @@ const AppContent: React.FC = () => {
             onViewBids={(j) => setViewBidsModal({ isOpen: true, job: j })}
             onChat={handleChatOpen}
             onEdit={handleEditJobLink}
-            onClick={() => { }} // Could be navigate to details
+            onClick={(j) => setSelectedJob(j)} // Open job details
             onReplyToCounter={handleWorkerReplyToCounter}
             onWithdrawBid={handleWithdrawBid}
             setShowFilterModal={setShowFilterModal}
@@ -483,6 +483,92 @@ const AppContent: React.FC = () => {
                 </button>
               </div>
               <button onClick={handlePlaceBid} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-emerald-700">{t.submitBid}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Job Details Modal */}
+      {selectedJob && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center pointer-events-none">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-auto" onClick={() => setSelectedJob(null)}></div>
+          <div className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-6 pointer-events-auto animate-slide-up relative max-h-[90vh] overflow-y-auto">
+            <button onClick={() => setSelectedJob(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><XCircle size={24} /></button>
+
+            {/* Job Header */}
+            <div className="mb-4">
+              <span className={`text-xs font-bold uppercase px-2 py-1 rounded-full ${selectedJob.status === 'OPEN' ? 'bg-green-100 text-green-700' : selectedJob.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+                {selectedJob.status.replace('_', ' ')}
+              </span>
+              <h2 className="text-xl font-bold text-gray-900 mt-2">{selectedJob.title}</h2>
+              <p className="text-sm text-gray-500 mt-1">{selectedJob.category}</p>
+            </div>
+
+            {/* Job Info */}
+            <div className="space-y-3 mb-4">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <MapPin size={16} className="text-emerald-600" />
+                <span>{selectedJob.location}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Star size={16} className="text-amber-500" />
+                <span>₹{selectedJob.budget} budget</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <AlertCircle size={16} className="text-blue-500" />
+                <span>{new Date(selectedJob.jobDate).toLocaleDateString()} • {selectedJob.duration}</span>
+              </div>
+            </div>
+
+            {/* Description */}
+            <div className="mb-4">
+              <h4 className="text-sm font-bold text-gray-800 mb-2">{t.description}</h4>
+              <p className="text-sm text-gray-600 whitespace-pre-wrap">{selectedJob.description}</p>
+            </div>
+
+            {/* Poster Info */}
+            <div className="bg-gray-50 rounded-xl p-4 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold overflow-hidden">
+                  {selectedJob.posterPhoto ? (
+                    <img src={selectedJob.posterPhoto} alt={selectedJob.posterName} className="w-full h-full object-cover" />
+                  ) : (
+                    selectedJob.posterName.charAt(0)
+                  )}
+                </div>
+                <div>
+                  <p className="font-bold text-gray-900">{selectedJob.posterName}</p>
+                  <p className="text-xs text-gray-500">Posted {new Date(selectedJob.createdAt).toLocaleDateString()}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3">
+              {role === UserRole.WORKER && selectedJob.status === JobStatus.OPEN && selectedJob.posterId !== user.id && (
+                <button
+                  onClick={() => { setSelectedJob(null); setBidModalOpen({ isOpen: true, jobId: selectedJob.id }); }}
+                  className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-emerald-700"
+                >
+                  {t.bidNow}
+                </button>
+              )}
+              {role === UserRole.POSTER && selectedJob.posterId === user.id && selectedJob.status === JobStatus.OPEN && selectedJob.bids.length > 0 && (
+                <button
+                  onClick={() => { setSelectedJob(null); setViewBidsModal({ isOpen: true, job: selectedJob }); }}
+                  className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-emerald-700"
+                >
+                  {t.viewBids} ({selectedJob.bids.length})
+                </button>
+              )}
+              {selectedJob.status === JobStatus.IN_PROGRESS && (
+                <button
+                  onClick={() => { setSelectedJob(null); handleChatOpen(selectedJob); }}
+                  className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-emerald-700"
+                >
+                  {t.chat}
+                </button>
+              )}
             </div>
           </div>
         </div>
