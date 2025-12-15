@@ -424,7 +424,6 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           table: 'chat_messages'
         },
         (payload) => {
-          // Only add if it's for a job this user is involved in
           const newMsg: ChatMessage = {
             id: payload.new.id,
             jobId: payload.new.job_id,
@@ -434,9 +433,29 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             timestamp: new Date(payload.new.created_at).getTime()
           };
 
-          // Avoid duplicates (in case we already added it optimistically)
+          // Avoid duplicates: Check by exact ID OR by matching content (for self-sent messages)
           setMessages(prev => {
+            // Already have this exact message ID?
             if (prev.some(m => m.id === newMsg.id)) return prev;
+
+            // Self-sent message that we already added optimistically?
+            // Check by matching senderId + jobId + text (within 10 second window)
+            const isDuplicateSelfSent = prev.some(m =>
+              m.senderId === newMsg.senderId &&
+              m.jobId === newMsg.jobId &&
+              m.text === newMsg.text &&
+              Math.abs(m.timestamp - newMsg.timestamp) < 10000 // 10 second window
+            );
+
+            if (isDuplicateSelfSent) {
+              // Update the temp message with the real DB id
+              return prev.map(m =>
+                (m.senderId === newMsg.senderId && m.jobId === newMsg.jobId && m.text === newMsg.text && m.id.startsWith('temp_'))
+                  ? { ...m, id: newMsg.id, timestamp: newMsg.timestamp }
+                  : m
+              );
+            }
+
             return [...prev, newMsg];
           });
         }

@@ -207,8 +207,9 @@ const AppContent: React.FC = () => {
   const handleSendMessage = async (text: string) => {
     if (!chatOpen.job) return;
 
+    const tempId = `temp_${Date.now()}_${Math.random()}`;
     const msg: ChatMessage = {
-      id: `msg_${Date.now()}`,
+      id: tempId,
       jobId: chatOpen.job.id,
       senderId: user.id,
       text,
@@ -220,14 +221,32 @@ const AppContent: React.FC = () => {
 
     // Save to database
     try {
-      const { error } = await supabase.from('chat_messages').insert({
-        job_id: msg.jobId,
-        sender_id: msg.senderId,
-        text: msg.text
-      });
-      if (error) console.error('Failed to save message:', error);
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .insert({
+          job_id: msg.jobId,
+          sender_id: msg.senderId,
+          text: msg.text
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Failed to save message:', error);
+        // Rollback optimistic update
+        setMessages(prev => prev.filter(m => m.id !== tempId));
+      } else if (data) {
+        // Replace temp message with real one (with DB id)
+        setMessages(prev => prev.map(m =>
+          m.id === tempId
+            ? { ...m, id: data.id, timestamp: new Date(data.created_at).getTime() }
+            : m
+        ));
+      }
     } catch (err) {
       console.error('Error sending message:', err);
+      // Rollback on error
+      setMessages(prev => prev.filter(m => m.id !== tempId));
     }
   };
 
@@ -809,9 +828,9 @@ const AppContent: React.FC = () => {
                   >
                     <div className="flex items-start gap-3">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center ${notif.type === 'SUCCESS' ? 'bg-green-100 text-green-600' :
-                          notif.type === 'ERROR' ? 'bg-red-100 text-red-600' :
-                            notif.type === 'WARNING' ? 'bg-yellow-100 text-yellow-600' :
-                              'bg-blue-100 text-blue-600'
+                        notif.type === 'ERROR' ? 'bg-red-100 text-red-600' :
+                          notif.type === 'WARNING' ? 'bg-yellow-100 text-yellow-600' :
+                            'bg-blue-100 text-blue-600'
                         }`}>
                         {notif.type === 'SUCCESS' ? <CheckCircle2 size={20} /> :
                           notif.type === 'ERROR' ? <XCircle size={20} /> :
