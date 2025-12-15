@@ -3,7 +3,7 @@ import { useUser } from '../contexts/UserContextDB';
 import { UserRole } from '../types';
 import { Wallet, ClipboardList, ChevronRight, History, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { updateWalletBalance } from '../services/authService';
+
 
 interface WalletViewProps {
   onShowBidHistory: () => void;
@@ -18,9 +18,13 @@ export const WalletView: React.FC<WalletViewProps> = ({ onShowBidHistory }) => {
       const amountToAdd = 100;
       const newBalance = user.walletBalance + amountToAdd;
 
-      // 1. Update Profile in DB
-      const { success, error } = await updateWalletBalance(user.id, newBalance);
-      if (!success) throw new Error(error);
+      // 1. Update Profile in DB (Inlined to avoid import issues)
+      const { error: balanceError } = await supabase
+        .from('profiles')
+        .update({ wallet_balance: newBalance })
+        .eq('id', user.id);
+
+      if (balanceError) throw new Error(balanceError.message);
 
       // 2. Add Transaction to DB
       const { data: txData, error: txError } = await supabase
@@ -52,7 +56,7 @@ export const WalletView: React.FC<WalletViewProps> = ({ onShowBidHistory }) => {
 
     } catch (error) {
       console.error('Error adding money:', error);
-      alert('Failed to add money. Please check your connection.');
+      alert(`Failed to add money: ${error.message || JSON.stringify(error)}`);
     }
   };
 
