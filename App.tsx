@@ -204,6 +204,69 @@ const AppContent: React.FC = () => {
     }
   };
 
+  const handleSendMessage = async (text: string) => {
+    if (!chatOpen.job) return;
+
+    const msg: ChatMessage = {
+      id: `msg_${Date.now()}`,
+      jobId: chatOpen.job.id,
+      senderId: user.id,
+      text,
+      timestamp: Date.now()
+    };
+
+    // Optimistic update
+    setMessages(prev => [...prev, msg]);
+
+    // Save to database
+    try {
+      const { error } = await supabase.from('chat_messages').insert({
+        job_id: msg.jobId,
+        sender_id: msg.senderId,
+        text: msg.text
+      });
+      if (error) console.error('Failed to save message:', error);
+    } catch (err) {
+      console.error('Error sending message:', err);
+    }
+  };
+
+  const handleCompleteJob = async () => {
+    if (!chatOpen.job) return;
+    try {
+      const updatedJob = { ...chatOpen.job, status: JobStatus.COMPLETED };
+      await updateJob(updatedJob);
+
+      // Prompt for review
+      const acceptedBid = chatOpen.job.bids.find(b => b.id === chatOpen.job?.acceptedBidId);
+      if (acceptedBid) {
+        setReviewModalData({
+          isOpen: true,
+          revieweeId: acceptedBid.workerId,
+          revieweeName: acceptedBid.workerName,
+          jobId: chatOpen.job.id
+        });
+        await addNotification(acceptedBid.workerId, t.notifJobCompleted, 'The job has been marked as completed!', 'SUCCESS', chatOpen.job.id);
+      }
+
+      setChatOpen({ isOpen: false, job: null });
+      showAlert(t.jobCompletedAlert, 'success');
+    } catch {
+      showAlert('Failed to complete job', 'error');
+    }
+  };
+
+  const handleTranslateMessage = async (messageId: string, text: string) => {
+    try {
+      const { translateText } = await import('./services/geminiService');
+      const translated = await translateText(text, language === 'en' ? 'hi' : 'en');
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, translatedText: translated } : m));
+    } catch (err) {
+      console.error('Translation error:', err);
+    }
+  };
+
+
   const handleAcceptBid = async (jobId: string, bidId: string, bidAmount: number, workerId: string) => {
     // Fix: Ensure we are using the correct context/services
     if (user.walletBalance < POSTER_FEE) { showAlert(`${t.alertInsufficientBalance}${POSTER_FEE}`, 'error'); return; }
@@ -571,6 +634,21 @@ const AppContent: React.FC = () => {
         }}
         revieweeName={reviewModalData?.revieweeName || ''}
       />
+
+      {/* Chat Interface */}
+      {chatOpen.isOpen && chatOpen.job && (
+        <ChatInterface
+          job={chatOpen.job}
+          currentUser={user}
+          onClose={() => setChatOpen({ isOpen: false, job: null })}
+          messages={messages.filter(m => m.jobId === chatOpen.job?.id)}
+          onSendMessage={handleSendMessage}
+          onCompleteJob={handleCompleteJob}
+          onTranslateMessage={handleTranslateMessage}
+          isPremium={user.isPremium}
+          remainingTries={user.isPremium ? 999 : (2 - (user.aiUsageCount || 0))}
+        />
+      )}
 
 
     </div>
