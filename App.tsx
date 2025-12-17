@@ -159,10 +159,22 @@ const AppContent: React.FC = () => {
   const handleSendMessage = async (text: string) => {
     if (!chatOpen.job) return;
 
+    // Derive receiver ID
+    const job = chatOpen.job;
+    const isPoster = user.id === job.posterId;
+    const acceptedBid = job.bids.find(b => b.id === job.acceptedBidId);
+    const receiverId = isPoster ? acceptedBid?.workerId : job.posterId;
+
+    if (!receiverId) {
+      console.error('Cannot determine chat receiver');
+      showAlert('Error sending message', 'error');
+      return;
+    }
+
     const tempId = `temp_${Date.now()}_${Math.random()} `;
     const msg: ChatMessage = {
       id: tempId,
-      jobId: chatOpen.job.id,
+      jobId: job.id,
       senderId: user.id,
       text,
       timestamp: Date.now()
@@ -178,6 +190,7 @@ const AppContent: React.FC = () => {
         .insert({
           job_id: msg.jobId,
           sender_id: msg.senderId,
+          receiver_id: receiverId,
           text: msg.text
         })
         .select()
