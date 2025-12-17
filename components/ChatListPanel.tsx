@@ -191,7 +191,7 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                                 ? new Date(lastMsg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                                 : null;
 
-                            const hasUnread = notifications.some(n => n.relatedJobId === job.id && !n.read && n.title === "New Message");
+                            const hasUnread = notifications.some(n => n.relatedJobId === job.id && !n.read); // Removed title check for debugging
 
                             return (
                                 <button

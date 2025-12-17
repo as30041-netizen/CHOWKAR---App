@@ -130,7 +130,7 @@ const AppContent: React.FC = () => {
   const unreadChatCount = notifications.filter(n =>
     n.userId === user.id &&
     !n.read &&
-    n.title === "New Message" &&
+    // n.title === "New Message" && // Removed check
     n.relatedJobId
   ).reduce((acc, n) => {
     if (!acc.includes(n.relatedJobId!)) acc.push(n.relatedJobId!);
