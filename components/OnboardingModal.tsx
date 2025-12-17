@@ -1,7 +1,7 @@
 import React from 'react';
 import { UserRole } from '../types';
 import { useUser } from '../contexts/UserContextDB';
-import { Briefcase, Search } from 'lucide-react';
+import { Briefcase, Search, Languages } from 'lucide-react';
 
 interface OnboardingModalProps {
     isOpen: boolean;
@@ -9,13 +9,22 @@ interface OnboardingModalProps {
 }
 
 export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onComplete }) => {
-    const { language } = useUser();
+    const { language, setLanguage } = useUser();
 
     if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-emerald-900/40 backdrop-blur-md animate-fade-in p-4">
             <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full text-center relative border-4 border-white/50 bg-clip-padding">
+
+                {/* Language Toggle */}
+                <button
+                    onClick={() => setLanguage(l => l === 'en' ? 'hi' : 'en')}
+                    className="absolute top-4 right-4 p-2 text-emerald-800 text-xs font-bold border border-emerald-100 rounded-lg bg-emerald-50 hover:bg-emerald-100 flex items-center gap-1 transition-colors z-10"
+                >
+                    <Languages size={16} /> {language === 'en' ? 'हि' : 'En'}
+                </button>
+
                 <div className="mb-6">
                     <h2 className="text-3xl font-bold text-emerald-950 mb-2">
                         {language === 'en' ? 'Welcome to CHOWKAR!' : 'CHOWKAR में स्वागत है!'}
