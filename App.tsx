@@ -25,6 +25,7 @@ import { JobDetailsModal } from './components/JobDetailsModal';
 import { EditProfileModal } from './components/EditProfileModal';
 import { ViewBidsModal } from './components/ViewBidsModal';
 import { CounterModal } from './components/CounterModal';
+import { OnboardingModal } from './components/OnboardingModal';
 import { NotificationsPanel } from './components/NotificationsPanel';
 import { ChatListPanel } from './components/ChatListPanel';
 import { LandingPage } from './components/LandingPage';
@@ -88,8 +89,21 @@ const AppContent: React.FC = () => {
   // Actually, I'll just keep the Navigate to Post for editing if I can.
   // For now, I'll implement `handleEditJobLink` to Navigate to ` / post` with the job state to pre-fill it (requires PostJob update, but I can't touch it easily).
   // So I will just keep the legacy state for now in case I missed where it renders.
+  // For now, I'll implement `handleEditJobLink` to Navigate to ` / post` with the job state to pre-fill it (requires PostJob update, but I can't touch it easily).
+  // So I will just keep the legacy state for now in case I missed where it renders.
   // Update: I will just use `useNavigate` to go to ` / post` with state.
   const navigate = useNavigate();
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Check onboarding status
+  useEffect(() => {
+    if (isLoggedIn && !isAuthLoading && !user.name.includes('Mock')) { // Don't show for mock user if we want
+      const hasCompletedOnboarding = localStorage.getItem('chowkar_onboarding_complete');
+      if (hasCompletedOnboarding !== 'true') {
+        setShowOnboarding(true);
+      }
+    }
+  }, [isLoggedIn, isAuthLoading, user]);
 
   // --- Realtime Sync ---
   // When 'jobs' update in background, update the open Modal view
@@ -473,6 +487,23 @@ const AppContent: React.FC = () => {
           remainingTries={user.isPremium ? 999 : (2 - (user.aiUsageCount || 0))}
         />
       )}
+
+      {/* Onboarding Dialog */}
+      <OnboardingModal
+        isOpen={showOnboarding}
+        onComplete={(selectedRole) => {
+          setRole(selectedRole);
+          localStorage.setItem('chowkar_onboarding_complete', 'true');
+          setShowOnboarding(false);
+
+          // Navigate based on choice
+          if (selectedRole === UserRole.POSTER) {
+            navigate('/post');
+          } else {
+            navigate('/');
+          }
+        }}
+      />
 
     </div>
   );
