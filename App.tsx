@@ -489,6 +489,7 @@ const AppContent: React.FC = () => {
           onCompleteJob={handleCompleteJob}
           onTranslateMessage={handleTranslateMessage}
           onDeleteMessage={handleDeleteMessage}
+          onIncomingMessage={(msg) => setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])}
           isPremium={user.isPremium}
           remainingTries={user.isPremium ? 999 : (2 - (user.aiUsageCount || 0))}
         />

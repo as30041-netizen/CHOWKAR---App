@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { supabase } from '../lib/supabase';
 import { Job, ChatMessage, User } from '../types';
 import { Send, Phone, CheckCircle, ArrowLeft, LockKeyhole, Paperclip, MoreVertical, Check, CheckCheck, Languages, Mic, MicOff, Loader2, Sparkles, Lock, Volume2, Square, Trash2 } from 'lucide-react';
 
@@ -8,6 +9,7 @@ interface ChatInterfaceProps {
   onClose: () => void;
   messages: ChatMessage[];
   onSendMessage: (text: string) => void;
+  onIncomingMessage?: (msg: ChatMessage) => void; // New prop for instant Updates
   onCompleteJob: () => void;
   onTranslateMessage: (messageId: string, text: string) => void;
   onDeleteMessage?: (messageId: string) => void;
@@ -37,6 +39,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   onClose,
   messages,
   onSendMessage,
+  onIncomingMessage,
   onCompleteJob,
   onTranslateMessage,
   onDeleteMessage,
@@ -49,6 +52,34 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [isListening, setIsListening] = useState(false);
   const [translatingId, setTranslatingId] = useState<string | null>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+
+  // Real-time Broadcast Channel
+  const [channel, setChannel] = useState<any>(null);
+
+  useEffect(() => {
+    // Subscribe to the specific job channel for broadcasts (Peer-to-Peer speed)
+    const newChannel = supabase.channel(`chat_room:${job.id}`);
+
+    newChannel
+      .on('broadcast', { event: 'new_message' }, ({ payload }) => {
+        // Only process if it's from the OTHER person (we handle our own optimistically)
+        if (payload.senderId !== currentUser.id && onIncomingMessage) {
+          console.log('[Chat] Broadcast received:', payload);
+          onIncomingMessage(payload as ChatMessage);
+        }
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          // console.log('Joined chat room');
+        }
+      });
+
+    setChannel(newChannel);
+
+    return () => {
+      supabase.removeChannel(newChannel);
+    };
+  }, [job.id]);
 
   const isPoster = job.posterId === currentUser.id;
   const showLockIcon = !isPremium && (remainingTries || 0) <= 0;
@@ -89,9 +120,27 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     };
   }, []);
 
-  const handleSend = (text: string = inputText) => {
+  const handleSend = async (text: string = inputText) => {
     if (text.trim()) {
+      // 1. Persistence (DB)
       onSendMessage(text);
+
+      // 2. Broadcast (Instant UI for peer)
+      if (channel) {
+        const tempMsg: ChatMessage = {
+          id: `temp_${Date.now()}_${Math.random()}`,
+          jobId: job.id,
+          senderId: currentUser.id,
+          text: text,
+          timestamp: Date.now()
+        };
+        await channel.send({
+          type: 'broadcast',
+          event: 'new_message',
+          payload: tempMsg
+        });
+      }
+
       setInputText('');
       setShowQuickReplies(false); // Hide quick replies after interaction
     }
