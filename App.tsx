@@ -141,9 +141,6 @@ const AppContent: React.FC = () => {
   const handleChatOpen = (job: Job) => {
     setChatOpen({ isOpen: true, job });
     setShowChatList(false);
-    if (!messages.some(m => m.jobId === job.id)) {
-      setMessages(prev => [...prev, { id: `sys_${job.id} `, jobId: job.id, senderId: 'system', text: 'Chat started.', timestamp: Date.now() }]);
-    }
   };
 
   const handleSendMessage = async (text: string) => {
