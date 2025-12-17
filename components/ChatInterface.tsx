@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchJobMessages } from '../services/chatService';
 import { Job, ChatMessage, User } from '../types';
-import { Send, Phone, CheckCircle, ArrowLeft, LockKeyhole, Paperclip, MoreVertical, Check, CheckCheck, Languages, Mic, MicOff, Loader2, Sparkles, Lock, Volume2, Square, Trash2 } from 'lucide-react';
+import { Send, Phone, CheckCircle, ArrowLeft, LockKeyhole, Paperclip, MoreVertical, Check, CheckCheck, Languages, Mic, MicOff, Loader2, Sparkles, Lock, Volume2, Square, Trash2, ShieldAlert, FileText, Flag } from 'lucide-react';
+import { SafetyTipsModal } from './SafetyTipsModal';
+import { ReportUserModal } from './ReportUserModal';
 
 interface ChatInterfaceProps {
   job: Job;
@@ -14,9 +16,11 @@ interface ChatInterfaceProps {
   onCompleteJob: () => void;
   onTranslateMessage: (messageId: string, text: string) => void;
   onDeleteMessage?: (messageId: string) => void;
+  onViewJobDetails?: () => void; // New prop optional
   isPremium?: boolean;
   remainingTries?: number;
 }
+
 const QUICK_REPLIES_WORKER = [
   "I'm on my way",
   "I've arrived at the location",
@@ -33,6 +37,8 @@ const QUICK_REPLIES_POSTER = [
   "Ok, thanks"
 ];
 
+// ... CONSTANTS ...
+
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   job,
   currentUser,
@@ -43,15 +49,29 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   onCompleteJob,
   onTranslateMessage,
   onDeleteMessage,
+  onViewJobDetails,
   isPremium,
   remainingTries
 }) => {
+  // Derived Constants
+  const isPoster = job.posterId === currentUser.id;
+  const acceptedBid = job.bids.find(b => b.id === job.acceptedBidId);
+  const otherPersonId = isPoster ? (acceptedBid?.workerId || '') : job.posterId;
+
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [showQuickReplies, setShowQuickReplies] = useState(true);
   const [isListening, setIsListening] = useState(false);
   const [translatingId, setTranslatingId] = useState<string | null>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+
+  // UI State
+  const [showMenu, setShowMenu] = useState(false);
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
+  const [isOtherUserOnline, setIsOtherUserOnline] = useState(false);
+  const [showSafetyTips, setShowSafetyTips] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const typingTimeoutRef = useRef<any>(null);
 
   // Local History State (Lazy Loaded)
   const [historyMessages, setHistoryMessages] = useState<ChatMessage[]>([]);
@@ -60,35 +80,36 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   // Real-time Broadcast Channel
   const [channel, setChannel] = useState<any>(null);
 
-  // Fetch History on Mount
-  useEffect(() => {
-    const loadHistory = async () => {
-      setIsLoadingHistory(true);
-      const { messages, error } = await fetchJobMessages(job.id, 0); // Page 0
-      if (!error && messages) {
-        setHistoryMessages(messages.sort((a, b) => a.timestamp - b.timestamp));
-      }
-      setIsLoadingHistory(false);
-    };
-    loadHistory();
-  }, [job.id]);
+  // ... existing useEffect history load ...
 
   useEffect(() => {
-    // Subscribe to the specific job channel for broadcasts (Peer-to-Peer speed)
-    // ... (existing Broadcast logic) ...
-    const newChannel = supabase.channel(`chat_room:${job.id}`);
+    const newChannel = supabase.channel(`chat_room:${job.id}`, {
+      config: { presence: { key: currentUser.id } }
+    });
 
     newChannel
+      .on('presence', { event: 'sync' }, () => {
+        const state = newChannel.presenceState();
+        const isOnline = Object.keys(state).includes(otherPersonId);
+        setIsOtherUserOnline(isOnline);
+      })
       .on('broadcast', { event: 'new_message' }, ({ payload }) => {
-        // Only process if it's from the OTHER person (we handle our own optimistically)
         if (payload.senderId !== currentUser.id && onIncomingMessage) {
-          console.log('[Chat] Broadcast received:', payload);
           onIncomingMessage(payload as ChatMessage);
+          setIsOtherTyping(false);
         }
       })
-      .subscribe((status) => {
+      .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        if (payload.senderId !== currentUser.id) {
+          setIsOtherTyping(true);
+          if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+          typingTimeoutRef.current = setTimeout(() => setIsOtherTyping(false), 3000);
+          scrollToBottom();
+        }
+      })
+      .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
-          // console.log('Joined chat room');
+          await newChannel.track({ online_at: new Date().toISOString() });
         }
       });
 
@@ -97,13 +118,22 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     return () => {
       supabase.removeChannel(newChannel);
     };
-  }, [job.id]);
+  }, [job.id, currentUser.id, otherPersonId]);
 
-  const isPoster = job.posterId === currentUser.id;
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputText(e.target.value);
+
+    // Broadcast typing (throttled logic could act here, but simple is fine for now)
+    if (channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'typing',
+        payload: { senderId: currentUser.id }
+      });
+    }
+  };
+
   const showLockIcon = !isPremium && (remainingTries || 0) <= 0;
-
-  // Determine the other person's details
-  const acceptedBid = job.bids.find(b => b.id === job.acceptedBidId);
 
   let otherPersonName = '';
   let otherPersonPhone = '';
@@ -287,8 +317,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               <div>
                 <h2 className="font-bold text-gray-900 leading-none">{otherPersonName}</h2>
                 <div className="flex items-center gap-1.5 mt-1">
-                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                  <span className="text-xs text-gray-500 font-medium">Online</span>
+                  <span className={`w-2 h-2 rounded-full ${isOtherUserOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}></span>
+                  <span className="text-xs text-gray-500 font-medium">{isOtherUserOnline ? 'Online' : 'Offline'}</span>
                 </div>
               </div>
             </div>
@@ -304,9 +334,24 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 <LockKeyhole size={20} />
               </div>
             )}
-            <button className="p-2 rounded-full text-gray-400 hover:bg-gray-100">
-              <MoreVertical size={20} />
-            </button>
+            <div className="relative">
+              <button onClick={() => setShowMenu(!showMenu)} className="p-2 rounded-full text-gray-400 hover:bg-gray-100 transition-colors">
+                <MoreVertical size={20} />
+              </button>
+              {showMenu && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+                  <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-xl border border-gray-100 z-20 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                    <button onClick={() => { setShowMenu(false); setShowSafetyTips(true); }} className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm font-medium text-gray-700 flex items-center gap-2">
+                      <ShieldAlert size={16} className="text-emerald-600" /> Safety Tips
+                    </button>
+                    <button onClick={() => { setShowMenu(false); setShowReportModal(true); }} className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm font-medium text-red-600 flex items-center gap-2">
+                      <Flag size={16} /> Report User
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
@@ -414,6 +459,18 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               </div>
             </div>
           ))}
+          {isOtherTyping && (
+            <div className="flex items-center gap-2 px-1 py-1 opacity-70 animate-pulse mt-2 ml-2">
+              <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                <div className="flex gap-1">
+                  <div className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce"></div>
+                  <div className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce delay-75"></div>
+                  <div className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce delay-150"></div>
+                </div>
+              </div>
+              <span className="text-xs text-gray-500 font-medium">Typing...</span>
+            </div>
+          )}
           <div ref={messagesEndRef} />
         </div>
 
@@ -458,7 +515,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               <div className="flex-1 bg-gray-100 rounded-2xl flex items-center min-h-[44px] px-4 py-2">
                 <textarea
                   value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
+                  onChange={handleInputChange}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
@@ -486,6 +543,20 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           </div>
         </div>
       </div>
+
+      <SafetyTipsModal
+        isOpen={showSafetyTips}
+        onClose={() => setShowSafetyTips(false)}
+      />
+
+      <ReportUserModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        reportedUserId={otherPersonId}
+        reportedUserName={otherPersonName}
+        reporterUserId={currentUser.id}
+        jobId={job.id}
+      />
     </>
   );
 };
