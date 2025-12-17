@@ -315,53 +315,11 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setNotifications(notifs);
       console.log('[Data] Notifications loaded:', notifs.length);
 
-      // Fetch chat messages for all jobs where user is involved (as poster or worker)
-      console.log('[Data] Fetching chat messages...');
-      const { data: userJobs, error: jobsError } = await supabase
-        .from('jobs')
-        .select('id')
-        .eq('poster_id', user.id);
-
-      if (jobsError) {
-        console.error('[Data] Error fetching user jobs:', jobsError);
-      }
-
-      const { data: userBids, error: bidsError } = await supabase
-        .from('bids')
-        .select('job_id')
-        .eq('worker_id', user.id)
-        .eq('status', 'ACCEPTED');
-
-      if (bidsError) {
-        console.error('[Data] Error fetching user bids:', bidsError);
-      }
-
-      const jobIds = [
-        ...(userJobs?.map(j => j.id) || []),
-        ...(userBids?.map(b => b.job_id) || [])
-      ];
-
-      const { data: messagesData, error: msgError } = jobIds.length > 0
-        ? await supabase
-          .from('chat_messages')
-          .select('*')
-          .in('job_id', jobIds)
-          .order('created_at', { ascending: true })
-        : { data: [], error: null };
-
-      if (msgError) throw msgError;
-
-      const msgs: ChatMessage[] = messagesData?.map(msg => ({
-        id: msg.id,
-        jobId: msg.job_id,
-        senderId: msg.sender_id,
-        text: msg.text,
-        timestamp: new Date(msg.created_at).getTime(),
-        translatedText: msg.translated_text || undefined
-      })) || [];
-
-      setMessages(msgs);
-      console.log('[Data] Chat messages loaded:', msgs.length);
+      // OPTIMIZATION: We do NOT fetch full chat history here anymore to save bandwidth.
+      // Chat components will fetch their own history on demand.
+      // We only track *new* messages via Realtime in this context.
+      setMessages([]);
+      console.log('[Data] Chat history fetch skipped (Lazy Loading Enabled)');
       console.log('[Data] All user data loaded successfully');
 
     } catch (error) {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { fetchJobMessages } from '../services/chatService';
 import { Job, ChatMessage, User } from '../types';
 import { Send, Phone, CheckCircle, ArrowLeft, LockKeyhole, Paperclip, MoreVertical, Check, CheckCheck, Languages, Mic, MicOff, Loader2, Sparkles, Lock, Volume2, Square, Trash2 } from 'lucide-react';
 
@@ -9,14 +10,13 @@ interface ChatInterfaceProps {
   onClose: () => void;
   messages: ChatMessage[];
   onSendMessage: (text: string) => void;
-  onIncomingMessage?: (msg: ChatMessage) => void; // New prop for instant Updates
+  onIncomingMessage?: (msg: ChatMessage) => void;
   onCompleteJob: () => void;
   onTranslateMessage: (messageId: string, text: string) => void;
   onDeleteMessage?: (messageId: string) => void;
   isPremium?: boolean;
   remainingTries?: number;
 }
-
 const QUICK_REPLIES_WORKER = [
   "I'm on my way",
   "I've arrived at the location",
@@ -37,7 +37,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   job,
   currentUser,
   onClose,
-  messages,
+  messages: liveMessages,
   onSendMessage,
   onIncomingMessage,
   onCompleteJob,
@@ -53,11 +53,29 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [translatingId, setTranslatingId] = useState<string | null>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
 
+  // Local History State (Lazy Loaded)
+  const [historyMessages, setHistoryMessages] = useState<ChatMessage[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+
   // Real-time Broadcast Channel
   const [channel, setChannel] = useState<any>(null);
 
+  // Fetch History on Mount
+  useEffect(() => {
+    const loadHistory = async () => {
+      setIsLoadingHistory(true);
+      const { messages, error } = await fetchJobMessages(job.id, 0); // Page 0
+      if (!error && messages) {
+        setHistoryMessages(messages.sort((a, b) => a.timestamp - b.timestamp));
+      }
+      setIsLoadingHistory(false);
+    };
+    loadHistory();
+  }, [job.id]);
+
   useEffect(() => {
     // Subscribe to the specific job channel for broadcasts (Peer-to-Peer speed)
+    // ... (existing Broadcast logic) ...
     const newChannel = supabase.channel(`chat_room:${job.id}`);
 
     newChannel
@@ -103,13 +121,22 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   const quickReplies = isPoster ? QUICK_REPLIES_POSTER : QUICK_REPLIES_WORKER;
 
+  // Merge and Deduplicate Messages
+  const allMessages = [...historyMessages, ...liveMessages]
+    .filter((msg, index, self) =>
+      index === self.findIndex((m) => (
+        m.id === msg.id // Unique ID check
+      ))
+    )
+    .sort((a, b) => a.timestamp - b.timestamp);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [allMessages.length]); // Scroll when count changes
 
   useEffect(() => {
     // Cleanup speech
@@ -217,7 +244,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   };
 
   // Group messages by date
-  const groupedMessages = messages.reduce((acc, msg) => {
+  const groupedMessages = allMessages.reduce((acc, msg) => {
     const date = new Date(msg.timestamp).toLocaleDateString('en-IN', {
       day: 'numeric',
       month: 'long'
