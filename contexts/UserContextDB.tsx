@@ -392,84 +392,87 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*', // Listen now to INSERT and UPDATE
           schema: 'public',
           table: 'chat_messages'
         },
         async (payload) => {
-          const newMsg: ChatMessage = {
-            id: payload.new.id,
-            jobId: payload.new.job_id,
-            senderId: payload.new.sender_id,
-            text: payload.new.text,
-            translatedText: payload.new.translated_text || undefined,
-            timestamp: new Date(payload.new.created_at).getTime()
-          };
+          if (payload.eventType === 'INSERT') {
+            const newMsg: ChatMessage = {
+              id: payload.new.id,
+              jobId: payload.new.job_id,
+              senderId: payload.new.sender_id,
+              text: payload.new.text,
+              translatedText: payload.new.translated_text || undefined,
+              timestamp: new Date(payload.new.created_at).getTime()
+            };
 
-          // Update messages state (for active chats)
-          setMessages(prev => {
-            // Exact ID Check
-            if (prev.some(m => m.id === newMsg.id)) return prev;
+            // Update messages state (for active chats)
+            setMessages(prev => {
+              // Exact ID Check
+              if (prev.some(m => m.id === newMsg.id)) return prev;
 
-            // Optimistic Update Check
-            const tempMatchIndex = prev.findIndex(m =>
-              m.id.startsWith('temp_') &&
-              m.senderId === newMsg.senderId &&
-              m.jobId === newMsg.jobId &&
-              m.text === newMsg.text
-            );
-
-            if (tempMatchIndex !== -1) {
-              const updated = [...prev];
-              updated[tempMatchIndex] = { ...updated[tempMatchIndex], id: newMsg.id, timestamp: newMsg.timestamp };
-              return updated;
-            }
-
-            console.log('[Realtime] New Chat Message received:', newMsg);
-
-            // Log for debugging notification issues
-            console.log('[Realtime] Debug:', {
-              msgSender: newMsg.senderId,
-              myId: user.id,
-              activeChat: activeChatIdRef.current,
-              msgJob: newMsg.jobId,
-              throttle: lastNotificationTimeRef.current[newMsg.jobId]
-            });
-
-            return [...prev, newMsg];
-          });
-
-          // NOTIFICATION LOGIC
-          // Triggers if:
-          // 1. Message IS NOT from me
-          // 2. Chat IS NOT currently active/open
-          // 3. We haven't sent a notification for this chat in the last 30 seconds (Throttle)
-          // FORCE NOTIFICATION (Debug Mode)
-          if (newMsg.senderId !== user.id && activeChatIdRef.current !== newMsg.jobId) {
-            const now = Date.now();
-            const lastTime = lastNotificationTimeRef.current[newMsg.jobId] || 0;
-
-            if (now - lastTime > 2000) { // 2s throttle
-              console.log('[Realtime] Triggering Notification', newMsg.jobId);
-              lastNotificationTimeRef.current[newMsg.jobId] = now;
-
-              // Insert notification into DB (which will trigger the other listener to update UI)
-              // We truncate the message for privacy/space
-              const preview = newMsg.text.length > 50 ? newMsg.text.substring(0, 50) + '...' : newMsg.text;
-
-              await addNotification(
-                user.id,
-                "New Message",
-                preview,
-                "INFO",
-                newMsg.jobId
+              // Optimistic Update Check
+              const tempMatchIndex = prev.findIndex(m =>
+                m.id.startsWith('temp_') &&
+                m.senderId === newMsg.senderId &&
+                m.jobId === newMsg.jobId &&
+                m.text === newMsg.text
               );
 
-              // Also show a local toast for immediate "wow" factor
-              showAlert(`New message: ${preview}`, 'info');
-            } else {
-              console.log('[Realtime] Notification throttled for job:', newMsg.jobId);
+              if (tempMatchIndex !== -1) {
+                const updated = [...prev];
+                updated[tempMatchIndex] = { ...updated[tempMatchIndex], id: newMsg.id, timestamp: newMsg.timestamp };
+                return updated;
+              }
+
+              console.log('[Realtime] New Chat Message received:', newMsg);
+
+              // Log for debugging notification issues
+              console.log('[Realtime] Debug:', {
+                msgSender: newMsg.senderId,
+                myId: user.id,
+                activeChat: activeChatIdRef.current,
+                msgJob: newMsg.jobId,
+                throttle: lastNotificationTimeRef.current[newMsg.jobId]
+              });
+
+              return [...prev, newMsg];
+            });
+
+            // NOTIFICATION LOGIC
+            if (newMsg.senderId !== user.id && activeChatIdRef.current !== newMsg.jobId) {
+              const now = Date.now();
+              const lastTime = lastNotificationTimeRef.current[newMsg.jobId] || 0;
+
+              if (now - lastTime > 2000) { // 2s throttle
+                console.log('[Realtime] Triggering Notification', newMsg.jobId);
+                lastNotificationTimeRef.current[newMsg.jobId] = now;
+
+                // Insert notification into DB (which will trigger the other listener to update UI)
+                const preview = newMsg.text.length > 50 ? newMsg.text.substring(0, 50) + '...' : newMsg.text;
+
+                await addNotification(
+                  user.id,
+                  "New Message",
+                  preview,
+                  "INFO",
+                  newMsg.jobId
+                );
+
+                // Also show a local toast for immediate "wow" factor
+                showAlert(`New message: ${preview}`, 'info');
+              } else {
+                console.log('[Realtime] Notification throttled for job:', newMsg.jobId);
+              }
             }
+          } else if (payload.eventType === 'UPDATE') {
+            console.log('[Realtime] Message Updated:', payload.new.id);
+            setMessages(prev => prev.map(m =>
+              m.id === payload.new.id
+                ? { ...m, text: payload.new.text, translatedText: payload.new.translated_text || undefined }
+                : m
+            ));
           }
         }
       )
