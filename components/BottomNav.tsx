@@ -12,7 +12,7 @@ export const BottomNav: React.FC = () => {
     const isActive = (path: string) => location.pathname === path;
 
     return (
-        <nav className="bg-white border-t border-gray-100 flex justify-around items-center px-2 py-3 fixed bottom-0 w-full max-w-md z-30 pb-[calc(12px+env(safe-area-inset-bottom))]">
+        <nav className="bg-white border-t border-gray-100 md:hidden flex justify-around items-center px-2 py-3 fixed bottom-0 left-0 right-0 z-30 pb-[calc(12px+env(safe-area-inset-bottom))] shadow-lg-up">
             <button onClick={() => navigate('/')} className={`flex flex-col items-center gap-1 min-w-[64px] ${isActive('/') ? 'text-emerald-600 font-bold' : 'text-gray-400 font-medium'}`}>
                 <LayoutGrid size={24} className={isActive('/') ? 'drop-shadow-sm' : ''} />
                 <span className="text-[10px]">{t.home}</span>

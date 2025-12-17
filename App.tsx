@@ -299,53 +299,68 @@ const AppContent: React.FC = () => {
 
   // --- Main Layout ---
   return (
-    <div className="h-[100dvh] bg-green-50 font-sans text-gray-900 flex flex-col max-w-md mx-auto relative shadow-2xl overflow-hidden">
+    <div className="h-[100dvh] w-full bg-green-50 font-sans text-gray-900 flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="bg-white px-4 py-3 pb-3 pt-safe sticky top-0 z-30 shadow-sm flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <MapPin size={24} className="text-emerald-600" fill="#10b981" />
-          <div><h1 className="text-xl font-bold text-emerald-900 leading-none">CHOWKAR</h1></div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setLanguage(l => l === 'en' ? 'hi' : 'en')} className="p-2 text-emerald-800 text-xs font-bold"><Languages size={18} /> {language === 'en' ? 'हि' : 'En'}</button>
-          <button onClick={() => setShowChatList(true)} className="p-2"><MessageCircle size={20} className="text-gray-600" /></button>
-          <button onClick={() => setShowNotifications(true)} className="relative p-2">
-            <Bell size={20} className="text-gray-600" />
-            {unreadCount > 0 && <span className="absolute top-1.5 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>}
-          </button>
-          <button onClick={() => { setRole(r => r === UserRole.WORKER ? UserRole.POSTER : UserRole.WORKER); }} className="px-3 py-1.5 bg-emerald-50 rounded-full text-xs font-semibold text-emerald-800 border border-emerald-100 flex items-center gap-1">
-            <ArrowLeftRight size={14} />{role === UserRole.WORKER ? t.switchHiring : t.switchWorking}
-          </button>
+      <header className="bg-white border-b border-gray-100 z-30 shadow-sm flex-none">
+        <div className="max-w-7xl mx-auto px-4 py-3 pt-safe flex justify-between items-center">
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
+            <MapPin size={24} className="text-emerald-600" fill="#10b981" />
+            <div><h1 className="text-xl font-bold text-emerald-900 leading-none">CHOWKAR</h1></div>
+          </div>
+
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex items-center gap-6">
+            <button onClick={() => navigate('/')} className={`text-sm font-bold ${location.pathname === '/' ? 'text-emerald-600' : 'text-gray-500 hover:text-emerald-600'}`}>{t.home}</button>
+            {role === UserRole.POSTER && (
+              <button onClick={() => navigate('/post')} className={`text-sm font-bold ${location.pathname === '/post' ? 'text-emerald-600' : 'text-gray-500 hover:text-emerald-600'}`}>{t.postJob}</button>
+            )}
+            <button onClick={() => navigate('/wallet')} className={`text-sm font-bold ${location.pathname === '/wallet' ? 'text-emerald-600' : 'text-gray-500 hover:text-emerald-600'}`}>{t.wallet}</button>
+            <button onClick={() => navigate('/profile')} className={`text-sm font-bold ${location.pathname === '/profile' ? 'text-emerald-600' : 'text-gray-500 hover:text-emerald-600'}`}>{t.profile}</button>
+          </nav>
+
+          <div className="flex items-center gap-3">
+            <button onClick={() => setLanguage(l => l === 'en' ? 'hi' : 'en')} className="p-2 text-emerald-800 text-xs font-bold border border-emerald-100 rounded-lg bg-emerald-50 hover:bg-emerald-100"><Languages size={18} /> {language === 'en' ? 'हि' : 'En'}</button>
+            <button onClick={() => setShowChatList(true)} className="p-2 hover:bg-gray-100 rounded-full"><MessageCircle size={20} className="text-gray-600" /></button>
+            <button onClick={() => setShowNotifications(true)} className="relative p-2 hover:bg-gray-100 rounded-full">
+              <Bell size={20} className="text-gray-600" />
+              {unreadCount > 0 && <span className="absolute top-1.5 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>}
+            </button>
+            <button onClick={() => { setRole(r => r === UserRole.WORKER ? UserRole.POSTER : UserRole.WORKER); }} className="px-3 py-1.5 bg-emerald-50 rounded-full text-xs font-semibold text-emerald-800 border border-emerald-100 flex items-center gap-1 hover:bg-emerald-100">
+              <ArrowLeftRight size={14} />{role === UserRole.WORKER ? t.switchHiring : t.switchWorking}
+            </button>
+          </div>
         </div>
       </header>
 
       {/* Alerts */}
       {showConfetti && <Confetti />}
       {currentAlert && (
-        <div className={`fixed top - 16 left - 1 / 2 - translate - x - 1 / 2 z - [100] px - 6 py - 3 rounded - full shadow - xl font - bold text - sm flex items - center gap - 3 backdrop - blur - md ${currentAlert.type === 'error' ? 'bg-red-500/90 text-white' : currentAlert.type === 'success' ? 'bg-emerald-600/90 text-white' : 'bg-gray-800/90 text-white'} `}>
+        <div className={`fixed top-16 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-full shadow-xl font-bold text-sm flex items-center gap-3 backdrop-blur-md ${currentAlert.type === 'error' ? 'bg-red-500/90 text-white' : currentAlert.type === 'success' ? 'bg-emerald-600/90 text-white' : 'bg-gray-800/90 text-white'} `}>
           <span>{currentAlert.message}</span>
         </div>
       )}
 
       {/* Router View */}
-      <main className="flex-1 overflow-y-auto bg-green-50">
-        <Routes>
-          <Route path="/" element={<Home
-            onBid={(id) => setBidModalOpen({ isOpen: true, jobId: id })}
-            onViewBids={(j) => setViewBidsModal({ isOpen: true, job: j })}
-            onChat={handleChatOpen}
-            onEdit={handleEditJobLink}
-            onClick={(j) => setSelectedJob(j)} // Open job details
-            onReplyToCounter={handleWorkerReplyToCounter}
-            onWithdrawBid={handleWithdrawBid}
-            setShowFilterModal={setShowFilterModal}
-            showAlert={showAlert}
-          />} />
-          <Route path="/wallet" element={<WalletPage onShowBidHistory={() => setShowBidHistory(true)} />} />
-          <Route path="/profile" element={<Profile onEditProfile={() => setShowEditProfile(true)} setShowSubscriptionModal={setShowSubscriptionModal} onLogout={handleLogout} />} />
-          <Route path="/post" element={<PostJob />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+      <main className="flex-1 overflow-y-auto bg-green-50 w-full relative">
+        <div className="max-w-7xl mx-auto w-full h-full">
+          <Routes>
+            <Route path="/" element={<Home
+              onBid={(id) => setBidModalOpen({ isOpen: true, jobId: id })}
+              onViewBids={(j) => setViewBidsModal({ isOpen: true, job: j })}
+              onChat={handleChatOpen}
+              onEdit={handleEditJobLink}
+              onClick={(j) => setSelectedJob(j)} // Open job details
+              onReplyToCounter={handleWorkerReplyToCounter}
+              onWithdrawBid={handleWithdrawBid}
+              setShowFilterModal={setShowFilterModal}
+              showAlert={showAlert}
+            />} />
+            <Route path="/wallet" element={<WalletPage onShowBidHistory={() => setShowBidHistory(true)} />} />
+            <Route path="/profile" element={<Profile onEditProfile={() => setShowEditProfile(true)} setShowSubscriptionModal={setShowSubscriptionModal} onLogout={handleLogout} />} />
+            <Route path="/post" element={<PostJob />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </div>
       </main>
 
       <BottomNav />

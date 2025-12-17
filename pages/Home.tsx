@@ -61,7 +61,7 @@ export const Home: React.FC<HomeProps> = ({
     };
 
     return (
-        <div className="p-4 animate-fade-in pb-24">
+        <div className="p-4 animate-fade-in pb-24 md:pb-6">
             <FilterModal
                 isOpen={showFilters}
                 onClose={() => setShowFilters(false)}
@@ -129,33 +129,35 @@ export const Home: React.FC<HomeProps> = ({
             </div>
 
             {/* Job List */}
-            {jobs.map(j => ({ ...j, distance: (user.coordinates && j.coordinates) ? calculateDistance(user.coordinates.lat, user.coordinates.lng, j.coordinates.lat, j.coordinates.lng) : undefined }))
-                .filter(j => {
-                    if (role === UserRole.POSTER) return j.posterId === user.id;
-                    const isMyJob = j.posterId === user.id;
-                    const myBid = j.bids.find(b => b.workerId === user.id);
-                    if (isMyJob) return false;
-                    if (showMyBidsOnly && !myBid) return false;
-                    if (j.status !== JobStatus.OPEN && !myBid) return false;
-                    if (searchQuery && !j.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-                    if (selectedCategory !== 'All' && j.category !== selectedCategory) return false;
-                    if (filterLocation && !j.location.toLowerCase().includes(filterLocation.toLowerCase())) return false;
-                    if (filterMinBudget && j.budget < parseInt(filterMinBudget)) return false;
-                    if (filterMaxDistance && j.distance !== undefined && j.distance > parseInt(filterMaxDistance)) return false;
-                    return true;
-                }).map(job => (
-                    <div key={job.id} className="animate-fade-in-up">
-                        <JobCard job={job} currentUserId={user.id} userRole={role} distance={job.distance} language={language}
-                            onBid={(id) => onBid(id)}
-                            onViewBids={(j) => onViewBids(j)}
-                            onChat={onChat}
-                            onEdit={onEdit}
-                            onClick={() => onClick(job)}
-                            onReplyToCounter={onReplyToCounter}
-                            onWithdrawBid={onWithdrawBid}
-                        />
-                    </div>
-                ))}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {jobs.map(j => ({ ...j, distance: (user.coordinates && j.coordinates) ? calculateDistance(user.coordinates.lat, user.coordinates.lng, j.coordinates.lat, j.coordinates.lng) : undefined }))
+                    .filter(j => {
+                        if (role === UserRole.POSTER) return j.posterId === user.id;
+                        const isMyJob = j.posterId === user.id;
+                        const myBid = j.bids.find(b => b.workerId === user.id);
+                        if (isMyJob) return false;
+                        if (showMyBidsOnly && !myBid) return false;
+                        if (j.status !== JobStatus.OPEN && !myBid) return false;
+                        if (searchQuery && !j.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+                        if (selectedCategory !== 'All' && j.category !== selectedCategory) return false;
+                        if (filterLocation && !j.location.toLowerCase().includes(filterLocation.toLowerCase())) return false;
+                        if (filterMinBudget && j.budget < parseInt(filterMinBudget)) return false;
+                        if (filterMaxDistance && j.distance !== undefined && j.distance > parseInt(filterMaxDistance)) return false;
+                        return true;
+                    }).map(job => (
+                        <div key={job.id} className="animate-fade-in-up h-full">
+                            <JobCard job={job} currentUserId={user.id} userRole={role} distance={job.distance} language={language}
+                                onBid={(id) => onBid(id)}
+                                onViewBids={(j) => onViewBids(j)}
+                                onChat={onChat}
+                                onEdit={onEdit}
+                                onClick={() => onClick(job)}
+                                onReplyToCounter={onReplyToCounter}
+                                onWithdrawBid={onWithdrawBid}
+                            />
+                        </div>
+                    ))}
+            </div>
 
             {loading && (
                 <div className="space-y-4">

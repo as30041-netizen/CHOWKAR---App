@@ -11,7 +11,7 @@ interface ProfileProps {
 }
 
 export const Profile: React.FC<ProfileProps> = ({ onEditProfile, setShowSubscriptionModal, onLogout }) => {
-    const { user, t, language, jobsCompleted } = useUser();
+    const { user, t, language } = useUser();
 
     // Note: jobContext might be needed if we want accurate "jobs posted" count. 
     // For now using user.jobsCompleted as a proxy or if we have access to jobs context we can filter.
@@ -28,7 +28,7 @@ export const Profile: React.FC<ProfileProps> = ({ onEditProfile, setShowSubscrip
     const postedJobsCount = jobs.filter((j: any) => j.posterId === user.id).length;
 
     return (
-        <div className="pb-24 animate-fade-in">
+        <div className="pb-24 md:pb-6 animate-fade-in">
             <div className="bg-white rounded-b-3xl shadow-sm border-b border-gray-100 overflow-hidden mb-4">
                 <div className="h-32 bg-gradient-to-r from-emerald-600 to-teal-500 relative">
                     <button onClick={onEditProfile} className="absolute top-4 right-4 bg-white/20 p-2 rounded-full text-white">
@@ -59,7 +59,7 @@ export const Profile: React.FC<ProfileProps> = ({ onEditProfile, setShowSubscrip
                 </div>
             </div>
             <div className="px-4 space-y-4">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div className="bg-white p-3 rounded-2xl border border-gray-100 shadow-sm text-center">
                         <div className="text-emerald-600 mb-1 flex justify-center"><Star size={20} fill="currentColor" /></div>
                         <div className="font-bold text-gray-900 text-lg">{user.rating}</div>

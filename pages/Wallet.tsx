@@ -7,7 +7,7 @@ interface WalletProps {
 
 export const Wallet: React.FC<WalletProps> = ({ onShowBidHistory }) => {
     return (
-        <div className="pb-24">
+        <div className="pb-24 md:pb-6">
             <WalletView onShowBidHistory={onShowBidHistory} />
         </div>
     );
