@@ -295,7 +295,12 @@ const AppContent: React.FC = () => {
   const handleDeleteMessage = async (messageId: string) => {
     try {
       await supabase.rpc('soft_delete_chat_message', { p_message_id: messageId });
-      setMessages(prev => prev.filter(m => m.id !== messageId));
+      // Update UI to show deleted state (consistent with DB soft delete)
+      setMessages(prev => prev.map(m =>
+        m.id === messageId
+          ? { ...m, text: 'This message was deleted', translatedText: undefined }
+          : m
+      ));
     } catch (error) {
       console.error('Error deleting message:', error);
     }
