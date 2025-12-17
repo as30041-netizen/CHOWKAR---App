@@ -383,10 +383,10 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     if (!isLoggedIn || !user.id) return;
 
-    // Guard: Only subscribe if user.id is a valid UUID
-    const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id);
-    if (!isValidUUID) return;
+    // Guard: Only subscribe if user.id is set (REMOVED STRICT UUID CHECK TO BE SAFE)
+    if (!user.id) return;
 
+    console.log('[Realtime] Subscribing to global chat messages...');
     const chatSubscription = supabase
       .channel('chat_messages_realtime')
       .on(
@@ -426,6 +426,16 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             console.log('[Realtime] New Chat Message received:', newMsg);
+
+            // Log for debugging notification issues
+            console.log('[Realtime] Debug:', {
+              msgSender: newMsg.senderId,
+              myId: user.id,
+              activeChat: activeChatIdRef.current,
+              msgJob: newMsg.jobId,
+              throttle: lastNotificationTimeRef.current[newMsg.jobId]
+            });
+
             return [...prev, newMsg];
           });
 
