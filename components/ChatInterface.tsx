@@ -228,7 +228,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-[#e5ddd5] bg-opacity-10 pb-24" style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
+      <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-[#e5ddd5] bg-opacity-10" style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
         {Object.entries(groupedMessages).map(([date, msgs]) => (
           <div key={date}>
             <div className="flex justify-center mb-4">
@@ -322,7 +322,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       </div>
 
       {/* Footer / Input */}
-      <div className="bg-white border-t border-gray-100 pb-safe absolute bottom-0 w-full">
+      <div className="bg-white border-t border-gray-100 flex-none z-20 pb-safe">
 
         {/* Quick Replies */}
         {showQuickReplies && (
