@@ -80,7 +80,29 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   // Real-time Broadcast Channel
   const [channel, setChannel] = useState<any>(null);
 
-  // ... existing useEffect history load ...
+  // Fetch History on Mount
+  // Fetch History on Mount
+  useEffect(() => {
+    const loadHistory = async () => {
+      setIsLoadingHistory(true);
+      try {
+        const { messages: historyData, error } = await fetchJobMessages(job.id);
+        if (error) throw error;
+
+        // Sort by timestamp just in case
+        const sorted = (historyData || []).sort((a, b) => a.timestamp - b.timestamp);
+        setHistoryMessages(sorted);
+      } catch (error) {
+        console.error('Error loading chat history:', error);
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    };
+
+    if (job.id) {
+      loadHistory();
+    }
+  }, [job.id]);
 
   useEffect(() => {
     const newChannel = supabase.channel(`chat_room:${job.id}`, {

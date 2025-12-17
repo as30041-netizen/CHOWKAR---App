@@ -438,7 +438,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const now = Date.now();
             const lastTime = lastNotificationTimeRef.current[newMsg.jobId] || 0;
 
-            if (now - lastTime > 30000) { // 30 seconds cooldown
+            if (now - lastTime > 5000) { // 5 seconds cooldown
               console.log('[Realtime] Triggering Notification', newMsg.jobId);
               lastNotificationTimeRef.current[newMsg.jobId] = now;
 
