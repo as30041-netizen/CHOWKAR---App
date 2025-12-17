@@ -310,12 +310,12 @@ const AppContent: React.FC = () => {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-6">
-            <button onClick={() => navigate('/')} className={`text-sm font-bold ${location.pathname === '/' ? 'text-emerald-600' : 'text-gray-500 hover:text-emerald-600'}`}>{t.home}</button>
+            <button onClick={() => navigate('/')} className={`text-sm font-bold ${location.pathname === '/' ? 'text-emerald-600' : 'text-gray-500 hover:text-emerald-600'}`}>{t.navHome}</button>
             {role === UserRole.POSTER && (
-              <button onClick={() => navigate('/post')} className={`text-sm font-bold ${location.pathname === '/post' ? 'text-emerald-600' : 'text-gray-500 hover:text-emerald-600'}`}>{t.postJob}</button>
+              <button onClick={() => navigate('/post')} className={`text-sm font-bold ${location.pathname === '/post' ? 'text-emerald-600' : 'text-gray-500 hover:text-emerald-600'}`}>{t.navPost}</button>
             )}
-            <button onClick={() => navigate('/wallet')} className={`text-sm font-bold ${location.pathname === '/wallet' ? 'text-emerald-600' : 'text-gray-500 hover:text-emerald-600'}`}>{t.wallet}</button>
-            <button onClick={() => navigate('/profile')} className={`text-sm font-bold ${location.pathname === '/profile' ? 'text-emerald-600' : 'text-gray-500 hover:text-emerald-600'}`}>{t.profile}</button>
+            <button onClick={() => navigate('/wallet')} className={`text-sm font-bold ${location.pathname === '/wallet' ? 'text-emerald-600' : 'text-gray-500 hover:text-emerald-600'}`}>{t.navWallet}</button>
+            <button onClick={() => navigate('/profile')} className={`text-sm font-bold ${location.pathname === '/profile' ? 'text-emerald-600' : 'text-gray-500 hover:text-emerald-600'}`}>{t.navProfile}</button>
           </nav>
 
           <div className="flex items-center gap-3">

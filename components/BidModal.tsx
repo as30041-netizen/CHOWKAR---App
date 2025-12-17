@@ -15,24 +15,15 @@ interface BidModalProps {
 }
 
 export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSuccess, showAlert }) => {
-    const { user, t, checkFreeLimit, incrementAiUsage, language } = useUser();
-    const { jobs, addBid, addNotification } = useJobs(); // Assuming addNotification is available via useUser, actually it is in useUser. 
-    // Wait, addNotification is in useUser. I need to import it from useUser context in App.tsx but here...
-    // Let me check props or context.
-    // In App.tsx: `const { ... addNotification ... } = useUser();`
-    // So I should get it from `useUser`.
-
-    // Correction: re-declare hooks to get what's needed.
-    // To avoid duplicate declaration, let's fix the imports above.
-    /* Redefining hooks usage */
     const {
         user: contextUser,
-        addNotification: contextAddNotification,
+        t: contextT,
         checkFreeLimit: contextCheckFreeLimit,
         incrementAiUsage: contextIncrementAiUsage,
-        t: contextT,
-        language: contextLanguage
+        language: contextLanguage,
+        addNotification: contextAddNotification
     } = useUser();
+    const { jobs, addBid } = useJobs();
 
     const [bidAmount, setBidAmount] = useState('');
     const [bidMessage, setBidMessage] = useState('');
@@ -103,17 +94,17 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
                 <h3 className="text-xl font-bold mb-4">{contextT.placeBid}</h3>
                 <div className="space-y-4">
                     <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase">{contextT.bidAmount} (₹)</label>
+                        <label className="text-xs font-bold text-gray-500 uppercase">{contextT.yourOffer}</label>
                         <input type="number" value={bidAmount} onChange={(e) => setBidAmount(e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 font-bold text-lg" placeholder="0" />
                     </div>
                     <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase">{contextT.message}</label>
-                        <textarea value={bidMessage} onChange={(e) => setBidMessage(e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 h-24" placeholder={contextT.messagePlaceholder}></textarea>
+                        <label className="text-xs font-bold text-gray-500 uppercase">{contextT.msgToEmployer}</label>
+                        <textarea value={bidMessage} onChange={(e) => setBidMessage(e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 h-24" placeholder={contextT.bidMessagePlaceholder}></textarea>
                         <button onClick={handleEnhanceBid} disabled={isEnhancingBid} className="text-xs text-emerald-600 font-bold flex items-center gap-1 mt-1 hover:underline">
                             <div className="w-4 h-4 bg-emerald-100 rounded-full flex items-center justify-center"><LayoutGrid size={10} /></div> {isEnhancingBid ? 'Enhancing...' : 'Enhance with AI'}
                         </button>
                     </div>
-                    <button onClick={handlePlaceBid} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-emerald-700">{contextT.submitBid}</button>
+                    <button onClick={handlePlaceBid} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-emerald-700">{contextT.sendBid}</button>
                 </div>
             </div>
         </div>

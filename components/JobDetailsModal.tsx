@@ -1,7 +1,8 @@
 import React from 'react';
-import { XCircle, MapPin, Star, AlertCircle, Pencil } from 'lucide-react';
+import { XCircle, MapPin, Star, AlertCircle, Pencil, ExternalLink } from 'lucide-react';
 import { Job, UserRole, JobStatus } from '../types';
 import { useUser } from '../contexts/UserContextDB';
+import { LeafletMap } from './LeafletMap';
 
 interface JobDetailsModalProps {
     job: Job | null;
@@ -78,22 +79,18 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
 
                 {/* Map Location Preview */}
                 {job.coordinates && (
-                    <div className="mb-4 rounded-xl overflow-hidden border border-gray-100 h-32 relative group">
-                        <iframe
-                            width="100%"
-                            height="100%"
-                            frameBorder="0"
-                            style={{ border: 0 }}
-                            src={`https://www.google.com/maps/embed/v1/place?key=YOUR_API_KEY&q=${job.coordinates.lat},${job.coordinates.lng}`}
-                            allowFullScreen
-                            className="grayscale group-hover:grayscale-0 transition-all pointer-events-none"
-                        ></iframe>
-                        {/* Fallback visual since we don't have API key in this demo, usually we'd use Leaflet or Static Map image */}
-                        <div className="absolute inset-0 bg-emerald-50 flex items-center justify-center flex-col gap-1 text-emerald-800 pointer-events-none">
-                            <MapPin size={24} className="animate-bounce" />
-                            <span className="text-xs font-bold">{job.location}</span>
-                            <span className="text-[10px] opacity-60">(Map Preview)</span>
-                        </div>
+                    <div className="mb-4 rounded-xl overflow-hidden border border-gray-100 h-48 relative group z-0">
+                        <LeafletMap lat={job.coordinates.lat} lng={job.coordinates.lng} popupText={job.location} />
+
+                        {/* Open in Google Maps Button */}
+                        <a
+                            href={`https://www.google.com/maps/dir/?api=1&destination=${job.coordinates.lat},${job.coordinates.lng}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="absolute bottom-3 right-3 bg-white/90 backdrop-blur-sm text-emerald-700 text-xs font-bold px-3 py-2 rounded-lg shadow-md flex items-center gap-1 hover:bg-emerald-50 transition-colors z-[400]"
+                        >
+                            <ExternalLink size={14} /> Open Maps
+                        </a>
                     </div>
                 )}
 
