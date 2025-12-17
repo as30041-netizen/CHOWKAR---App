@@ -147,6 +147,12 @@ const AppContent: React.FC = () => {
     }
   };
 
+  // Close chat on navigation to prevent stuck active state
+  useEffect(() => {
+    setChatOpen({ isOpen: false, job: null });
+    setActiveChatId(null);
+  }, [location.pathname]);
+
   const handleLogout = async () => { await logout(); };
 
   const handleChatOpen = (job: Job) => {

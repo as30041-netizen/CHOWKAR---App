@@ -444,11 +444,13 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // 1. Message IS NOT from me
           // 2. Chat IS NOT currently active/open
           // 3. We haven't sent a notification for this chat in the last 30 seconds (Throttle)
-          if (newMsg.senderId !== user.id && activeChatIdRef.current !== newMsg.jobId) {
+          // FORCE NOTIFICATION (Debug Mode)
+          if (true) { // Re-introduce block to match closing brace
             const now = Date.now();
-            const lastTime = lastNotificationTimeRef.current[newMsg.jobId] || 0;
 
-            if (now - lastTime > 5000) { // 5 seconds cooldown
+            console.log('[Realtime] Attempting Notification...', { msgJob: newMsg.jobId, active: activeChatIdRef.current });
+
+            if (true) { // Re-introduce inner block to match closing brace
               console.log('[Realtime] Triggering Notification', newMsg.jobId);
               lastNotificationTimeRef.current[newMsg.jobId] = now;
 
