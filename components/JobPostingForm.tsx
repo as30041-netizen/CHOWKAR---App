@@ -9,10 +9,11 @@ import { Mic, MicOff, Sparkles, Lock, Loader2, Calculator, MapPin, ChevronRight,
 
 interface JobPostingFormProps {
     onSuccess: () => void;
+    onCancel?: () => void;
     initialJob?: Job;
 }
 
-export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, initialJob }) => {
+export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCancel, initialJob }) => {
     const { user, t, language, checkFreeLimit, incrementAiUsage, addNotification, showAlert } = useUser();
     const { addJob, updateJob } = useJobs();
 
@@ -428,6 +429,15 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, initi
             >
                 {isEditing ? (language === 'en' ? 'Update Job' : 'नौकरी अपडेट करें') : t.postJobBtn} <ChevronRight size={20} />
             </button>
+            {onCancel && (
+                <button
+                    type="button"
+                    onClick={onCancel}
+                    className="w-full mt-3 text-gray-500 font-bold py-3 hover:text-gray-800 transition-colors"
+                >
+                    {language === 'en' ? 'Cancel' : 'रद्द करें'}
+                </button>
+            )}
         </div>
     );
 };

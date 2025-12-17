@@ -14,6 +14,7 @@ export const PostJob: React.FC = () => {
         <div className="pb-24 md:pb-6">
             <JobPostingForm
                 onSuccess={() => navigate('/')}
+                onCancel={() => navigate('/')}
                 initialJob={jobToEdit}
             />
         </div>
