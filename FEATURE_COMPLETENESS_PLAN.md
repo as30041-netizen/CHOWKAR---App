@@ -6,11 +6,11 @@ Ensure every major feature (Notifications, Chat, Jobs, Bids, Wallet) has a compl
 ## 📊 Feature Audit & Missing Actions
 
 ### 1. 🔔 Notifications System
-*Current State:* Can view and click to mark read.
+*Current State:* Can view, mark read, delete, and clear all.
 *Missing Actions:*
-- [ ] **Delete Single**: Swipe left to delete a specific notification.
-- [ ] **Clear All**: "Clear All" button to remove all read notifications.
-- [ ] **Mark All Read**: Start fresh without opening each one.
+- [x] **Delete Single**: Trash icon implemented.
+- [x] **Clear All**: "Clear All" button implemented (Database & Local).
+- [x] **Mark All Read**: "Mark Read" button implemented.
 - [ ] **Settings**: Toggle specific notification types (e.g., "Mute Marketing").
 
 ### 2. 💬 Chat System
@@ -45,10 +45,10 @@ Ensure every major feature (Notifications, Chat, Jobs, Bids, Wallet) has a compl
 
 ## 🛠️ Implementation Plan
 
-### Phase 1: Notification Polish (High Impact, Low Effort)
-1.  **Add `deleteNotification` RPC**: Allow database deletion.
-2.  **UI Update**: Add "Clear All" button in `NotificationsPanel` header.
-3.  **Swipe Gestures**: Implement `react-swipeable-list` for swipe-to-delete.
+### Phase 1: Notification Polish (High Impact, Low Effort) - ✅ DONE
+1.  **Add `deleteNotification` RPC**: ✅ Implemented in `SUPABASE_SCHEMA_UPDATES.sql`.
+2.  **UI Update**: ✅ "Clear All" & "Mark Read" added to `NotificationsPanel`.
+3.  **Gestures**: Trash icon used instead of Swipe (Clean & Simple).
 
 ### Phase 2: Chat Lifecycle (Medium Effort)
 1.  **Message Actions Menu**: Add long-press menu on chat bubbles.

@@ -33,6 +33,9 @@ interface UserContextType {
   updateUserInDB: (updates: Partial<User>) => Promise<void>;
   retryAuth: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  activeChatId: string | null;
+  setActiveChatId: (id: string | null) => void;
+  markNotificationsAsReadForJob: (jobId: string) => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -66,6 +69,17 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+
+  // Track active chat to prevent notifications for open chats
+  const [activeChatId, setActiveChatIdState] = useState<string | null>(null);
+  const activeChatIdRef = useRef<string | null>(null);
+  // Track last notification time per job to prevent spam (throttling)
+  const lastNotificationTimeRef = useRef<Record<string, number>>({});
+
+  const setActiveChatId = (id: string | null) => {
+    setActiveChatIdState(id);
+    activeChatIdRef.current = id;
+  };
 
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [currentAlert, setCurrentAlert] = useState<{ message: string, type: 'success' | 'error' | 'info' } | null>(null);
@@ -294,7 +308,8 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .from('notifications')
         .select('*')
         .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50);
 
       if (notifError) {
         console.error('[Data] Error fetching notifications:', notifError);
@@ -364,7 +379,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, [isLoggedIn, user.id]);
 
-  // Real-time subscription for chat messages
+  // Real-time subscription for chat messages AND Notifications
   useEffect(() => {
     if (!isLoggedIn || !user.id) return;
 
@@ -381,7 +396,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           schema: 'public',
           table: 'chat_messages'
         },
-        (payload) => {
+        async (payload) => {
           const newMsg: ChatMessage = {
             id: payload.new.id,
             jobId: payload.new.job_id,
@@ -391,15 +406,12 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             timestamp: new Date(payload.new.created_at).getTime()
           };
 
-          // Prevent duplicates
+          // Update messages state (for active chats)
           setMessages(prev => {
-            // 1. Check exact ID match (Realtime sometimes sends same event twice)
-            if (prev.some(m => m.id === newMsg.id)) {
-              return prev;
-            }
+            // Exact ID Check
+            if (prev.some(m => m.id === newMsg.id)) return prev;
 
-            // 2. Check for Optimistic Update Deduplication (Self-sent messages)
-            // If we find a temp message that looks like this new real message, replace it.
+            // Optimistic Update Check
             const tempMatchIndex = prev.findIndex(m =>
               m.id.startsWith('temp_') &&
               m.senderId === newMsg.senderId &&
@@ -413,10 +425,41 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               return updated;
             }
 
-            // 3. New message from someone else (or self if optimistic failed/missed)
             console.log('[Realtime] New Chat Message received:', newMsg);
             return [...prev, newMsg];
           });
+
+          // NOTIFICATION LOGIC
+          // Triggers if:
+          // 1. Message IS NOT from me
+          // 2. Chat IS NOT currently active/open
+          // 3. We haven't sent a notification for this chat in the last 30 seconds (Throttle)
+          if (newMsg.senderId !== user.id && activeChatIdRef.current !== newMsg.jobId) {
+            const now = Date.now();
+            const lastTime = lastNotificationTimeRef.current[newMsg.jobId] || 0;
+
+            if (now - lastTime > 30000) { // 30 seconds cooldown
+              console.log('[Realtime] Triggering Notification', newMsg.jobId);
+              lastNotificationTimeRef.current[newMsg.jobId] = now;
+
+              // Insert notification into DB (which will trigger the other listener to update UI)
+              // We truncate the message for privacy/space
+              const preview = newMsg.text.length > 50 ? newMsg.text.substring(0, 50) + '...' : newMsg.text;
+
+              await addNotification(
+                user.id,
+                "New Message",
+                preview,
+                "INFO",
+                newMsg.jobId
+              );
+
+              // Also show a local toast for immediate "wow" factor
+              showAlert(`New message: ${preview}`, 'info');
+            } else {
+              console.log('[Realtime] Notification throttled for job:', newMsg.jobId);
+            }
+          }
         }
       )
       .subscribe();
@@ -517,6 +560,25 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setTimeout(() => {
       setCurrentAlert(prev => (prev?.message === message ? null : prev));
     }, 3000);
+  };
+
+  const markNotificationsAsReadForJob = async (jobId: string) => {
+    // Optimistic update
+    setNotifications(prev => prev.map(n =>
+      n.relatedJobId === jobId && !n.read
+        ? { ...n, read: true }
+        : n
+    ));
+
+    // DB update
+    if (user.id) {
+      await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('user_id', user.id)
+        .eq('related_job_id', jobId)
+        .eq('read', false);
+    }
   };
 
   const checkFreeLimit = () => {
@@ -651,7 +713,10 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       showAlert, currentAlert,
       updateUserInDB,
       retryAuth,
-      refreshUser: fetchUserData
+      refreshUser: fetchUserData,
+      activeChatId,
+      setActiveChatId,
+      markNotificationsAsReadForJob
     }}>
       {children}
     </UserContext.Provider>

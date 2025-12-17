@@ -43,7 +43,7 @@ const AppContent: React.FC = () => {
     notifications, messages, setMessages,
     addNotification, logout, t,
     showSubscriptionModal, setShowSubscriptionModal,
-    showAlert, currentAlert, updateUserInDB, refreshUser
+    showAlert, currentAlert, updateUserInDB, refreshUser, setActiveChatId, markNotificationsAsReadForJob
   } = useUser();
 
   const { jobs, updateJob, deleteJob, updateBid } = useJobs();
@@ -126,6 +126,17 @@ const AppContent: React.FC = () => {
 
   const unreadCount = notifications.filter(n => n.userId === user.id && !n.read).length;
 
+  // Count chats with unread messages
+  const unreadChatCount = notifications.filter(n =>
+    n.userId === user.id &&
+    !n.read &&
+    n.title === "New Message" &&
+    n.relatedJobId
+  ).reduce((acc, n) => {
+    if (!acc.includes(n.relatedJobId!)) acc.push(n.relatedJobId!);
+    return acc;
+  }, [] as string[]).length;
+
   // --- Handlers ---
   const handleGoogleSignIn = async () => {
     setIsSigningIn(true);
@@ -140,6 +151,8 @@ const AppContent: React.FC = () => {
 
   const handleChatOpen = (job: Job) => {
     setChatOpen({ isOpen: true, job });
+    setActiveChatId(job.id);
+    markNotificationsAsReadForJob(job.id);
     setShowChatList(false);
   };
 
@@ -332,7 +345,14 @@ const AppContent: React.FC = () => {
 
           <div className="flex items-center gap-3">
             <button onClick={() => setLanguage(l => l === 'en' ? 'hi' : 'en')} className="p-2 text-emerald-800 text-xs font-bold border border-emerald-100 rounded-lg bg-emerald-50 hover:bg-emerald-100"><Languages size={18} /> {language === 'en' ? 'हि' : 'En'}</button>
-            <button onClick={() => setShowChatList(true)} className="p-2 hover:bg-gray-100 rounded-full"><MessageCircle size={20} className="text-gray-600" /></button>
+            <button onClick={() => setShowChatList(true)} className="relative p-2 hover:bg-gray-100 rounded-full">
+              <MessageCircle size={20} className="text-gray-600" />
+              {unreadChatCount > 0 && (
+                <span className="absolute top-1.5 right-2 min-w-[18px] h-[18px] bg-emerald-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                  {unreadChatCount}
+                </span>
+              )}
+            </button>
             <button onClick={() => setShowNotifications(true)} className="relative p-2 hover:bg-gray-100 rounded-full">
               <Bell size={20} className="text-gray-600" />
               {unreadCount > 0 && <span className="absolute top-1.5 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>}
@@ -437,7 +457,7 @@ const AppContent: React.FC = () => {
       <NotificationsPanel
         isOpen={showNotifications}
         onClose={() => setShowNotifications(false)}
-        onJobClick={(job) => { setShowNotifications(false); setSelectedJob(job); }}
+        onJobClick={(job) => { setShowNotifications(false); handleChatOpen(job); }}
       />
 
       <ChatListPanel
@@ -480,7 +500,7 @@ const AppContent: React.FC = () => {
         <ChatInterface
           job={chatOpen.job}
           currentUser={user}
-          onClose={() => setChatOpen({ isOpen: false, job: null })}
+          onClose={() => { setChatOpen({ isOpen: false, job: null }); setActiveChatId(null); }}
           messages={messages.filter(m => m.jobId === chatOpen.job?.id)}
           onSendMessage={handleSendMessage}
           onCompleteJob={handleCompleteJob}
