@@ -433,29 +433,30 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             timestamp: new Date(payload.new.created_at).getTime()
           };
 
-          // Avoid duplicates: Check by exact ID OR by matching content (for self-sent messages)
+          // Prevent duplicates
           setMessages(prev => {
-            // Already have this exact message ID?
-            if (prev.some(m => m.id === newMsg.id)) return prev;
-
-            // Self-sent message that we already added optimistically?
-            // Check by matching senderId + jobId + text (within 10 second window)
-            const isDuplicateSelfSent = prev.some(m =>
-              m.senderId === newMsg.senderId &&
-              m.jobId === newMsg.jobId &&
-              m.text === newMsg.text &&
-              Math.abs(m.timestamp - newMsg.timestamp) < 10000 // 10 second window
-            );
-
-            if (isDuplicateSelfSent) {
-              // Update the temp message with the real DB id
-              return prev.map(m =>
-                (m.senderId === newMsg.senderId && m.jobId === newMsg.jobId && m.text === newMsg.text && m.id.startsWith('temp_'))
-                  ? { ...m, id: newMsg.id, timestamp: newMsg.timestamp }
-                  : m
-              );
+            // 1. Check exact ID match (Realtime sometimes sends same event twice)
+            if (prev.some(m => m.id === newMsg.id)) {
+              return prev;
             }
 
+            // 2. Check for Optimistic Update Deduplication (Self-sent messages)
+            // If we find a temp message that looks like this new real message, replace it.
+            const tempMatchIndex = prev.findIndex(m =>
+              m.id.startsWith('temp_') &&
+              m.senderId === newMsg.senderId &&
+              m.jobId === newMsg.jobId &&
+              m.text === newMsg.text
+            );
+
+            if (tempMatchIndex !== -1) {
+              const updated = [...prev];
+              updated[tempMatchIndex] = { ...updated[tempMatchIndex], id: newMsg.id, timestamp: newMsg.timestamp };
+              return updated;
+            }
+
+            // 3. New message from someone else (or self if optimistic failed/missed)
+            console.log('[Realtime] New Chat Message received:', newMsg);
             return [...prev, newMsg];
           });
         }

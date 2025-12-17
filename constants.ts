@@ -225,7 +225,15 @@ export const TRANSLATIONS = {
     featLimitedAI: "2 Free AI Uses",
     featBasic: "Basic Profile",
     currentPlan: "Current Plan",
-    bestValue: "Best Value"
+    bestValue: "Best Value",
+
+    // New Wallet/Bid Translatons
+    commissionCredits: "Commission Credits",
+    addCredits: "Add Credits",
+    withdraw: "Withdraw",
+    yourOfferLabel: "Your Offer",
+    noBidsFound: "No bids found.",
+    acceptingBidFeeWarn: "Accepting this bid will deduct a ₹{fee} platform fee from your wallet. Continue?"
   },
   hi: {
     // Auth
@@ -408,7 +416,15 @@ export const TRANSLATIONS = {
     featLimitedAI: "2 बार फ्री AI उपयोग",
     featBasic: "बेसिक प्रोफाइल",
     currentPlan: "वर्तमान प्लान",
-    bestValue: "सबसे अच्छा"
+    bestValue: "सबसे अच्छा",
+
+    // New Wallet/Bid Translatons
+    commissionCredits: "कमीशन क्रेडिट",
+    addCredits: "क्रेडिट जोड़ें",
+    withdraw: "निकालें",
+    yourOfferLabel: "आपका प्रस्ताव",
+    noBidsFound: "कोई बोली नहीं मिली।",
+    acceptingBidFeeWarn: "इस बोली को स्वीकार करने पर आपके वॉलेट से ₹{fee} प्लेटफॉर्म शुल्क काट लिया जाएगा। जारी रखें?"
   }
 };
 

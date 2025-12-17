@@ -276,3 +276,51 @@ export const cancelJob = async (jobId: string, reason: string): Promise<{ succes
     return { success: false, error: error.message || 'Failed to cancel job' };
   }
 };
+
+export const chargeWorkerCommission = async (workerId: string, jobId: string, bidAmount: number): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { WORKER_COMMISSION_RATE } = await import('../constants');
+    const commission = Math.ceil(bidAmount * WORKER_COMMISSION_RATE);
+
+    // 1. Get current balance
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('wallet_balance')
+      .eq('id', workerId)
+      .single();
+
+    if (profileError) throw profileError;
+
+    const currentBalance = profile.wallet_balance || 0;
+    const newBalance = currentBalance - commission;
+
+    // 2. Update balance
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ wallet_balance: newBalance })
+      .eq('id', workerId);
+
+    if (updateError) throw updateError;
+
+    // 3. Record transaction
+    const { error: txError } = await supabase
+      .from('transactions')
+      .insert({
+        user_id: workerId,
+        amount: commission,
+        type: 'DEBIT',
+        description: `Platform Fee (5%) for Job`,  // Shortened description
+        related_job_id: jobId
+      });
+
+    if (txError) {
+      console.error('Error recording transaction:', txError);
+      // non-fatal
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error charging commission:', error);
+    return { success: false, error: error.message };
+  }
+};

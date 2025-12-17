@@ -54,12 +54,17 @@ export const WalletView: React.FC<WalletViewProps> = ({ onShowBidHistory }) => {
     <div className="p-4 animate-fade-in">
       <div className="bg-emerald-600 rounded-2xl p-6 text-white mb-6 shadow-lg relative overflow-hidden animate-pop">
         <Wallet size={150} className="absolute right-0 top-0 opacity-10 translate-x-1/4 -translate-y-1/4" />
-        <p className="text-emerald-100 text-sm font-medium mb-1">{t.totalBalance}</p>
+        <p className="text-emerald-100 text-sm font-medium mb-1">{t.commissionCredits}</p>
         <h2 className="text-4xl font-bold mb-4">₹{user.walletBalance}</h2>
-        <button onClick={handleAddMoney} className="bg-white text-emerald-700 px-4 py-2 rounded-lg text-sm font-bold shadow-sm flex flex-col items-center leading-none py-1">
-          <span>+ {t.addMoney}</span>
-          <span className="text-[8px] opacity-70 mt-0.5">(TEST MODE)</span>
-        </button>
+        <div className="flex gap-2">
+          <button onClick={handleAddMoney} className="bg-white text-emerald-700 px-4 py-2 rounded-lg text-sm font-bold shadow-sm flex flex-col items-center leading-none py-1 flex-1">
+            <span>+ {t.addCredits}</span>
+            <span className="text-[8px] opacity-70 mt-0.5">(TEST MODE)</span>
+          </button>
+          <button disabled className="bg-emerald-700/50 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm flex flex-col items-center justify-center leading-none py-1 flex-1 opacity-60 cursor-not-allowed">
+            <span>{t.withdraw}</span>
+          </button>
+        </div>
       </div>
       {role === UserRole.WORKER && (
         <button onClick={onShowBidHistory} className="w-full bg-white p-4 rounded-xl shadow-sm border border-emerald-100 flex items-center justify-between mb-6">

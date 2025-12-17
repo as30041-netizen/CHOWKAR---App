@@ -26,6 +26,7 @@ import { EditProfileModal } from './components/EditProfileModal';
 import { ViewBidsModal } from './components/ViewBidsModal';
 import { CounterModal } from './components/CounterModal';
 import { OnboardingModal } from './components/OnboardingModal';
+import { BidHistoryModal } from './components/BidHistoryModal';
 import { NotificationsPanel } from './components/NotificationsPanel';
 import { ChatListPanel } from './components/ChatListPanel';
 import { LandingPage } from './components/LandingPage';
@@ -203,7 +204,7 @@ const AppContent: React.FC = () => {
           revieweeName: acceptedBid.workerName,
           jobId: chatOpen.job.id
         });
-        await addNotification(acceptedBid.workerId, t.notifJobCompleted, 'The job has been marked as completed!', 'SUCCESS', chatOpen.job.id);
+        await addNotification(acceptedBid.workerId, t.notifJobCompleted, t.jobCompletedAlert, 'SUCCESS', chatOpen.job.id);
       }
 
       setChatOpen({ isOpen: false, job: null });
@@ -446,6 +447,11 @@ const AppContent: React.FC = () => {
         isOpen={showChatList}
         onClose={() => setShowChatList(false)}
         onChatSelect={handleChatOpen}
+      />
+
+      <BidHistoryModal
+        isOpen={showBidHistory}
+        onClose={() => setShowBidHistory(false)}
       />
 
       {/* Legacy Review Modal (if used) */}

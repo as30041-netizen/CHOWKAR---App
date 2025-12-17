@@ -45,11 +45,10 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
 
     const handlePlaceBid = async () => {
         if (!jobId || !bidAmount) return;
-        const commission = Math.ceil(parseInt(bidAmount) * WORKER_COMMISSION_RATE);
-        if (contextUser.walletBalance < commission) {
-            showAlert(`${contextT.alertInsufficientBalance}${commission}`, 'error');
-            return;
-        }
+
+        // Commission calculation for display/logic (deduction happens on acceptance/completion typically)
+        // We allow bidding even with low balance, but they must top up before effective acceptance if required.
+
         const job = jobs.find(j => j.id === jobId);
         if (!job) return;
 
@@ -103,6 +102,13 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
                         <button onClick={handleEnhanceBid} disabled={isEnhancingBid} className="text-xs text-emerald-600 font-bold flex items-center gap-1 mt-1 hover:underline">
                             <div className="w-4 h-4 bg-emerald-100 rounded-full flex items-center justify-center"><LayoutGrid size={10} /></div> {isEnhancingBid ? 'Enhancing...' : 'Enhance with AI'}
                         </button>
+                    </div>
+                    <div className="bg-orange-50 p-3 rounded-lg border border-orange-100 mb-2">
+                        <p className="text-xs text-orange-800">
+                            {contextLanguage === 'en'
+                                ? `Note: A ${(WORKER_COMMISSION_RATE * 100)}% platform fee (₹${Math.ceil(Number(bidAmount || 0) * WORKER_COMMISSION_RATE)}) will be deducted from your wallet when your bid is accepted.`
+                                : `ध्यान दें: आपकी बोली स्वीकार होने पर आपके वॉलेट से ${(WORKER_COMMISSION_RATE * 100)}% प्लेटफॉर्म फीस (₹${Math.ceil(Number(bidAmount || 0) * WORKER_COMMISSION_RATE)}) काट ली जाएगी।`}
+                        </p>
                     </div>
                     <button onClick={handlePlaceBid} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-emerald-700">{contextT.sendBid}</button>
                 </div>

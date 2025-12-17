@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { XCircle, UserCircle, Star } from 'lucide-react';
 import { Job, UserRole } from '../types';
 import { useUser } from '../contexts/UserContextDB';
-import { POSTER_FEE } from '../constants';
+import { POSTER_FEE, WORKER_COMMISSION_RATE } from '../constants';
 import { supabase } from '../lib/supabase'; // Direct supabase usage as per original App.tsx
 import { useJobs } from '../contexts/JobContextDB'; // Need context to refresh wallet if needed, though props might suffice
+import { chargeWorkerCommission } from '../services/jobService';
 
 interface ViewBidsModalProps {
     isOpen: boolean;
@@ -28,16 +29,34 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
 
         setIsAcceptingBid(true);
         try {
+            // 1. Charge Poster & Accept Logic (RPC)
             const { error } = await supabase.rpc('accept_bid', {
                 p_job_id: jobId, p_bid_id: bidId, p_poster_id: user.id, p_worker_id: workerId, p_amount: bidAmount, p_poster_fee: POSTER_FEE
             });
             if (error) throw error;
 
+            // 2. Charge Worker Commission immediately
+            // Note: We do this after Poster is charged to ensure connection is valid first.
+            const { error: workerChargeError } = await chargeWorkerCommission(workerId, jobId, bidAmount);
+
+            if (workerChargeError) {
+                console.error("Failed to charge worker commission:", workerChargeError);
+                // We proceed anyway, connection is made. Admin can reconcile later or we accept the debt.
+            }
+
             // Refresh user wallet immediately to show new balance
             await refreshUser();
 
             onClose();
-            await addNotification(workerId, t.notifBidAccepted, t.notifBidAcceptedBody, "SUCCESS", jobId);
+            // Notify Worker with clear message about connection + fee
+            const commission = Math.ceil(bidAmount * WORKER_COMMISSION_RATE);
+            await addNotification(
+                workerId,
+                t.notifBidAccepted,
+                `${t.notifBidAcceptedBody} A ₹${commission} platform fee has been deducted from your commission wallet.`,
+                "SUCCESS",
+                jobId
+            );
             showAlert(t.contactUnlocked, 'success');
         } catch (error: any) {
             console.error("Bid accept error:", error);
@@ -88,7 +107,15 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
 
                                 {user.id === job?.posterId && bid.status === 'PENDING' && (
                                     <div className="flex gap-2 mt-2">
-                                        <button onClick={() => handleAcceptBid(job!.id, bid.id, bid.amount, bid.workerId)} disabled={isAcceptingBid} className="flex-1 bg-emerald-600 text-white py-2 rounded-lg font-bold text-sm shadow-md hover:bg-emerald-700">
+                                        <button
+                                            onClick={() => {
+                                                if (confirm(t.acceptingBidFeeWarn.replace('{fee}', POSTER_FEE.toString()))) {
+                                                    handleAcceptBid(job!.id, bid.id, bid.amount, bid.workerId);
+                                                }
+                                            }}
+                                            disabled={isAcceptingBid}
+                                            className="flex-1 bg-emerald-600 text-white py-2 rounded-lg font-bold text-sm shadow-md hover:bg-emerald-700"
+                                        >
                                             {isAcceptingBid ? 'Accepting...' : 'Accept Bid'}
                                         </button>
                                         <button onClick={() => onCounter(bid.id, bid.amount)} className="flex-1 bg-white border border-emerald-600 text-emerald-600 py-2 rounded-lg font-bold text-sm hover:bg-emerald-50">
