@@ -1,20 +1,30 @@
 import { supabase } from '../lib/supabase';
 import { User, Coordinates } from '../types';
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 
 export const signInWithGoogle = async (): Promise<{ success: boolean; error?: string }> => {
   try {
-    console.log('[Auth] Initiating Google OAuth, redirect URL:', window.location.origin);
+    // Use Capacitor callback URL for native apps, web URL for browser
+    const redirectTo = Capacitor.isNativePlatform()
+      ? 'in.chowkar.app://callback'
+      : window.location.origin;
+
+    console.log('[Auth] Initiating Google OAuth, redirect URL:', redirectTo);
+    console.log('[Auth] Platform:', Capacitor.getPlatform());
 
     // Set optimistic flag so we expect a session on return
     localStorage.setItem('chowkar_isLoggedIn', 'true');
 
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: window.location.origin,
+        redirectTo,
+        skipBrowserRedirect: Capacitor.isNativePlatform(), // Important for mobile!
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',
+          display: 'touch',  // Request touch-optimized fullscreen view
         }
       }
     });
@@ -23,6 +33,15 @@ export const signInWithGoogle = async (): Promise<{ success: boolean; error?: st
       console.error('[Auth] OAuth initialization error:', error);
       localStorage.removeItem('chowkar_isLoggedIn'); // Revert on immediate error
       throw error;
+    }
+
+    // For native platforms, open OAuth in system browser for fullscreen experience
+    if (Capacitor.isNativePlatform() && data?.url) {
+      console.log('[Auth] Opening OAuth URL in system browser:', data.url);
+      await Browser.open({
+        url: data.url,
+        windowName: '_system',
+      });
     }
 
     console.log('[Auth] OAuth redirect initiated successfully');

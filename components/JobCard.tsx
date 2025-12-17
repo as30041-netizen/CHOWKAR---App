@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Job, JobStatus, UserRole, Bid } from '../types';
-import { MapPin, IndianRupee, Clock, CheckCircle, User as UserIcon, Calendar, Hourglass, XCircle, AlertCircle, ChevronRight, Ban, Pencil, ExternalLink, Navigation, Volume2, Square, TrendingUp, Handshake, CornerDownRight } from 'lucide-react';
+import { MapPin, IndianRupee, Clock, CheckCircle2 as CheckCircle, User as UserIcon, Calendar, Hourglass, XCircle, AlertCircle, ChevronRight, Ban, Pencil, ExternalLink, Navigation, Volume2, Square, TrendingUp, Handshake, CornerDownRight } from 'lucide-react';
 import { TRANSLATIONS, CATEGORY_TRANSLATIONS } from '../constants';
 
 interface JobCardProps {
@@ -56,7 +56,9 @@ export const JobCard: React.FC<JobCardProps> = ({
   useEffect(() => {
     // Cleanup speech when component unmounts
     return () => {
-      window.speechSynthesis.cancel();
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
     };
   }, []);
 
@@ -64,7 +66,9 @@ export const JobCard: React.FC<JobCardProps> = ({
     e.stopPropagation();
 
     if (isSpeaking) {
-      window.speechSynthesis.cancel();
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
       setIsSpeaking(false);
       return;
     }
@@ -81,9 +85,11 @@ export const JobCard: React.FC<JobCardProps> = ({
     utterance.onend = () => setIsSpeaking(false);
     utterance.onerror = () => setIsSpeaking(false);
 
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
-    setIsSpeaking(true);
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+      setIsSpeaking(true);
+    }
   };
 
   // Format Date for job start
@@ -198,7 +204,7 @@ export const JobCard: React.FC<JobCardProps> = ({
   return (
     <div
       onClick={onClick}
-      className="bg-white rounded-2xl p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-gray-100 transition-all hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:border-emerald-100 relative overflow-hidden group cursor-pointer"
+      className="bg-white rounded-2xl p-4 sm:p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-gray-100 transition-all hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:border-emerald-100 hover:scale-[1.01] relative overflow-hidden group cursor-pointer"
     >
 
       {/* Top Header Row */}
@@ -306,7 +312,7 @@ export const JobCard: React.FC<JobCardProps> = ({
             !myBid && job.status === JobStatus.OPEN ? (
               <button
                 onClick={() => onBid(job.id)}
-                className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-emerald-700 active:scale-95 shadow-md shadow-emerald-200 transition-all flex items-center"
+                className="bg-emerald-600 text-white px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl text-sm font-bold hover:bg-emerald-700 active:scale-95 shadow-md shadow-emerald-200 transition-all flex items-center"
               >
                 {t.bidNow} <ChevronRight size={16} className="ml-1" />
               </button>

@@ -11,11 +11,12 @@ interface JobDetailsModalProps {
     onChat: (job: Job) => void;
     onEdit: (job: Job) => void;
     onDelete: (jobId: string) => void;
+    onCancel?: (jobId: string) => void;
     showAlert: (message: string, type: 'success' | 'error' | 'info') => void;
 }
 
 export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
-    job, onClose, onBid, onViewBids, onChat, onEdit, onDelete, showAlert
+    job, onClose, onBid, onViewBids, onChat, onEdit, onDelete, onCancel, showAlert
 }) => {
     const { user, role, t, language } = useUser();
 
@@ -75,13 +76,34 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                     </div>
                 </div>
 
+                {/* Map Location Preview */}
+                {job.coordinates && (
+                    <div className="mb-4 rounded-xl overflow-hidden border border-gray-100 h-32 relative group">
+                        <iframe
+                            width="100%"
+                            height="100%"
+                            frameBorder="0"
+                            style={{ border: 0 }}
+                            src={`https://www.google.com/maps/embed/v1/place?key=YOUR_API_KEY&q=${job.coordinates.lat},${job.coordinates.lng}`}
+                            allowFullScreen
+                            className="grayscale group-hover:grayscale-0 transition-all pointer-events-none"
+                        ></iframe>
+                        {/* Fallback visual since we don't have API key in this demo, usually we'd use Leaflet or Static Map image */}
+                        <div className="absolute inset-0 bg-emerald-50 flex items-center justify-center flex-col gap-1 text-emerald-800 pointer-events-none">
+                            <MapPin size={24} className="animate-bounce" />
+                            <span className="text-xs font-bold">{job.location}</span>
+                            <span className="text-[10px] opacity-60">(Map Preview)</span>
+                        </div>
+                    </div>
+                )}
+
                 {/* Actions */}
                 <div className="flex gap-3 flex-wrap">
                     {/* Worker: Bid button */}
                     {role === UserRole.WORKER && job.status === JobStatus.OPEN && job.posterId !== user.id && (
                         <button
                             onClick={() => onBid(job.id)}
-                            className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-emerald-700"
+                            className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-emerald-700 active:scale-95 transition-all"
                         >
                             {t.bidNow}
                         </button>
@@ -91,7 +113,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                     {role === UserRole.POSTER && job.posterId === user.id && job.status === JobStatus.OPEN && job.bids.length > 0 && (
                         <button
                             onClick={() => onViewBids(job)}
-                            className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-emerald-700"
+                            className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-emerald-700 active:scale-95 transition-all"
                         >
                             {t.viewBids} ({job.bids.length})
                         </button>
@@ -101,9 +123,23 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                     {job.status === JobStatus.IN_PROGRESS && (
                         <button
                             onClick={() => onChat(job)}
-                            className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-emerald-700"
+                            className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-emerald-700 active:scale-95 transition-all"
                         >
                             {t.chat}
+                        </button>
+                    )}
+
+                    {/* Poster: Cancel Job (with Refund) - only if IN_PROGRESS */}
+                    {job.posterId === user.id && job.status === JobStatus.IN_PROGRESS && onCancel && (
+                        <button
+                            onClick={() => {
+                                if (confirm(language === 'en' ? 'Cancel job and refund fees?' : 'जॉब रद्द करें और रिफंड पाएं?')) {
+                                    onCancel(job.id);
+                                }
+                            }}
+                            className="flex-1 bg-gray-100 text-gray-700 border border-gray-300 py-3 rounded-xl font-bold hover:bg-gray-200 active:scale-95 transition-all flex items-center justify-center gap-2"
+                        >
+                            <XCircle size={16} /> {language === 'en' ? 'Cancel Job' : 'रद्द करें'}
                         </button>
                     )}
 
@@ -111,7 +147,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                     {job.posterId === user.id && job.status === JobStatus.OPEN && job.bids.length === 0 && (
                         <button
                             onClick={() => onEdit(job)}
-                            className="flex-1 bg-blue-500 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-blue-600 flex items-center justify-center gap-2"
+                            className="flex-1 bg-blue-500 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-blue-600 active:scale-95 transition-all flex items-center justify-center gap-2"
                         >
                             <Pencil size={16} /> {language === 'en' ? 'Edit' : 'संपादित करें'}
                         </button>
@@ -125,7 +161,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                                     onDelete(job.id);
                                 }
                             }}
-                            className="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-red-600 flex items-center justify-center gap-2"
+                            className="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-red-600 active:scale-95 transition-all flex items-center justify-center gap-2"
                         >
                             <XCircle size={16} /> {language === 'en' ? 'Delete' : 'हटाएं'}
                         </button>

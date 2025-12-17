@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useUser } from '../contexts/UserContextDB';
 import { useJobs } from '../contexts/JobContextDB';
 import { JobCard } from '../components/JobCard';
+import { JobCardSkeleton } from '../components/Skeleton';
 import { Job, UserRole, JobStatus } from '../types';
 import { calculateDistance } from '../utils/geo';
 import { CATEGORIES, CATEGORY_TRANSLATIONS } from '../constants';
@@ -19,9 +20,11 @@ interface HomeProps {
     showAlert: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
+import { FilterModal } from '../components/FilterModal';
+
 export const Home: React.FC<HomeProps> = ({
     onBid, onViewBids, onChat, onEdit, onClick, onReplyToCounter, onWithdrawBid,
-    setShowFilterModal, showAlert
+    setShowFilterModal: _setShowFilterModal, showAlert
 }) => {
     const { user, role, t, language } = useUser();
     const { jobs, loading, error, refreshJobs } = useJobs();
@@ -32,12 +35,11 @@ export const Home: React.FC<HomeProps> = ({
     const [isSearchingVoice, setIsSearchingVoice] = useState(false);
     const [showMyBidsOnly, setShowMyBidsOnly] = useState(false);
 
-    // These filters might come from a modal, for now assuming they are passed or managed locally
-    // If ShowFilterModal is global in App.tsx, we might need to lift these states or use a Context.
-    // For this refactor, let's keep basic filtering here.
+    // Filter Logic integrated
     const [filterLocation, setFilterLocation] = useState('');
     const [filterMinBudget, setFilterMinBudget] = useState('');
     const [filterMaxDistance, setFilterMaxDistance] = useState('');
+    const [showFilters, setShowFilters] = useState(false);
 
     const toggleVoiceInput = () => {
         const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
@@ -60,6 +62,17 @@ export const Home: React.FC<HomeProps> = ({
 
     return (
         <div className="p-4 animate-fade-in pb-24">
+            <FilterModal
+                isOpen={showFilters}
+                onClose={() => setShowFilters(false)}
+                currentFilters={{ location: filterLocation, minBudget: filterMinBudget, maxDistance: filterMaxDistance }}
+                onApply={(f) => {
+                    setFilterLocation(f.location);
+                    setFilterMinBudget(f.minBudget);
+                    setFilterMaxDistance(f.maxDistance);
+                }}
+            />
+
             <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold text-emerald-900 flex items-center gap-2">
                     {role === UserRole.POSTER ? t.myJobPosts : (showMyBidsOnly ? t.myApplications : t.jobsNearMe)}
@@ -96,8 +109,9 @@ export const Home: React.FC<HomeProps> = ({
                             {isSearchingVoice ? <MicOff size={16} /> : <Mic size={16} />}
                         </button>
                     </div>
-                    <button onClick={() => setShowFilterModal(true)} className={`p-2.5 rounded-xl border transition-colors shadow-sm ${filterLocation ? 'bg-emerald-100 text-emerald-800' : 'bg-white text-gray-500'}`}>
+                    <button onClick={() => setShowFilters(true)} className={`p-2.5 rounded-xl border transition-colors shadow-sm ${filterLocation || filterMinBudget || filterMaxDistance ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-white text-gray-500'}`}>
                         <SlidersHorizontal size={20} />
+                        {(filterLocation || filterMinBudget || filterMaxDistance) && <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white transform translate-x-1 -translate-y-1"></span>}
                     </button>
                 </div>
                 <div className="flex overflow-x-auto gap-2 pb-2 no-scrollbar">
@@ -130,16 +144,24 @@ export const Home: React.FC<HomeProps> = ({
                     if (filterMaxDistance && j.distance !== undefined && j.distance > parseInt(filterMaxDistance)) return false;
                     return true;
                 }).map(job => (
-                    <JobCard key={job.id} job={job} currentUserId={user.id} userRole={role} distance={job.distance} language={language}
-                        onBid={(id) => onBid(id)}
-                        onViewBids={(j) => onViewBids(j)}
-                        onChat={onChat}
-                        onEdit={onEdit}
-                        onClick={() => onClick(job)}
-                        onReplyToCounter={onReplyToCounter}
-                        onWithdrawBid={onWithdrawBid}
-                    />
+                    <div key={job.id} className="animate-fade-in-up">
+                        <JobCard job={job} currentUserId={user.id} userRole={role} distance={job.distance} language={language}
+                            onBid={(id) => onBid(id)}
+                            onViewBids={(j) => onViewBids(j)}
+                            onChat={onChat}
+                            onEdit={onEdit}
+                            onClick={() => onClick(job)}
+                            onReplyToCounter={onReplyToCounter}
+                            onWithdrawBid={onWithdrawBid}
+                        />
+                    </div>
                 ))}
+
+            {loading && (
+                <div className="space-y-4">
+                    {[1, 2, 3].map(i => <JobCardSkeleton key={i} />)}
+                </div>
+            )}
 
             {jobs.length === 0 && (
                 <div className="text-center py-10 text-gray-400">

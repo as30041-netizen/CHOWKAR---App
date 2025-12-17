@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useUser } from '../contexts/UserContextDB';
 import { useJobs } from '../contexts/JobContextDB';
 import { Job, JobStatus, Coordinates } from '../types';
@@ -9,11 +9,12 @@ import { Mic, MicOff, Sparkles, Lock, Loader2, Calculator, MapPin, ChevronRight,
 
 interface JobPostingFormProps {
     onSuccess: () => void;
+    initialJob?: Job;
 }
 
-export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess }) => {
+export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, initialJob }) => {
     const { user, t, language, checkFreeLimit, incrementAiUsage, addNotification, showAlert } = useUser();
-    const { addJob } = useJobs();
+    const { addJob, updateJob } = useJobs();
 
     const [newJobTitle, setNewJobTitle] = useState('');
     const [newJobDesc, setNewJobDesc] = useState('');
@@ -33,6 +34,21 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess }) => 
 
     const remainingFreeTries = FREE_AI_USAGE_LIMIT - (user.aiUsageCount || 0);
     const showLockIcon = !user.isPremium && remainingFreeTries <= 0;
+    const isEditing = !!initialJob;
+
+    // Prefill form when editing
+    useEffect(() => {
+        if (initialJob) {
+            setNewJobTitle(initialJob.title);
+            setNewJobDesc(initialJob.description);
+            setNewJobBudget(initialJob.budget.toString());
+            setNewJobCategory(initialJob.category);
+            setNewJobDate(initialJob.jobDate);
+            setNewJobDuration(initialJob.duration);
+            setNewJobCoords(initialJob.coordinates);
+            setNewJobImage(initialJob.image);
+        }
+    }, [initialJob]);
 
     const handlePostJob = async () => {
         // Robust validation with feedback
@@ -54,39 +70,59 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess }) => 
         }
 
         try {
-            const newJob: Job = {
-                id: `j${Date.now()}`,
-                posterId: user.id,
-                posterName: user.name,
-                posterPhone: user.phone,
-                posterPhoto: user.profilePhoto,
-                title: newJobTitle,
-                description: newJobDesc,
-                category: newJobCategory,
-                location: user.location,
-                coordinates: newJobCoords || user.coordinates,
-                jobDate: newJobDate,
-                duration: newJobDuration || 'Flexible',
-                budget: budgetValue,
-                status: JobStatus.OPEN,
-                createdAt: Date.now(),
-                bids: [],
-                image: newJobImage
-            };
+            if (isEditing && initialJob) {
+                // Update existing job
+                const updatedJob: Job = {
+                    ...initialJob,
+                    title: newJobTitle,
+                    description: newJobDesc,
+                    category: newJobCategory,
+                    jobDate: newJobDate,
+                    duration: newJobDuration || 'Flexible',
+                    budget: budgetValue,
+                    coordinates: newJobCoords || initialJob.coordinates,
+                    image: newJobImage
+                };
 
-            const createdJobId = await addJob(newJob);
+                await updateJob(updatedJob);
+                showAlert('Job updated successfully!', 'success');
+                await addNotification(user.id, 'Job Updated', `Job "${newJobTitle}" has been updated.`, "SUCCESS", initialJob.id);
+            } else {
+                // Create new job
+                const newJob: Job = {
+                    id: `j${Date.now()}`,
+                    posterId: user.id,
+                    posterName: user.name,
+                    posterPhone: user.phone,
+                    posterPhoto: user.profilePhoto,
+                    title: newJobTitle,
+                    description: newJobDesc,
+                    category: newJobCategory,
+                    location: user.location,
+                    coordinates: newJobCoords || user.coordinates,
+                    jobDate: newJobDate,
+                    duration: newJobDuration || 'Flexible',
+                    budget: budgetValue,
+                    status: JobStatus.OPEN,
+                    createdAt: Date.now(),
+                    bids: [],
+                    image: newJobImage
+                };
+
+                const createdJobId = await addJob(newJob);
+
+                if (createdJobId) {
+                    await addNotification(user.id, t.notifJobPosted, `${t.notifJobPostedBody}: "${newJobTitle}"`, "SUCCESS", createdJobId);
+                }
+                showAlert('Job posted successfully!', 'success');
+            }
 
             // Reset form
             setNewJobTitle(''); setNewJobDesc(''); setNewJobBudget(''); setNewJobDate(''); setNewJobDuration(''); setNewJobCoords(undefined); setNewJobImage(undefined);
-
-            if (createdJobId) {
-                await addNotification(user.id, t.notifJobPosted, `${t.notifJobPostedBody}: "${newJobTitle}"`, "SUCCESS", createdJobId);
-            }
-            showAlert('Job posted successfully!', 'success');
             onSuccess();
         } catch (error) {
-            console.error("Failed to post job:", error);
-            showAlert("An error occurred while posting the job. Please try again.", 'error');
+            console.error(isEditing ? "Failed to update job:" : "Failed to post job:", error);
+            showAlert(`An error occurred while ${isEditing ? 'updating' : 'posting'} the job. Please try again.`, 'error');
         }
     };
 
@@ -217,11 +253,38 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess }) => 
         fileInputRef.current?.click();
     };
 
+    const [showEditForm, setShowEditForm] = useState(false);
+
+    if (isEditing && !showEditForm) {
+        return (
+            <div className="p-4 animate-fade-in pb-10">
+                <h2 className="text-2xl font-bold text-emerald-900 mb-6">{language === 'en' ? 'Edit Job' : 'नौकरी संपादित करें'}</h2>
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-emerald-100 text-center">
+                    <p className="text-gray-600 mb-6">Update the details for <strong>{initialJob?.title}</strong></p>
+                    <button
+                        onClick={() => setShowEditForm(true)}
+                        className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 active:scale-95 transition-all"
+                    >
+                        {language === 'en' ? 'Start Editing' : 'संपादन शुरू करें'}
+                    </button>
+                    <button
+                        onClick={onSuccess}
+                        className="mt-3 text-gray-500 font-medium hover:text-gray-800"
+                    >
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="p-4 animate-fade-in pb-10">
-            <h2 className="text-2xl font-bold text-emerald-900 mb-6">{t.postJobHeader}</h2>
+            <h2 className="text-2xl font-bold text-emerald-900 mb-6">
+                {isEditing ? (language === 'en' ? 'Edit Job Details' : 'नौकरी विवरण संपादित करें') : t.postJobHeader}
+            </h2>
             <div className="space-y-5 bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                <div><label className="block text-sm font-bold text-gray-700 mb-2">{t.jobTitleLabel}</label><input style={{ colorScheme: 'light', backgroundColor: '#ffffff', color: '#000000', caretColor: '#000000' }} type="text" className="w-full appearance-none bg-white text-black border border-gray-200 rounded-xl p-3.5 outline-none placeholder-gray-400" value={newJobTitle} onChange={(e) => setNewJobTitle(e.target.value)} /></div>
+                <div><label className="block text-sm font-bold text-gray-700 mb-2">{t.jobTitleLabel}</label><input style={{ colorScheme: 'light', backgroundColor: '#ffffff', color: '#000000', caretColor: '#000000' }} type="text" enterKeyHint="next" className="w-full appearance-none bg-white text-black border border-gray-200 rounded-xl p-3.5 outline-none placeholder-gray-400" value={newJobTitle} onChange={(e) => setNewJobTitle(e.target.value)} /></div>
                 <div>
                     <label className="block text-sm font-bold text-gray-700 mb-2">{t.categoryLabel}</label>
                     <div className="relative">
@@ -243,8 +306,8 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess }) => 
                             <button
                                 onClick={triggerImageUpload}
                                 className={`text-xs flex items-center gap-1 font-bold px-2 py-1 rounded-lg transition-colors border ${!showLockIcon
-                                        ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
-                                        : 'bg-gray-50 text-gray-500 border-gray-200'
+                                    ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
+                                    : 'bg-gray-50 text-gray-500 border-gray-200'
                                     }`}
                             >
                                 {isAnalyzingImage ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
@@ -260,8 +323,8 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess }) => 
                                 onClick={handleEnhanceDescription}
                                 disabled={isEnhancing}
                                 className={`text-xs flex items-center gap-1 font-bold px-2 py-1 rounded-lg transition-all border ${!showLockIcon
-                                        ? 'bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-700 border-emerald-200 hover:shadow-sm'
-                                        : 'bg-gray-50 text-gray-500 border-gray-200'
+                                    ? 'bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-700 border-emerald-200 hover:shadow-sm'
+                                    : 'bg-gray-50 text-gray-500 border-gray-200'
                                     } ${remainingFreeTries > 0 && !user.isPremium ? 'animate-pulse-slow' : ''}`}
                             >
                                 {isEnhancing ? (
@@ -329,8 +392,8 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess }) => 
                             onClick={handleEstimateWage}
                             disabled={isEstimating}
                             className={`text-[10px] flex items-center gap-1 font-bold px-2 py-1 rounded-lg transition-all border ${!showLockIcon
-                                    ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
-                                    : 'bg-gray-50 text-gray-500 border-gray-200'
+                                ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                                : 'bg-gray-50 text-gray-500 border-gray-200'
                                 }`}
                         >
                             {isEstimating ? (
@@ -347,7 +410,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess }) => 
                         </button>
                     </div>
                     <div className="relative">
-                        <input style={{ colorScheme: 'light', backgroundColor: '#ffffff', color: '#000000', caretColor: '#000000' }} type="number" className="w-full appearance-none bg-white text-black border border-gray-200 rounded-xl p-3.5 outline-none font-bold placeholder-gray-400" value={newJobBudget} onChange={(e) => setNewJobBudget(e.target.value)} />
+                        <input style={{ colorScheme: 'light', backgroundColor: '#ffffff', color: '#000000', caretColor: '#000000' }} type="number" inputMode="numeric" pattern="[0-9]*" className="w-full appearance-none bg-white text-black border border-gray-200 rounded-xl p-3.5 outline-none font-bold placeholder-gray-400" value={newJobBudget} onChange={(e) => setNewJobBudget(e.target.value)} />
                         {isEstimating && (
                             <div className="absolute inset-0 bg-white rounded-xl flex items-center px-3 border border-blue-200">
                                 <div className="h-6 w-32 bg-gray-200 rounded animate-pulse"></div>
@@ -363,7 +426,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess }) => 
                 onClick={handlePostJob}
                 className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 hover:bg-emerald-700 active:scale-95 transition-all mt-4 relative z-10"
             >
-                {t.postJobBtn} <ChevronRight size={20} />
+                {isEditing ? (language === 'en' ? 'Update Job' : 'नौकरी अपडेट करें') : t.postJobBtn} <ChevronRight size={20} />
             </button>
         </div>
     );

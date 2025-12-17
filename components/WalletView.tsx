@@ -16,40 +16,30 @@ export const WalletView: React.FC<WalletViewProps> = ({ onShowBidHistory }) => {
   const handleAddMoney = async () => {
     try {
       const amountToAdd = 100;
-      const newBalance = user.walletBalance + amountToAdd;
 
-      // 1. Update Profile in DB (Inlined to avoid import issues)
-      const { error: balanceError } = await supabase
-        .from('profiles')
-        .update({ wallet_balance: newBalance })
-        .eq('id', user.id);
+      // Use Secure RPC
+      const { data, error } = await supabase
+        .rpc('process_transaction', {
+          p_amount: amountToAdd,
+          p_type: 'CREDIT',
+          p_description: 'Test Mode: Added Money'
+        });
 
-      if (balanceError) throw new Error(balanceError.message);
+      if (error) throw error;
 
-      // 2. Add Transaction to DB
-      const { data: txData, error: txError } = await supabase
-        .from('transactions')
-        .insert({
-          user_id: user.id,
-          amount: amountToAdd,
-          type: 'CREDIT',
-          description: 'Test Mode: Added Money'
-        })
-        .select()
-        .single();
-
-      if (txError) throw txError;
+      // data contains { new_balance, transaction_id }
+      const { new_balance, transaction_id } = data;
 
       // 3. Update Local State
-      setUser(p => ({ ...p, walletBalance: newBalance }));
+      setUser(p => ({ ...p, walletBalance: new_balance }));
 
       const newTx = {
-        id: txData.id,
+        id: transaction_id,
         userId: user.id,
         amount: amountToAdd,
         type: 'CREDIT' as const,
         description: 'Test Mode: Added Money',
-        timestamp: new Date(txData.created_at).getTime()
+        timestamp: Date.now()
       };
 
       setTransactions(prev => [newTx, ...prev]);

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import { UserProvider, useUser } from './contexts/UserContextDB';
 import { JobProvider, useJobs } from './contexts/JobContextDB';
-import { Job, ChatMessage, UserRole, JobStatus, Coordinates } from './types';
+import { ChatMessage, Coordinates, Job, JobStatus, UserRole } from './types';
+import { Confetti } from './components/Confetti';
 import { POSTER_FEE } from './constants';
 import { ChatInterface } from './components/ChatInterface';
 import { ReviewModal } from './components/ReviewModal';
@@ -30,6 +31,8 @@ import { LandingPage } from './components/LandingPage';
 
 // Services
 import { signInWithGoogle, completeProfile } from './services/authService';
+import { useDeepLinkHandler } from './hooks/useDeepLinkHandler';
+import { cancelJob } from './services/jobService';
 
 const AppContent: React.FC = () => {
   const {
@@ -43,12 +46,19 @@ const AppContent: React.FC = () => {
 
   const { jobs, updateJob, deleteJob, updateBid } = useJobs();
 
+  // Handle deep links for OAuth callback
+  useDeepLinkHandler(() => {
+    console.log('[App] OAuth callback handled, refreshing auth');
+    retryAuth();
+  });
+
   // --- Auth State ---
   const [showProfileCompletion, setShowProfileCompletion] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [profileLocation, setProfileLocation] = useState('');
   const [profileCoords, setProfileCoords] = useState<Coordinates | undefined>(undefined);
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   // --- UI State ---
   const [showNotifications, setShowNotifications] = useState(false);
@@ -76,9 +86,9 @@ const AppContent: React.FC = () => {
   // It seems it was preparing to use the `PostJob` component (if it was embedded) or similar.
   // I will leave the `handleEditJobLink` logic as a stub or navigation for now until I see `PostJob` usage.
   // Actually, I'll just keep the Navigate to Post for editing if I can.
-  // For now, I'll implement `handleEditJobLink` to Navigate to `/post` with the job state to pre-fill it (requires PostJob update, but I can't touch it easily).
+  // For now, I'll implement `handleEditJobLink` to Navigate to ` / post` with the job state to pre-fill it (requires PostJob update, but I can't touch it easily).
   // So I will just keep the legacy state for now in case I missed where it renders.
-  // Update: I will just use `useNavigate` to go to `/post` with state.
+  // Update: I will just use `useNavigate` to go to ` / post` with state.
   const navigate = useNavigate();
 
   // --- Realtime Sync ---
@@ -90,7 +100,14 @@ const AppContent: React.FC = () => {
         setViewBidsModal(prev => ({ ...prev, job: liveJob }));
       }
     }
-  }, [jobs, viewBidsModal.isOpen, viewBidsModal.job]);
+    // Also sync Selected Job if open
+    if (selectedJob) {
+      const liveJob = jobs.find(j => j.id === selectedJob.id);
+      if (liveJob && liveJob.status !== selectedJob.status) {
+        setSelectedJob(liveJob);
+      }
+    }
+  }, [jobs, viewBidsModal.isOpen, viewBidsModal.job, selectedJob]);
 
   const unreadCount = notifications.filter(n => n.userId === user.id && !n.read).length;
 
@@ -110,14 +127,14 @@ const AppContent: React.FC = () => {
     setChatOpen({ isOpen: true, job });
     setShowChatList(false);
     if (!messages.some(m => m.jobId === job.id)) {
-      setMessages(prev => [...prev, { id: `sys_${job.id}`, jobId: job.id, senderId: 'system', text: 'Chat started.', timestamp: Date.now() }]);
+      setMessages(prev => [...prev, { id: `sys_${job.id} `, jobId: job.id, senderId: 'system', text: 'Chat started.', timestamp: Date.now() }]);
     }
   };
 
   const handleSendMessage = async (text: string) => {
     if (!chatOpen.job) return;
 
-    const tempId = `temp_${Date.now()}_${Math.random()}`;
+    const tempId = `temp_${Date.now()}_${Math.random()} `;
     const msg: ChatMessage = {
       id: tempId,
       jobId: chatOpen.job.id,
@@ -176,6 +193,8 @@ const AppContent: React.FC = () => {
       }
 
       setChatOpen({ isOpen: false, job: null });
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 3000);
       showAlert(t.jobCompletedAlert, 'success');
     } catch {
       showAlert('Failed to complete job', 'error');
@@ -207,7 +226,7 @@ const AppContent: React.FC = () => {
       } else if (action === 'COUNTER' && amount) {
         const updatedBid = { ...bid, amount, negotiationHistory: [...(bid.negotiationHistory || []), { amount, by: UserRole.WORKER, timestamp: Date.now() }] };
         await updateBid(updatedBid);
-        await addNotification(job.posterId, t.notifCounterOffer, `Worker countered: ₹${amount}`, "INFO", jobId);
+        await addNotification(job.posterId, t.notifCounterOffer, `Worker countered: ₹${amount} `, "INFO", jobId);
       }
     } catch { showAlert('Failed to process counter.', 'error'); }
   };
@@ -228,6 +247,32 @@ const AppContent: React.FC = () => {
     // NOTE: This assumes PostJob can read location state. If not, it just opens the form.
     navigate('/post', { state: { jobToEdit: job } });
   };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    try {
+      await supabase.rpc('soft_delete_chat_message', { p_message_id: messageId });
+      setMessages(prev => prev.filter(m => m.id !== messageId));
+    } catch (error) {
+      console.error('Error deleting message:', error);
+    }
+  };
+
+  const handleCancelJob = async (jobId: string) => {
+    try {
+      const result = await cancelJob(jobId, 'Cancelled by user');
+      if (result.success) {
+        showAlert(language === 'en' ? 'Job cancelled and funds refunded.' : 'जॉब रद्द कर दिया गया और पैसे वापस कर दिए गए।', 'success');
+        setSelectedJob(null);
+        await refreshUser(); // Update wallet balance
+      } else {
+        showAlert(result.error || 'Failed to cancel', 'error');
+      }
+    } catch (e) {
+      console.error(e);
+      showAlert('Error during cancellation', 'error');
+    }
+  };
+
 
   // --- Views ---
 
@@ -254,9 +299,9 @@ const AppContent: React.FC = () => {
 
   // --- Main Layout ---
   return (
-    <div className="min-h-screen bg-green-50 font-sans text-gray-900 flex flex-col max-w-md mx-auto relative shadow-2xl overflow-hidden">
+    <div className="h-[100dvh] bg-green-50 font-sans text-gray-900 flex flex-col max-w-md mx-auto relative shadow-2xl overflow-hidden">
       {/* Header */}
-      <header className="bg-white px-4 py-3 sticky top-0 z-30 shadow-sm flex justify-between items-center">
+      <header className="bg-white px-4 py-3 pb-3 pt-safe sticky top-0 z-30 shadow-sm flex justify-between items-center">
         <div className="flex items-center gap-2">
           <MapPin size={24} className="text-emerald-600" fill="#10b981" />
           <div><h1 className="text-xl font-bold text-emerald-900 leading-none">CHOWKAR</h1></div>
@@ -275,8 +320,9 @@ const AppContent: React.FC = () => {
       </header>
 
       {/* Alerts */}
+      {showConfetti && <Confetti />}
       {currentAlert && (
-        <div className={`fixed top-16 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-full shadow-xl font-bold text-sm flex items-center gap-3 backdrop-blur-md ${currentAlert.type === 'error' ? 'bg-red-500/90 text-white' : currentAlert.type === 'success' ? 'bg-emerald-600/90 text-white' : 'bg-gray-800/90 text-white'}`}>
+        <div className={`fixed top - 16 left - 1 / 2 - translate - x - 1 / 2 z - [100] px - 6 py - 3 rounded - full shadow - xl font - bold text - sm flex items - center gap - 3 backdrop - blur - md ${currentAlert.type === 'error' ? 'bg-red-500/90 text-white' : currentAlert.type === 'success' ? 'bg-emerald-600/90 text-white' : 'bg-gray-800/90 text-white'} `}>
           <span>{currentAlert.message}</span>
         </div>
       )}
@@ -321,6 +367,7 @@ const AppContent: React.FC = () => {
         onViewBids={(job) => { setSelectedJob(null); setViewBidsModal({ isOpen: true, job }); }}
         onChat={(job) => { setSelectedJob(null); handleChatOpen(job); }}
         onEdit={(job) => { setSelectedJob(null); handleEditJobLink(job); }}
+        onCancel={handleCancelJob}
         onDelete={async (jobId) => {
           try {
             await deleteJob(jobId);
@@ -406,6 +453,7 @@ const AppContent: React.FC = () => {
           onSendMessage={handleSendMessage}
           onCompleteJob={handleCompleteJob}
           onTranslateMessage={handleTranslateMessage}
+          onDeleteMessage={handleDeleteMessage}
           isPremium={user.isPremium}
           remainingTries={user.isPremium ? 999 : (2 - (user.aiUsageCount || 0))}
         />

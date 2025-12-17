@@ -260,3 +260,19 @@ export const updateBid = async (bid: Bid): Promise<{ success: boolean; error?: s
     return { success: false, error: 'Failed to update bid' };
   }
 };
+// Cancel a job with refund
+export const cancelJob = async (jobId: string, reason: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { error } = await supabase.rpc('cancel_job_with_refund', {
+      p_job_id: jobId,
+      p_reason: reason
+    });
+
+    if (error) throw error;
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error cancelling job:', error);
+    return { success: false, error: error.message || 'Failed to cancel job' };
+  }
+};
