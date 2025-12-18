@@ -113,7 +113,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                 const createdJobId = await addJob(newJob);
 
                 if (createdJobId) {
-                    await addNotification(user.id, t.notifJobPosted, `${t.notifJobPostedBody}: "${newJobTitle}"`, "SUCCESS", createdJobId);
+                    await addNotification(user.id, "Job Posted", `"${newJobTitle}" is now live!`, "SUCCESS", createdJobId);
                 }
                 showAlert('Job posted successfully!', 'success');
             }

@@ -254,7 +254,7 @@ const AppContent: React.FC = () => {
         });
 
         try {
-          await addNotification(acceptedBid.workerId, t.notifJobCompleted, t.jobCompletedAlert, 'SUCCESS', currentJob.id);
+          await addNotification(acceptedBid.workerId, "Job Completed", `Job "${currentJob.title}" marked as completed!`, 'SUCCESS', currentJob.id);
         } catch (notifErr) {
           console.warn('[App] Failed to send completion notification:', notifErr);
         }
@@ -287,7 +287,7 @@ const AppContent: React.FC = () => {
       if (action === 'ACCEPT') {
         const updatedBid = { ...bid, negotiationHistory: [...(bid.negotiationHistory || []), { amount: bid.amount, by: UserRole.WORKER, timestamp: Date.now(), message: "Accepted Counter Offer" }] };
         await updateBid(updatedBid);
-        await addNotification(job.posterId, "Counter Accepted", "Worker accepted your offer. Please finalize hiring.", "SUCCESS", jobId);
+        await addNotification(job.posterId, "Counter Accepted", `${bid.workerName} accepted your offer!`, "SUCCESS", jobId);
       } else if (action === 'REJECT') {
         const updatedJob = { ...job, bids: job.bids.filter(b => b.id !== bidId) };
         await updateJob(updatedJob);
@@ -295,7 +295,7 @@ const AppContent: React.FC = () => {
       } else if (action === 'COUNTER' && amount) {
         const updatedBid = { ...bid, amount, negotiationHistory: [...(bid.negotiationHistory || []), { amount, by: UserRole.WORKER, timestamp: Date.now() }] };
         await updateBid(updatedBid);
-        await addNotification(job.posterId, t.notifCounterOffer, `Worker countered: ₹${amount} `, "INFO", jobId);
+        await addNotification(job.posterId, "Counter Offer", `${bid.workerName} countered with ₹${amount}`, "INFO", jobId);
       }
     } catch { showAlert('Failed to process counter.', 'error'); }
   };
@@ -506,7 +506,33 @@ const AppContent: React.FC = () => {
       <NotificationsPanel
         isOpen={showNotifications}
         onClose={() => setShowNotifications(false)}
-        onJobClick={(job) => { setShowNotifications(false); handleChatOpen(job); }}
+        onJobClick={(job, notif) => {
+          setShowNotifications(false);
+
+          // Click-to-Action Logic
+          if (notif.title === t.notifBidReceived || notif.title === "New Bid") {
+            setViewBidsModal({ isOpen: true, job });
+          } else if (notif.title === t.notifJobCompleted || notif.title === "Job Completed") {
+            // If poster, show review modal for worker
+            const acceptedBid = job.bids.find(b => b.id === job.acceptedBidId);
+            if (user.id === job.posterId && acceptedBid) {
+              setReviewModalData({
+                isOpen: true,
+                revieweeId: acceptedBid.workerId,
+                revieweeName: acceptedBid.workerName,
+                jobId: job.id
+              });
+            } else {
+              handleChatOpen(job);
+            }
+          } else if (notif.title === t.notifCounterOffer || notif.title === "Counter Offer") {
+            // For worker, open chat to reply to counter
+            handleChatOpen(job);
+          } else {
+            // Default: Open Chat
+            handleChatOpen(job);
+          }
+        }}
       />
 
       <ChatListPanel

@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase';
 interface NotificationsPanelProps {
     isOpen: boolean;
     onClose: () => void;
-    onJobClick: (job: any) => void;
+    onJobClick: (job: any, notification: any) => void;
 }
 
 export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ isOpen, onClose, onJobClick }) => {
@@ -96,7 +96,7 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ isOpen, 
                                         const job = jobs.find(j => j.id === notif.relatedJobId);
                                         if (job) {
                                             onClose();
-                                            onJobClick(job);
+                                            onJobClick(job, notif);
                                         }
                                     }
                                 }}

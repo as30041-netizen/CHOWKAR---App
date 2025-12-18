@@ -73,7 +73,7 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
         try {
             await addBid(newBid);
             // We need to notify the poster. `addNotification` is from useUser context.
-            await contextAddNotification(job.posterId, contextT.notifBidReceived, `${contextUser.name}: ₹${bidAmount}`, "INFO", job.id);
+            await contextAddNotification(job.posterId, "New Bid", `${contextUser.name} offered ₹${bidAmount}`, "INFO", job.id);
             showAlert(contextT.alertBidPlaced, 'success');
             onSuccess();
             onClose();

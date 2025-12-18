@@ -52,8 +52,8 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
             const commission = Math.ceil(bidAmount * WORKER_COMMISSION_RATE);
             await addNotification(
                 workerId,
-                t.notifBidAccepted,
-                `${t.notifBidAcceptedBody} A ₹${commission} platform fee has been deducted from your commission wallet.`,
+                "Bid Accepted",
+                `Congrats! Your bid for "${job.title}" was accepted. A ₹${commission} platform fee was deducted.`,
                 "SUCCESS",
                 jobId
             );

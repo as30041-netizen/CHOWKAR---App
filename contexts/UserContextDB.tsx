@@ -350,7 +350,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     console.log('[Realtime] Setting up notification subscription for user:', user.id);
     const subscription = supabase
-      .channel('notifications')
+      .channel(`notifications_${user.id}`) // Unique channel per user
       .on(
         'postgres_changes',
         {
@@ -361,21 +361,34 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         },
         (payload) => {
           console.log('[Realtime] Notification INSERT received:', payload.new);
+
+          // Map DB to App type
           const newNotif: Notification = {
             id: payload.new.id,
             userId: payload.new.user_id,
             title: payload.new.title,
             message: payload.new.message,
-            type: payload.new.type,
+            type: payload.new.type as 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR',
             read: payload.new.read,
             timestamp: new Date(payload.new.created_at).getTime(),
             relatedJobId: payload.new.related_job_id || undefined
           };
-          console.log('[Realtime] Adding notification to state:', newNotif);
-          setNotifications(prev => [newNotif, ...prev]);
+
+          // Update state and show a live alert for better UX
+          setNotifications(prev => {
+            if (prev.some(n => n.id === newNotif.id)) return prev;
+            return [newNotif, ...prev];
+          });
+
+          // Standard notification pulse/sound or alert
+          if (!newNotif.read) {
+            showAlert(`${newNotif.title}: ${newNotif.message}`, 'info');
+          }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`[Realtime] Notification subscription status:`, status);
+      });
 
     return () => {
       subscription.unsubscribe();
