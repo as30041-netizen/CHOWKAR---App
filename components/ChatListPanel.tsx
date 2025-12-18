@@ -271,7 +271,8 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                                 ? new Date(lastMsg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                                 : null;
 
-                            const hasUnread = notifications.some(n => n.relatedJobId === job.id && !n.read); // Removed title check for debugging
+                            const hasUnread = notifications.some(n => n.relatedJobId === job.id && !n.read);
+                            const unreadCount = notifications.filter(n => n.relatedJobId === job.id && !n.read).length;
 
                             return (
                                 <div key={job.id} className="relative">
@@ -293,7 +294,10 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                                             onClose();
                                             onChatSelect(job, targetReceiverId);
                                         }}
-                                        className="w-full text-left bg-white p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-all group relative overflow-hidden"
+                                        className={`w-full text-left p-3 rounded-2xl hover:bg-gray-50 border-2 transition-all group relative overflow-hidden ${hasUnread
+                                            ? 'bg-emerald-50 border-emerald-400 shadow-md'
+                                            : 'bg-white border-transparent hover:border-gray-100'
+                                            }`}
                                     >
                                         <div className="flex items-start gap-3">
                                             {/* Avatar */}
@@ -307,6 +311,13 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                                                 </div>
                                             </div>
 
+                                            {/* Unread Count Badge */}
+                                            {hasUnread && unreadCount > 0 && (
+                                                <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-lg animate-bounce">
+                                                    {unreadCount > 9 ? '9+' : unreadCount}
+                                                </div>
+                                            )}
+
                                             {/* Content */}
                                             <div className="flex-1 min-w-0 pt-0.5">
                                                 <div className="flex justify-between items-center mb-0.5">
@@ -315,9 +326,16 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                                                         {hasUnread && <span className="ml-2 w-2 h-2 bg-emerald-500 rounded-full inline-block animate-pulse"></span>}
                                                     </h4>
                                                     {timeDisplay && (
-                                                        <span className="text-[10px] font-medium text-gray-400 whitespace-nowrap">
-                                                            {timeDisplay}
-                                                        </span>
+                                                        <div className="flex items-center gap-1">
+                                                            {hasUnread && (
+                                                                <span className="bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded animate-pulse">
+                                                                    NEW
+                                                                </span>
+                                                            )}
+                                                            <span className={`text-[10px] font-medium whitespace-nowrap ${hasUnread ? 'text-emerald-700 font-bold' : 'text-gray-400'}`}>
+                                                                {timeDisplay}
+                                                            </span>
+                                                        </div>
                                                     )}
                                                 </div>
 
@@ -329,7 +347,7 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                                                 </div>
 
                                                 <div className="flex items-center justify-between">
-                                                    <p className={`text-sm truncate ${lastMsg ? 'text-gray-600' : 'text-emerald-600 italic'}`}>
+                                                    <p className={`text-sm truncate ${hasUnread ? 'font-semibold text-gray-800' : (lastMsg ? 'text-gray-600' : 'text-emerald-600 italic')}`}>
                                                         {lastMsg
                                                             ? (lastMsg.isDeleted ? <span className="italic text-gray-400">This message was deleted</span> : (lastMsg.translatedText || lastMsg.text))
                                                             : 'Start the conversation...'
