@@ -28,38 +28,35 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     refreshJobs();
   }, []);
 
-  // Real-time subscription for jobs
+  // Real-time subscription for jobs and bids
   useEffect(() => {
-    const subscription = supabase
-      .channel('jobs')
+    console.log('[Realtime] Subscribing to jobs and bids changes...');
+
+    // Listen for ALL changes to jobs and bids
+    const channel = supabase.channel('job_system_sync')
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'jobs'
-        },
+        { event: '*', schema: 'public', table: 'jobs' },
         (payload) => {
-          // Reload jobs on any change
+          console.log('[Realtime] Job change detected:', payload.eventType);
           refreshJobs();
         }
       )
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'bids'
-        },
+        { event: '*', schema: 'public', table: 'bids' },
         (payload) => {
-          // Reload jobs when bids change
+          console.log('[Realtime] Bid change detected:', payload.eventType, payload.new?.id);
           refreshJobs();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`[Realtime] Job system subscription status: ${status}`);
+      });
 
     return () => {
-      subscription.unsubscribe();
+      console.log('[Realtime] Cleaning up job system subscription');
+      supabase.removeChannel(channel);
     };
   }, []);
 
