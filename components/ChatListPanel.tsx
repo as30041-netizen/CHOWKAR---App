@@ -25,8 +25,8 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
     const [archivedChats, setArchivedChats] = useState<Set<string>>(new Set());
     const [deletedChats, setDeletedChats] = useState<Set<string>>(new Set());
 
-    // 1. Get all active chat interactions (only jobs with actual conversations)
-    const allChatJobs = useMemo(() => {
+    // 1. Get all potentially relevant jobs (before message check)
+    const relevantJobs = useMemo(() => {
         return jobs.filter(j => {
             // Basic status check
             const isValidStatus = j.status === 'IN_PROGRESS' || j.status === 'COMPLETED' || j.status === 'OPEN';
@@ -37,14 +37,15 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
             const isBidder = j.bids.some(b => b.workerId === user.id);
             if (!isPoster && !isBidder) return false;
 
-            // KEY FIX: Only show in inbox if there's an actual conversation reason
+            // Must have accepted bid OR be IN_PROGRESS/COMPLETED
             const hasAcceptedBid = j.bids.some(b => b.status === 'ACCEPTED');
-            const hasMessages = lastMessagesMap[j.id] !== undefined;
-            const hasLiveMessages = liveMessages.some(m => m.jobId === j.id);
+            const isActive = j.status === 'IN_PROGRESS' || j.status === 'COMPLETED';
 
-            // Show chat if: accepted worker exists OR messages have been exchanged
-            if (!hasAcceptedBid && !hasMessages && !hasLiveMessages) {
-                return false;
+            // Only require accepted bid for OPEN jobs
+            if (j.status === 'OPEN' && !hasAcceptedBid) {
+                // Check if there are live messages for this job
+                const hasLiveMessages = liveMessages.some(m => m.jobId === j.id);
+                if (!hasLiveMessages) return false;
             }
 
             // Filter archived chats unless "Show Archived" is enabled
@@ -56,9 +57,24 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
 
             return true;
         });
-    }, [jobs, user.id, showArchived, archivedChats, deletedChats, lastMessagesMap, liveMessages]);
+    }, [jobs, user.id, showArchived, archivedChats, deletedChats, liveMessages]);
 
-    // 2. Fetch last messages for previews (only once on open or when job list changes)
+    // 2. Final filtered jobs (after previews loaded)
+    const allChatJobs = useMemo(() => {
+        // Filter out jobs with no messages after previews are loaded
+        if (isLoadingPreviews) return relevantJobs;
+
+        return relevantJobs.filter(j => {
+            const hasPreview = lastMessagesMap[j.id] !== undefined;
+            const hasLiveMsg = liveMessages.some(m => m.jobId === j.id);
+            const hasAcceptedBid = j.bids.some(b => b.status === 'ACCEPTED');
+
+            // Show if has messages OR has accepted bid
+            return hasPreview || hasLiveMsg || hasAcceptedBid;
+        });
+    }, [relevantJobs, lastMessagesMap, liveMessages, isLoadingPreviews]);
+
+    // 3. Fetch last messages for previews (only once on open or when relevant jobs change)
     useEffect(() => {
         if (!isOpen) return;
 
@@ -67,8 +83,8 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
             const map: Record<string, ChatMessage> = {};
 
             try {
-                // Parallel fetch for speed
-                await Promise.all(allChatJobs.map(async (job) => {
+                // Parallel fetch for speed - use relevantJobs to avoid circular dependency
+                await Promise.all(relevantJobs.map(async (job) => {
                     try {
                         const { data, error } = await supabase
                             .from('chat_messages')
@@ -106,7 +122,7 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
         };
 
         fetchPreviews();
-    }, [isOpen, allChatJobs]);
+    }, [isOpen, relevantJobs.length]); // Only depend on length to avoid re-fetching on every render
 
     // 3. Filter Logic
     const filteredJobs = useMemo(() => {
