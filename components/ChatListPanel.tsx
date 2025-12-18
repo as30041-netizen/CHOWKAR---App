@@ -37,28 +37,40 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
             setIsLoadingPreviews(true);
             const map: Record<string, ChatMessage> = {};
 
-            // Parallel fetch for speed
-            await Promise.all(allChatJobs.map(async (job) => {
-                const { data } = await supabase
-                    .from('chat_messages')
-                    .select('*')
-                    .eq('job_id', job.id)
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .single();
+            try {
+                // Parallel fetch for speed
+                await Promise.all(allChatJobs.map(async (job) => {
+                    try {
+                        const { data, error } = await supabase
+                            .from('chat_messages')
+                            .select('*')
+                            .eq('job_id', job.id)
+                            .order('created_at', { ascending: false })
+                            .limit(1)
+                            .single();
 
-                if (data) {
-                    map[job.id] = {
-                        id: data.id,
-                        jobId: data.job_id,
-                        senderId: data.sender_id,
-                        text: data.text,
-                        translatedText: data.translated_text,
-                        timestamp: new Date(data.created_at).getTime(),
-                        isDeleted: data.is_deleted
-                    };
-                }
-            }));
+                        if (error && error.code !== 'PGRST116') { // Ignore 'no rows found' error
+                            console.warn(`Error fetching preview for job ${job.id}:`, error);
+                        }
+
+                        if (data) {
+                            map[job.id] = {
+                                id: data.id,
+                                jobId: data.job_id,
+                                senderId: data.sender_id,
+                                text: data.text,
+                                translatedText: data.translated_text,
+                                timestamp: new Date(data.created_at).getTime(),
+                                isDeleted: data.is_deleted
+                            };
+                        }
+                    } catch (innerErr) {
+                        console.error(`Failed to fetch preview for job ${job.id}`, innerErr);
+                    }
+                }));
+            } catch (err) {
+                console.error("Error in fetchPreviews:", err);
+            }
 
             setLastMessagesMap(map);
             setIsLoadingPreviews(false);
