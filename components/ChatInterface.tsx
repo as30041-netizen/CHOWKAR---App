@@ -106,16 +106,27 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   }, [job.id]);
 
-  // Mark messages as read when chat opens
+  // Mark messages AND notifications as read when chat opens
   useEffect(() => {
     const markAsRead = async () => {
       try {
+        // Mark messages as read
         await supabase.rpc('mark_messages_read', {
           p_job_id: job.id,
           p_user_id: currentUser.id
         });
+
+        // Mark related notifications as read
+        await supabase
+          .from('notifications')
+          .update({ read: true })
+          .eq('user_id', currentUser.id)
+          .eq('related_job_id', job.id)
+          .eq('read', false);
+
+        console.log('[Chat] Marked messages and notifications as read for job:', job.id);
       } catch (error) {
-        console.error('Error marking messages as read:', error);
+        console.error('Error marking as read:', error);
       }
     };
 
