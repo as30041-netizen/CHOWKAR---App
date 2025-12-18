@@ -125,18 +125,10 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
             const hasAcceptedBid = j.bids.some(b => b.status === 'ACCEPTED');
             const hasMessages = lastMessagesMap[j.id] !== undefined || liveMessages.some(m => m.jobId === j.id);
 
-            // CORE RULE: Show if there's an accepted bid OR if messages exist
+            // 1. Must have either an accepted bid or existing messages
             if (!hasAcceptedBid && !hasMessages) return false;
 
-            // Participant check: Poster, Accepted Worker, or Bidder with messages
-            const isPoster = j.posterId === user.id;
-            const isAcceptedWorker = j.bids.some(b => b.status === 'ACCEPTED' && b.workerId === user.id);
-            const isMessagingBidder = j.bids.some(b => b.workerId === user.id) && hasMessages;
-
-            const isParticipant = isPoster || isAcceptedWorker || isMessagingBidder;
-            if (!isParticipant) return false;
-
-            // Apply Database-level Archive/Delete filters
+            // 2. Database-level Archive/Delete filters
             if (deletedChats.has(j.id)) return false;
             if (!showArchived && archivedChats.has(j.id)) return false;
             if (showArchived && !archivedChats.has(j.id)) return false;
@@ -144,13 +136,17 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
             return true;
         });
 
-        console.log('[ChatList] Involved:', involvedJobs.length, 'Filtered:', filtered.length, {
-            previews: Object.keys(lastMessagesMap).length,
-            live: liveMessages.length
-        });
+        // Debug log to trace the filter results
+        if (involvedJobs.length > 0) {
+            console.log(`[ChatList] Involved: ${involvedJobs.length} -> Filtered: ${filtered.length}`, {
+                firstJob: involvedJobs[0]?.id,
+                hasMsg: lastMessagesMap[involvedJobs[0]?.id] !== undefined,
+                lastMessagesKeys: Object.keys(lastMessagesMap)
+            });
+        }
 
         return filtered;
-    }, [involvedJobs, lastMessagesMap, liveMessages, showArchived, archivedChats, deletedChats, user.id]);
+    }, [involvedJobs, lastMessagesMap, liveMessages, showArchived, archivedChats, deletedChats]);
 
     // 4. Final Filter Logic (Tabs + Search)
     const filteredJobs = useMemo(() => {
