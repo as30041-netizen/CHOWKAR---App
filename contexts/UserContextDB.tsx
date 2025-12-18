@@ -529,20 +529,18 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addNotification = async (userId: string, title: string, message: string, type: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' = 'INFO', relatedJobId?: string) => {
     try {
       const isForMe = userId === user.id;
-
-      // If it's for someone else, we just insert and don't try to select/single it back
-      // because RLS might prevent us from reading it, which causes an error.
-      const query = supabase.from('notifications').insert({
+      const payload = {
         user_id: userId,
         title,
         message,
         type,
         read: false,
         related_job_id: relatedJobId
-      });
+      };
 
       if (isForMe) {
-        const { data, error } = await query.select().single();
+        // For current user, we want the data back to update state
+        const { data, error } = await supabase.from('notifications').insert(payload).select().single();
         if (error) throw error;
 
         const newNotif: Notification = {
@@ -557,20 +555,18 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
         setNotifications(prev => [newNotif, ...prev]);
       } else {
-        const { error } = await query;
+        // FOR OTHERS: Fire and forget. DO NOT use .select()! 
+        // This prevents 403 Forbidden errors when RLS blocks reading others' notifs.
+        const { error } = await supabase.from('notifications').insert(payload);
         if (error) throw error;
-        // No local update needed for other users' state
       }
     } catch (error) {
       console.error('Error adding notification:', error);
-      // Only add to local state if it's for the current user
+      // Local fallback only for current user
       if (userId === user.id) {
         const newNotif: Notification = {
           id: `n${Date.now()}`,
-          userId,
-          title,
-          message,
-          type,
+          userId, title, message, type,
           read: false,
           timestamp: Date.now(),
           relatedJobId
@@ -579,7 +575,6 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     }
   };
-
   const showAlert = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setCurrentAlert({ message, type });
     setTimeout(() => {
