@@ -25,14 +25,27 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
     const [archivedChats, setArchivedChats] = useState<Set<string>>(new Set());
     const [deletedChats, setDeletedChats] = useState<Set<string>>(new Set());
 
-    // 1. Get all active chat interactions
+    // 1. Get all active chat interactions (only jobs with actual conversations)
     const allChatJobs = useMemo(() => {
         return jobs.filter(j => {
-            // Include IN_PROGRESS, COMPLETED, AND OPEN jobs where user is involved
-            const isRelevant = (j.status === 'IN_PROGRESS' || j.status === 'COMPLETED' || j.status === 'OPEN') &&
-                (j.posterId === user.id || j.bids.some(b => b.workerId === user.id));
+            // Basic status check
+            const isValidStatus = j.status === 'IN_PROGRESS' || j.status === 'COMPLETED' || j.status === 'OPEN';
+            if (!isValidStatus) return false;
 
-            if (!isRelevant) return false;
+            // User must be involved
+            const isPoster = j.posterId === user.id;
+            const isBidder = j.bids.some(b => b.workerId === user.id);
+            if (!isPoster && !isBidder) return false;
+
+            // KEY FIX: Only show in inbox if there's an actual conversation reason
+            const hasAcceptedBid = j.bids.some(b => b.status === 'ACCEPTED');
+            const hasMessages = lastMessagesMap[j.id] !== undefined;
+            const hasLiveMessages = liveMessages.some(m => m.jobId === j.id);
+
+            // Show chat if: accepted worker exists OR messages have been exchanged
+            if (!hasAcceptedBid && !hasMessages && !hasLiveMessages) {
+                return false;
+            }
 
             // Filter archived chats unless "Show Archived" is enabled
             if (!showArchived && archivedChats.has(j.id)) return false;
@@ -43,7 +56,7 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
 
             return true;
         });
-    }, [jobs, user.id, showArchived, archivedChats, deletedChats]);
+    }, [jobs, user.id, showArchived, archivedChats, deletedChats, lastMessagesMap, liveMessages]);
 
     // 2. Fetch last messages for previews (only once on open or when job list changes)
     useEffect(() => {
