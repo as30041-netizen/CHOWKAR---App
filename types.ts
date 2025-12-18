@@ -100,6 +100,7 @@ export interface ChatMessage {
   timestamp: number;
   translatedText?: string;
   isDeleted?: boolean;
+  receiverId?: string;
 }
 
 export interface Transaction {

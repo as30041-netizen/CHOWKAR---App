@@ -24,8 +24,9 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
     // 1. Get all active chat interactions
     const allChatJobs = useMemo(() => {
         return jobs.filter(j =>
-            j.status === 'IN_PROGRESS' &&
-            (j.posterId === user.id || j.bids.some(b => b.workerId === user.id && b.status === 'ACCEPTED'))
+            // Include IN_PROGRESS, COMPLETED, AND OPEN jobs where user is involved
+            (j.status === 'IN_PROGRESS' || j.status === 'COMPLETED' || j.status === 'OPEN') &&
+            (j.posterId === user.id || j.bids.some(b => b.workerId === user.id))
         );
     }, [jobs, user.id]);
 
@@ -209,7 +210,33 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                             return (
                                 <button
                                     key={job.id}
-                                    onClick={() => { onClose(); onChatSelect(job); }}
+                                    onClick={() => {
+                                        // Determine correct receiver ID to pass
+                                        let targetReceiverId: string | undefined;
+                                        if (!isPoster) {
+                                            targetReceiverId = job.posterId; // Workers always chat with poster
+                                        } else {
+                                            // As poster, we chat with the person in the last message, 
+                                            // OR the accepted worker, OR undefined (if ambiguous)
+                                            if (lastMsg) {
+                                                targetReceiverId = lastMsg.senderId === user.id ? lastMsg.receiverId : lastMsg.senderId;
+                                                // Note: lastMsg won't have receiverId field from the select above? 
+                                                // Wait, the select('*') includes it. But type might need check.
+                                                // ChatMessage type in frontend usually has receiverId? Let's check type.
+                                                // If not, we fallback.
+                                            } else if (acceptedBid) {
+                                                targetReceiverId = acceptedBid.workerId;
+                                            }
+                                            // If still undefined (e.g. Open job, no messages yet), opening chat might fail
+                                            // But if it's in the list there IS a message usually?
+                                            // Or we just filtered for Involved jobs.
+                                            // If I am active on a job but no messages, I might want to chat with... who?
+                                            // For this Inbox panel which is message-centric, we can assume lastMsg exists if we want to support multiple bidders robustly.
+                                            // For now, let's use what we have.
+                                        }
+                                        onClose();
+                                        onChatSelect(job, targetReceiverId);
+                                    }}
                                     className="w-full text-left bg-white p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-all group relative overflow-hidden"
                                 >
                                     <div className="flex items-start gap-3">

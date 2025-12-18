@@ -71,7 +71,7 @@ const AppContent: React.FC = () => {
 
   // --- Global Modals State ---
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
-  const [chatOpen, setChatOpen] = useState<{ isOpen: boolean; job: Job | null }>({ isOpen: false, job: null });
+  const [chatOpen, setChatOpen] = useState<{ isOpen: boolean; job: Job | null; receiverId?: string }>({ isOpen: false, job: null });
   const [bidModalOpen, setBidModalOpen] = useState<{ isOpen: boolean; jobId: string | null }>({ isOpen: false, jobId: null });
   const [reviewModalData, setReviewModalData] = useState<{ isOpen: boolean, revieweeId: string, revieweeName: string, jobId: string } | null>(null);
   const [viewBidsModal, setViewBidsModal] = useState<{ isOpen: boolean; job: Job | null }>({ isOpen: false, job: null });
@@ -155,8 +155,8 @@ const AppContent: React.FC = () => {
 
   const handleLogout = async () => { await logout(); };
 
-  const handleChatOpen = (job: Job) => {
-    setChatOpen({ isOpen: true, job });
+  const handleChatOpen = (job: Job, receiverId?: string) => {
+    setChatOpen({ isOpen: true, job, receiverId });
     setActiveChatId(job.id);
     markNotificationsAsReadForJob(job.id);
     setShowChatList(false);
@@ -172,12 +172,22 @@ const AppContent: React.FC = () => {
     // Derive receiver ID
     const job = chatOpen.job;
     const isPoster = user.id === job.posterId;
-    const acceptedBid = job.bids.find(b => b.id === job.acceptedBidId);
-    const receiverId = isPoster ? acceptedBid?.workerId : job.posterId;
+
+    let receiverId = chatOpen.receiverId;
+
+    if (!receiverId) {
+      // Fallback logic
+      const acceptedBid = job.bids.find(b => b.id === job.acceptedBidId);
+      if (isPoster) {
+        receiverId = acceptedBid?.workerId;
+      } else {
+        receiverId = job.posterId;
+      }
+    }
 
     if (!receiverId) {
       console.error('Cannot determine chat receiver');
-      showAlert('Error sending message', 'error');
+      showAlert('Error: Cannot determine who to send message to.', 'error');
       return;
     }
 
