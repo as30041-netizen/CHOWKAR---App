@@ -88,21 +88,24 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                             .select('*')
                             .eq('job_id', job.id)
                             .order('created_at', { ascending: false })
-                            .limit(1)
-                            .single();
+                            .limit(1);
 
-                        if (data) {
+                        if (error) throw error;
+
+                        if (data && data.length > 0) {
+                            const msg = data[0];
                             map[job.id] = {
-                                id: data.id,
-                                jobId: data.job_id,
-                                senderId: data.sender_id,
-                                text: data.text,
-                                timestamp: new Date(data.created_at).getTime(),
-                                isDeleted: data.is_deleted
+                                id: msg.id,
+                                jobId: msg.job_id,
+                                senderId: msg.sender_id,
+                                text: msg.text,
+                                translatedText: msg.translated_text,
+                                timestamp: new Date(msg.created_at).getTime(),
+                                isDeleted: msg.is_deleted
                             };
                         }
                     } catch (innerErr) {
-                        // Ignore individual fetch errors
+                        // Silent fail for individual job previews
                     }
                 }));
             } catch (err) {
@@ -118,19 +121,20 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
 
     // 3. Filter the broad list down to "Relevant" chats (Accepted Bid OR Messages Exist)
     const allChatJobs = useMemo(() => {
-        return involvedJobs.filter(j => {
+        const filtered = involvedJobs.filter(j => {
             const hasAcceptedBid = j.bids.some(b => b.status === 'ACCEPTED');
             const hasMessages = lastMessagesMap[j.id] !== undefined || liveMessages.some(m => m.jobId === j.id);
 
             // CORE RULE: Show if there's an accepted bid OR if messages exist
             if (!hasAcceptedBid && !hasMessages) return false;
 
-            // User must be one of the participants
+            // Participant check: Poster, Accepted Worker, or Bidder with messages
             const isPoster = j.posterId === user.id;
             const isAcceptedWorker = j.bids.some(b => b.status === 'ACCEPTED' && b.workerId === user.id);
             const isMessagingBidder = j.bids.some(b => b.workerId === user.id) && hasMessages;
 
-            if (!isPoster && !isAcceptedWorker && !isMessagingBidder) return false;
+            const isParticipant = isPoster || isAcceptedWorker || isMessagingBidder;
+            if (!isParticipant) return false;
 
             // Apply Database-level Archive/Delete filters
             if (deletedChats.has(j.id)) return false;
@@ -139,6 +143,13 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
 
             return true;
         });
+
+        console.log('[ChatList] Involved:', involvedJobs.length, 'Filtered:', filtered.length, {
+            previews: Object.keys(lastMessagesMap).length,
+            live: liveMessages.length
+        });
+
+        return filtered;
     }, [involvedJobs, lastMessagesMap, liveMessages, showArchived, archivedChats, deletedChats, user.id]);
 
     // 4. Final Filter Logic (Tabs + Search)
