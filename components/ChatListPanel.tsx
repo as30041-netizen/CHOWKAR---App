@@ -301,7 +301,7 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                                     >
                                         <div className="flex items-start gap-3">
                                             {/* Avatar */}
-                                            <div className="relative">
+                                            <div className="relative shrink-0">
                                                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-100 to-teal-50 border border-white shadow-sm flex items-center justify-center text-emerald-700 font-bold overflow-hidden">
                                                     {otherPersonPhoto ? (
                                                         <img src={otherPersonPhoto} alt={otherPerson} className="w-full h-full object-cover" />
@@ -309,14 +309,13 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                                                         otherPerson.charAt(0)
                                                     )}
                                                 </div>
+                                                {/* Unread Count Badge - positioned on avatar */}
+                                                {hasUnread && unreadCount > 0 && (
+                                                    <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shadow-lg border-2 border-white">
+                                                        {unreadCount > 9 ? '9+' : unreadCount}
+                                                    </div>
+                                                )}
                                             </div>
-
-                                            {/* Unread Count Badge */}
-                                            {hasUnread && unreadCount > 0 && (
-                                                <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-lg animate-bounce">
-                                                    {unreadCount > 9 ? '9+' : unreadCount}
-                                                </div>
-                                            )}
 
                                             {/* Content */}
                                             <div className="flex-1 min-w-0 pt-0.5">
