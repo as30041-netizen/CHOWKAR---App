@@ -474,6 +474,7 @@ const AppContent: React.FC = () => {
           }
         }}
         showAlert={showAlert}
+        onReplyToCounter={handleWorkerReplyToCounter}
       />
 
       <EditProfileModal
@@ -510,7 +511,7 @@ const AppContent: React.FC = () => {
           setShowNotifications(false);
 
           // Click-to-Action Logic
-          if (notif.title === t.notifBidReceived || notif.title === "New Bid") {
+          if (notif.title === t.notifBidReceived || notif.title === "New Bid" || notif.title === "Counter Accepted") {
             setViewBidsModal({ isOpen: true, job });
           } else if (notif.title === t.notifJobCompleted || notif.title === "Job Completed") {
             // If poster, show review modal for worker
@@ -526,8 +527,11 @@ const AppContent: React.FC = () => {
               handleChatOpen(job);
             }
           } else if (notif.title === t.notifCounterOffer || notif.title === "Counter Offer") {
-            // For worker, open chat to reply to counter
-            handleChatOpen(job);
+            if (user.id === job.posterId) {
+              setViewBidsModal({ isOpen: true, job });
+            } else {
+              setSelectedJob(job);
+            }
           } else {
             // Default: Open Chat
             handleChatOpen(job);

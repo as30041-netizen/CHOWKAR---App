@@ -1,5 +1,5 @@
 import React from 'react';
-import { XCircle, MapPin, Star, AlertCircle, Pencil, ExternalLink } from 'lucide-react';
+import { XCircle, MapPin, Star, AlertCircle, Pencil, ExternalLink, IndianRupee } from 'lucide-react';
 import { Job, UserRole, JobStatus } from '../types';
 import { useUser } from '../contexts/UserContextDB';
 import { LeafletMap } from './LeafletMap';
@@ -13,15 +13,29 @@ interface JobDetailsModalProps {
     onEdit: (job: Job) => void;
     onDelete: (jobId: string) => void;
     onCancel?: (jobId: string) => void;
+    onReplyToCounter?: (jobId: string, bidId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', amount?: number) => void;
     showAlert: (message: string, type: 'success' | 'error' | 'info') => void;
 }
 
 export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
-    job, onClose, onBid, onViewBids, onChat, onEdit, onDelete, onCancel, showAlert
+    job, onClose, onBid, onViewBids, onChat, onEdit, onDelete, onCancel, onReplyToCounter, showAlert
 }) => {
     const { user, role, t, language } = useUser();
+    const [showCounterInput, setShowCounterInput] = React.useState(false);
+    const [counterAmount, setCounterAmount] = React.useState('');
 
     if (!job) return null;
+
+    const myBid = job.bids.find(b => b.workerId === user.id);
+    const lastNegotiation = myBid?.negotiationHistory?.[myBid.negotiationHistory.length - 1];
+    const isWorkerTurn = lastNegotiation?.by === UserRole.POSTER && myBid?.status === 'PENDING';
+
+    const handleSubmitCounter = () => {
+        if (!myBid || !onReplyToCounter || !counterAmount) return;
+        onReplyToCounter(job.id, myBid.id, 'COUNTER', parseInt(counterAmount));
+        setShowCounterInput(false);
+        onClose();
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center pointer-events-none">
@@ -38,6 +52,52 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                     <p className="text-sm text-gray-500 mt-1">{job.category}</p>
                 </div>
 
+                {/* Negotiation Section (for Worker) */}
+                {role === UserRole.WORKER && isWorkerTurn && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-5 shadow-sm">
+                        <h4 className="flex items-center gap-2 text-amber-800 font-bold text-sm mb-3">
+                            <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>
+                            {t.posterCountered}: ₹{myBid!.amount}
+                        </h4>
+
+                        {showCounterInput ? (
+                            <div className="flex gap-2">
+                                <input
+                                    type="number"
+                                    value={counterAmount}
+                                    onChange={(e) => setCounterAmount(e.target.value)}
+                                    placeholder="Enter ₹"
+                                    className="flex-1 p-2 rounded-lg border border-amber-300 outline-none font-bold"
+                                    autoFocus
+                                />
+                                <button onClick={handleSubmitCounter} className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold shadow-sm">Send</button>
+                                <button onClick={() => setShowCounterInput(false)} className="bg-gray-200 text-gray-600 px-3 py-2 rounded-lg">✕</button>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    onClick={() => { onReplyToCounter?.(job.id, myBid!.id, 'ACCEPT'); onClose(); }}
+                                    className="bg-emerald-600 text-white py-2.5 rounded-xl font-bold shadow-sm hover:bg-emerald-700 transition-all"
+                                >
+                                    {t.acceptCounter}
+                                </button>
+                                <button
+                                    onClick={() => setShowCounterInput(true)}
+                                    className="bg-white border border-amber-400 text-amber-700 py-2.5 rounded-xl font-bold hover:bg-amber-100 transition-all"
+                                >
+                                    {t.counterOffer}
+                                </button>
+                                <button
+                                    onClick={() => { onReplyToCounter?.(job.id, myBid!.id, 'REJECT'); onClose(); }}
+                                    className="col-span-2 text-xs text-red-500 font-bold hover:underline py-1"
+                                >
+                                    {language === 'en' ? 'Decline Counter Offer' : 'बोली अस्वीकार करें'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Job Info */}
                 <div className="space-y-3 mb-4">
                     <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -45,8 +105,8 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                         <span>{job.location}</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Star size={16} className="text-amber-500" />
-                        <span>₹{job.budget} budget</span>
+                        <IndianRupee size={16} className="text-amber-500" />
+                        <span className="font-bold text-gray-900">₹{job.budget}</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                         <AlertCircle size={16} className="text-blue-500" />
@@ -59,6 +119,13 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                     <h4 className="text-sm font-bold text-gray-800 mb-2">{t.description}</h4>
                     <p className="text-sm text-gray-600 whitespace-pre-wrap">{job.description}</p>
                 </div>
+
+                {/* Image */}
+                {job.image && (
+                    <div className="mb-4 w-full h-40 rounded-xl overflow-hidden border">
+                        <img src={job.image} alt="Job" className="w-full h-full object-cover" />
+                    </div>
+                )}
 
                 {/* Poster Info */}
                 <div className="bg-gray-50 rounded-xl p-4 mb-4">
@@ -82,7 +149,6 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                     <div className="mb-4 rounded-xl overflow-hidden border border-gray-100 h-48 relative group z-0">
                         <LeafletMap lat={job.coordinates.lat} lng={job.coordinates.lng} popupText={job.location} />
 
-                        {/* Open in Google Maps Button */}
                         <a
                             href={`https://www.google.com/maps/dir/?api=1&destination=${job.coordinates.lat},${job.coordinates.lng}`}
                             target="_blank"
@@ -97,13 +163,20 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                 {/* Actions */}
                 <div className="flex gap-3 flex-wrap">
                     {/* Worker: Bid button */}
-                    {role === UserRole.WORKER && job.status === JobStatus.OPEN && job.posterId !== user.id && (
+                    {role === UserRole.WORKER && job.status === JobStatus.OPEN && job.posterId !== user.id && !myBid && (
                         <button
                             onClick={() => onBid(job.id)}
                             className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-emerald-700 active:scale-95 transition-all"
                         >
                             {t.bidNow}
                         </button>
+                    )}
+
+                    {/* Worker: Pending Bid view if not turn */}
+                    {role === UserRole.WORKER && myBid && !isWorkerTurn && job.status === JobStatus.OPEN && (
+                        <div className="flex-1 text-center py-2 bg-blue-50 rounded-xl border border-blue-200">
+                            <p className="text-xs font-bold text-blue-700">{t.pending}: ₹{myBid.amount}</p>
+                        </div>
                     )}
 
                     {/* Poster: View Bids button if there are bids */}
