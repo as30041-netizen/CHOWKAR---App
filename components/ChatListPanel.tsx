@@ -62,16 +62,17 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
     }, [user.id]);
 
     // 1. Get ALL jobs where the user is a participant (Poster or Bidder)
-    // This is the "Search Space" for finding messages.
+    // Inclusive: If there's a live message, consider the user involved.
     const involvedJobs = useMemo(() => {
         return jobs.filter(j => {
             const isPoster = j.posterId === user.id;
             const isBidder = j.bids.some(b => b.workerId === user.id);
-            return isPoster || isBidder;
+            const hasLiveMsg = liveMessages.some(m => m.jobId === j.id);
+            return isPoster || isBidder || hasLiveMsg;
         });
-    }, [jobs, user.id]);
+    }, [jobs, user.id, liveMessages.length]);
 
-    // 2. Fetch last messages for previews (only once on open or when involved jobs change)
+    // 2. Fetch last messages for previews
     useEffect(() => {
         if (!isOpen) return;
 
@@ -80,7 +81,6 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
             const map: Record<string, ChatMessage> = {};
 
             try {
-                // Parallel fetch for speed - use involvedJobs to find all possible messages
                 await Promise.all(involvedJobs.map(async (job) => {
                     try {
                         const { data, error } = await supabase
@@ -90,45 +90,47 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                             .order('created_at', { ascending: false })
                             .limit(1);
 
-                        if (error) throw error;
-
                         if (data && data.length > 0) {
                             const msg = data[0];
                             map[job.id] = {
                                 id: msg.id,
                                 jobId: msg.job_id,
                                 senderId: msg.sender_id,
+                                receiverId: msg.receiver_id, // Restored receiver_id
                                 text: msg.text,
                                 translatedText: msg.translated_text,
                                 timestamp: new Date(msg.created_at).getTime(),
                                 isDeleted: msg.is_deleted
                             };
                         }
-                    } catch (innerErr) {
-                        // Silent fail for individual job previews
-                    }
+                    } catch (innerErr) { }
                 }));
-            } catch (err) {
-                console.error("Error in fetchPreviews:", err);
-            }
+            } catch (err) { }
 
             setLastMessagesMap(map);
             setIsLoadingPreviews(false);
         };
 
         fetchPreviews();
-    }, [isOpen, involvedJobs.length]); // Only depend on length to avoid re-fetching on every change
+    }, [isOpen, involvedJobs.length]);
 
-    // 3. Filter the broad list down to "Relevant" chats (Accepted Bid OR Messages Exist)
+    // 3. Filter "Relevant" chats with diagnostic logging
     const allChatJobs = useMemo(() => {
         const filtered = involvedJobs.filter(j => {
             const hasAcceptedBid = j.bids.some(b => b.status === 'ACCEPTED');
-            const hasMessages = lastMessagesMap[j.id] !== undefined || liveMessages.some(m => m.jobId === j.id);
+            const previewMsg = lastMessagesMap[j.id];
+            const hasLiveMsg = liveMessages.some(m => m.jobId === j.id);
+            const hasContent = previewMsg !== undefined || hasLiveMsg;
 
-            // 1. Must have either an accepted bid or existing messages
-            if (!hasAcceptedBid && !hasMessages) return false;
+            // Diagnostic log for the first few items to see why they filter
+            if (involvedJobs.indexOf(j) < 5) {
+                console.log(`[InboxCheck] Job: ${j.id.substring(0, 4)} | ${j.title.substring(0, 10)}... | Content: ${hasContent} | Accepted: ${hasAcceptedBid}`);
+            }
 
-            // 2. Database-level Archive/Delete filters
+            // Must have either an accepted bid OR existing messages
+            if (!hasAcceptedBid && !hasContent) return false;
+
+            // Database-level Archive/Delete filters
             if (deletedChats.has(j.id)) return false;
             if (!showArchived && archivedChats.has(j.id)) return false;
             if (showArchived && !archivedChats.has(j.id)) return false;
@@ -136,15 +138,7 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
             return true;
         });
 
-        // Debug log to trace the filter results
-        if (involvedJobs.length > 0) {
-            console.log(`[ChatList] Involved: ${involvedJobs.length} -> Filtered: ${filtered.length}`, {
-                firstJob: involvedJobs[0]?.id,
-                hasMsg: lastMessagesMap[involvedJobs[0]?.id] !== undefined,
-                lastMessagesKeys: Object.keys(lastMessagesMap)
-            });
-        }
-
+        console.log(`[ChatFilter] Involved: ${involvedJobs.length} -> Final List: ${filtered.length}`);
         return filtered;
     }, [involvedJobs, lastMessagesMap, liveMessages, showArchived, archivedChats, deletedChats]);
 
