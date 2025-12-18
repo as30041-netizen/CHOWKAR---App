@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { XCircle, Search, Filter, Phone, Briefcase, ChevronRight } from 'lucide-react';
+import { XCircle, Search, Filter, Phone, Briefcase, ChevronRight, MoreVertical, Archive, Trash2, FileText } from 'lucide-react';
 import { useUser } from '../contexts/UserContextDB';
 import { useJobs } from '../contexts/JobContextDB';
 import { Job, ChatMessage } from '../types';
@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase';
 interface ChatListPanelProps {
     isOpen: boolean;
     onClose: () => void;
-    onChatSelect: (job: Job) => void;
+    onChatSelect: (job: Job, receiverId?: string) => void;
 }
 
 export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, onChatSelect }) => {
@@ -20,15 +20,30 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
     // UX States
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState<'ALL' | 'AS_WORKER' | 'AS_POSTER'>('ALL');
+    const [showArchived, setShowArchived] = useState(false);
+    const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+    const [archivedChats, setArchivedChats] = useState<Set<string>>(new Set());
+    const [deletedChats, setDeletedChats] = useState<Set<string>>(new Set());
 
     // 1. Get all active chat interactions
     const allChatJobs = useMemo(() => {
-        return jobs.filter(j =>
+        return jobs.filter(j => {
             // Include IN_PROGRESS, COMPLETED, AND OPEN jobs where user is involved
-            (j.status === 'IN_PROGRESS' || j.status === 'COMPLETED' || j.status === 'OPEN') &&
-            (j.posterId === user.id || j.bids.some(b => b.workerId === user.id))
-        );
-    }, [jobs, user.id]);
+            const isRelevant = (j.status === 'IN_PROGRESS' || j.status === 'COMPLETED' || j.status === 'OPEN') &&
+                (j.posterId === user.id || j.bids.some(b => b.workerId === user.id));
+
+            if (!isRelevant) return false;
+
+            // Filter archived chats unless "Show Archived" is enabled
+            if (!showArchived && archivedChats.has(j.id)) return false;
+            if (showArchived && !archivedChats.has(j.id)) return false;
+
+            // Filter deleted chats completely
+            if (deletedChats.has(j.id)) return false;
+
+            return true;
+        });
+    }, [jobs, user.id, showArchived, archivedChats, deletedChats]);
 
     // 2. Fetch last messages for previews (only once on open or when job list changes)
     useEffect(() => {
@@ -103,6 +118,46 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
         });
     }, [allChatJobs, activeTab, searchTerm, user.id]);
 
+    // Archive/Delete Helper Functions
+    const handleArchiveChat = async (jobId: string) => {
+        try {
+            await supabase.rpc('archive_chat', { p_job_id: jobId });
+            setArchivedChats(prev => new Set(prev).add(jobId));
+            setActiveMenuId(null);
+        } catch (error) {
+            console.error('Error archiving chat:', error);
+            alert('Failed to archive chat');
+        }
+    };
+
+    const handleUnarchiveChat = async (jobId: string) => {
+        try {
+            await supabase.rpc('unarchive_chat', { p_job_id: jobId });
+            setArchivedChats(prev => {
+                const updated = new Set(prev);
+                updated.delete(jobId);
+                return updated;
+            });
+            setActiveMenuId(null);
+        } catch (error) {
+            console.error('Error unarchiving chat:', error);
+            alert('Failed to unarchive chat');
+        }
+    };
+
+    const handleDeleteChat = async (jobId: string) => {
+        if (!confirm('Delete this conversation? This will hide all messages.')) return;
+
+        try {
+            await supabase.rpc('delete_chat', { p_job_id: jobId });
+            setDeletedChats(prev => new Set(prev).add(jobId));
+            setActiveMenuId(null);
+        } catch (error) {
+            console.error('Error deleting chat:', error);
+            alert('Failed to delete chat');
+        }
+    };
+
     if (!isOpen) return null;
 
     return (
@@ -146,6 +201,17 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                                 {tab === 'ALL' ? 'All' : tab === 'AS_WORKER' ? 'My Jobs' : 'Hiring'}
                             </button>
                         ))}
+                    </div>
+
+                    {/* Archive Toggle */}
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+                        <span className="text-xs font-medium text-gray-600">Show Archived</span>
+                        <button
+                            onClick={() => setShowArchived(!showArchived)}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${showArchived ? 'bg-emerald-600' : 'bg-gray-200'}`}
+                        >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${showArchived ? 'translate-x-6' : 'translate-x-1'}`} />
+                        </button>
                     </div>
                 </div>
 
@@ -208,87 +274,125 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                             const hasUnread = notifications.some(n => n.relatedJobId === job.id && !n.read); // Removed title check for debugging
 
                             return (
-                                <button
-                                    key={job.id}
-                                    onClick={() => {
-                                        // Determine correct receiver ID to pass
-                                        let targetReceiverId: string | undefined;
-                                        if (!isPoster) {
-                                            targetReceiverId = job.posterId; // Workers always chat with poster
-                                        } else {
-                                            // As poster, we chat with the person in the last message, 
-                                            // OR the accepted worker, OR undefined (if ambiguous)
-                                            if (lastMsg) {
-                                                targetReceiverId = lastMsg.senderId === user.id ? lastMsg.receiverId : lastMsg.senderId;
-                                                // Note: lastMsg won't have receiverId field from the select above? 
-                                                // Wait, the select('*') includes it. But type might need check.
-                                                // ChatMessage type in frontend usually has receiverId? Let's check type.
-                                                // If not, we fallback.
-                                            } else if (acceptedBid) {
-                                                targetReceiverId = acceptedBid.workerId;
+                                <div key={job.id} className="relative">
+                                    <button
+                                        onClick={() => {
+                                            // Determine correct receiver ID to pass
+                                            let targetReceiverId: string | undefined;
+                                            if (!isPoster) {
+                                                targetReceiverId = job.posterId; // Workers always chat with poster
+                                            } else {
+                                                // As poster, we chat with the person in the last message, 
+                                                // OR the accepted worker, OR undefined (if ambiguous)
+                                                if (lastMsg) {
+                                                    targetReceiverId = lastMsg.senderId === user.id ? lastMsg.receiverId : lastMsg.senderId;
+                                                } else if (acceptedBid) {
+                                                    targetReceiverId = acceptedBid.workerId;
+                                                }
                                             }
-                                            // If still undefined (e.g. Open job, no messages yet), opening chat might fail
-                                            // But if it's in the list there IS a message usually?
-                                            // Or we just filtered for Involved jobs.
-                                            // If I am active on a job but no messages, I might want to chat with... who?
-                                            // For this Inbox panel which is message-centric, we can assume lastMsg exists if we want to support multiple bidders robustly.
-                                            // For now, let's use what we have.
-                                        }
-                                        onClose();
-                                        onChatSelect(job, targetReceiverId);
-                                    }}
-                                    className="w-full text-left bg-white p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-all group relative overflow-hidden"
-                                >
-                                    <div className="flex items-start gap-3">
-                                        {/* Avatar */}
-                                        <div className="relative">
-                                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-100 to-teal-50 border border-white shadow-sm flex items-center justify-center text-emerald-700 font-bold overflow-hidden">
-                                                {otherPersonPhoto ? (
-                                                    <img src={otherPersonPhoto} alt={otherPerson} className="w-full h-full object-cover" />
-                                                ) : (
-                                                    otherPerson.charAt(0)
-                                                )}
+                                            onClose();
+                                            onChatSelect(job, targetReceiverId);
+                                        }}
+                                        className="w-full text-left bg-white p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-all group relative overflow-hidden"
+                                    >
+                                        <div className="flex items-start gap-3">
+                                            {/* Avatar */}
+                                            <div className="relative">
+                                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-100 to-teal-50 border border-white shadow-sm flex items-center justify-center text-emerald-700 font-bold overflow-hidden">
+                                                    {otherPersonPhoto ? (
+                                                        <img src={otherPersonPhoto} alt={otherPerson} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        otherPerson.charAt(0)
+                                                    )}
+                                                </div>
                                             </div>
-                                            {/* Online Dot (Mocked/Shared state would go here) */}
-                                            {/* <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div> */}
-                                        </div>
 
-                                        {/* Content */}
-                                        <div className="flex-1 min-w-0 pt-0.5">
-                                            <div className="flex justify-between items-center mb-0.5">
-                                                <h4 className={`font-bold truncate pr-2 group-hover:text-emerald-700 transition-colors ${hasUnread ? 'text-gray-900' : 'text-gray-900'}`}>
-                                                    {otherPerson}
-                                                    {hasUnread && <span className="ml-2 w-2 h-2 bg-emerald-500 rounded-full inline-block animate-pulse"></span>}
-                                                </h4>
-                                                {timeDisplay && (
-                                                    <span className="text-[10px] font-medium text-gray-400 whitespace-nowrap">
-                                                        {timeDisplay}
+                                            {/* Content */}
+                                            <div className="flex-1 min-w-0 pt-0.5">
+                                                <div className="flex justify-between items-center mb-0.5">
+                                                    <h4 className={`font-bold truncate pr-2 group-hover:text-emerald-700 transition-colors ${hasUnread ? 'text-gray-900' : 'text-gray-900'}`}>
+                                                        {otherPerson}
+                                                        {hasUnread && <span className="ml-2 w-2 h-2 bg-emerald-500 rounded-full inline-block animate-pulse"></span>}
+                                                    </h4>
+                                                    {timeDisplay && (
+                                                        <span className="text-[10px] font-medium text-gray-400 whitespace-nowrap">
+                                                            {timeDisplay}
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                <div className="flex items-center gap-1.5 mb-1">
+                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${isPoster ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'}`}>
+                                                        {isPoster ? 'Hiring' : 'Job'}
                                                     </span>
-                                                )}
-                                            </div>
+                                                    <p className="text-xs font-medium text-gray-500 truncate">{job.title}</p>
+                                                </div>
 
-                                            <div className="flex items-center gap-1.5 mb-1">
-                                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${isPoster ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'
-                                                    }`}>
-                                                    {isPoster ? 'Hiring' : 'Job'}
-                                                </span>
-                                                <p className="text-xs font-medium text-gray-500 truncate">{job.title}</p>
-                                            </div>
+                                                <div className="flex items-center justify-between">
+                                                    <p className={`text-sm truncate ${lastMsg ? 'text-gray-600' : 'text-emerald-600 italic'}`}>
+                                                        {lastMsg
+                                                            ? (lastMsg.isDeleted ? <span className="italic text-gray-400">This message was deleted</span> : (lastMsg.translatedText || lastMsg.text))
+                                                            : 'Start the conversation...'
+                                                        }
+                                                    </p>
 
-                                            <div className="flex items-center justify-between">
-                                                <p className={`text-sm truncate ${lastMsg ? 'text-gray-600' : 'text-emerald-600 italic'}`}>
-                                                    {lastMsg
-                                                        ? (lastMsg.isDeleted ? <span className="italic text-gray-400">This message was deleted</span> : (lastMsg.translatedText || lastMsg.text))
-                                                        : 'Start the conversation...'
-                                                    }
-                                                </p>
-
-                                                {/* Hover Action Arrow */}
-                                                <ChevronRight size={16} className="text-gray-300 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all" />
+                                                    {/* Hover Action Arrow */}
+                                                    <ChevronRight size={16} className="text-gray-300 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all" />
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                </button>
+                                    </button>
+
+                                    {/* 3-Dot Menu Button */}
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveMenuId(activeMenuId === job.id ? null : job.id);
+                                        }}
+                                        className="absolute top-3 right-3 p-2 hover:bg-gray-100 rounded-full transition-colors z-10"
+                                    >
+                                        <MoreVertical size={16} className="text-gray-400" />
+                                    </button>
+
+                                    {/* Dropdown Menu */}
+                                    {activeMenuId === job.id && (
+                                        <div className="absolute top-12 right-3 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50 min-w-[160px]">
+                                            {showArchived ? (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleUnarchiveChat(job.id);
+                                                    }}
+                                                    className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
+                                                >
+                                                    <Archive size={14} />
+                                                    Unarchive
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleArchiveChat(job.id);
+                                                    }}
+                                                    className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
+                                                >
+                                                    <Archive size={14} />
+                                                    Archive
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDeleteChat(job.id);
+                                                }}
+                                                className="w-full px-4 py-2 text-left text-sm hover:bg-red-50 flex items-center gap-2 text-red-600"
+                                            >
+                                                <Trash2 size={14} />
+                                                Delete
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             );
                         })
                     )}

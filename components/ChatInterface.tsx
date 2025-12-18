@@ -106,6 +106,24 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   }, [job.id]);
 
+  // Mark messages as read when chat opens
+  useEffect(() => {
+    const markAsRead = async () => {
+      try {
+        await supabase.rpc('mark_messages_read', {
+          p_job_id: job.id,
+          p_user_id: currentUser.id
+        });
+      } catch (error) {
+        console.error('Error marking messages as read:', error);
+      }
+    };
+
+    if (job.id && currentUser.id) {
+      markAsRead();
+    }
+  }, [job.id, currentUser.id]);
+
   useEffect(() => {
     const newChannel = supabase.channel(`chat_room:${job.id}`, {
       config: { presence: { key: currentUser.id } }
@@ -149,7 +167,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             text: newMsg.is_deleted ? 'This message was deleted' : newMsg.text,
             timestamp: new Date(newMsg.created_at).getTime(),
             translatedText: newMsg.translated_text,
-            isDeleted: newMsg.is_deleted
+            isDeleted: newMsg.is_deleted,
+            read: newMsg.read,
+            readAt: newMsg.read_at ? new Date(newMsg.read_at).getTime() : undefined
           };
           onMessageUpdate(updated);
         }
@@ -472,7 +492,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                           )}
                           <div className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${isMe ? 'text-emerald-100' : 'text-gray-400'}`}>
                             <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                            {isMe && <CheckCheck size={14} className="opacity-80" />}
+                            {isMe && (
+                              msg.read ? (
+                                <CheckCheck size={14} className="opacity-80" title="Read" />
+                              ) : (
+                                <Check size={14} className="opacity-80" title="Delivered" />
+                              )
+                            )}
                           </div>
                         </div>
 

@@ -96,11 +96,16 @@ export interface ChatMessage {
   id: string;
   jobId: string;
   senderId: string;
+  receiverId?: string;
   text: string;
   timestamp: number;
   translatedText?: string;
   isDeleted?: boolean;
-  receiverId?: string;
+  read?: boolean;
+  readAt?: number;
+  mediaType?: 'voice' | 'image' | 'video';
+  mediaUrl?: string;
+  mediaDuration?: number; // Duration in seconds for voice/video
 }
 
 export interface Transaction {
