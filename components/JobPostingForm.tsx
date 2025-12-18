@@ -216,36 +216,52 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
 
         if (!checkFreeLimit()) return;
 
-        // Show preview immediately
+        // Optimized Image Loading: Resize before setting in state
         const reader = new FileReader();
         reader.onloadend = async () => {
-            const base64String = reader.result as string;
-            setNewJobImage(base64String);
+            const img = new Image();
+            img.src = reader.result as string;
+            img.onload = async () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 1200;
+                const MAX_HEIGHT = 1200;
+                let width = img.width;
+                let height = img.height;
 
-            setIsAnalyzingImage(true);
-            try {
-                // Extract raw base64 without prefix
-                const rawBase64 = base64String.split(',')[1];
-                const mimeType = file.type;
-
-                const result = await analyzeImageForJob(rawBase64, mimeType, language);
-
-                if (result) {
-                    if (result.description) setNewJobDesc(result.description);
-                    if (result.category && CATEGORIES.includes(result.category)) {
-                        setNewJobCategory(result.category);
-                    }
-                    incrementAiUsage();
-                    addNotification(user.id, "Photo Analyzed", "Description and Category updated based on your photo.", "SUCCESS");
+                if (width > height) {
+                    if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
                 } else {
-                    showAlert("Could not analyze image. Please try another.", 'error');
+                    if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
                 }
-            } catch (error) {
-                console.error(error);
-                showAlert("Error processing image.", 'error');
-            } finally {
-                setIsAnalyzingImage(false);
-            }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx?.drawImage(img, 0, 0, width, height);
+
+                // Use JPEG for better compression than the original high-res capture
+                const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+                setNewJobImage(compressedBase64);
+
+                setIsAnalyzingImage(true);
+                try {
+                    const rawBase64 = compressedBase64.split(',')[1];
+                    const result = await analyzeImageForJob(rawBase64, 'image/jpeg', language);
+
+                    if (result) {
+                        if (result.description && !newJobDesc.trim()) setNewJobDesc(result.description);
+                        if (result.category && CATEGORIES.includes(result.category)) {
+                            setNewJobCategory(result.category);
+                        }
+                        incrementAiUsage();
+                        addNotification(user.id, "Photo Analyzed", "Details updated based on your photo.", "SUCCESS");
+                    }
+                } catch (error) {
+                    console.error("AI Analysis Error:", error);
+                } finally {
+                    setIsAnalyzingImage(false);
+                }
+            };
         };
         reader.readAsDataURL(file);
     };

@@ -61,53 +61,57 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
         loadChatStates();
     }, [user.id]);
 
-    // 1. Get ALL jobs where an acceptance has occurred and the user is involved
+    // 1. Determine involved jobs (those where user is poster or bidder)
     const involvedJobs = useMemo(() => {
+        // PERF: Skip heavy filtering if panel is closed
+        if (!isOpen) return [];
+
         return jobs.filter(j => {
-            const hasAcceptedBid = j.bids.some(b => b.status === 'ACCEPTED');
-            if (!hasAcceptedBid) return false;
-
             const isPoster = j.posterId === user.id;
-            const isAcceptedWorker = j.bids.some(b => b.status === 'ACCEPTED' && b.workerId === user.id);
-
-            return isPoster || isAcceptedWorker;
+            const isBidder = j.bids.some(b => b.workerId === user.id);
+            // Also include jobs with live messages (even if not bid on yet)
+            const hasLiveMsg = liveMessages.some(m => m.jobId === j.id);
+            return isPoster || isBidder || hasLiveMsg;
         });
-    }, [jobs, user.id]);
+    }, [jobs, user.id, liveMessages.length, isOpen]);
 
-    // 2. Fetch last messages for previews (only for jobs with accepted bids)
+    // 2. Fetch last messages for previews
     useEffect(() => {
-        if (!isOpen) return;
+        // CRITICAL PERF: Don't fetch previews globaly if the panel is hidden
+        if (!isOpen || involvedJobs.length === 0) return;
 
         const fetchPreviews = async () => {
             setIsLoadingPreviews(true);
             const map: Record<string, ChatMessage> = {};
 
-            try {
-                await Promise.all(involvedJobs.map(async (job) => {
-                    try {
-                        const { data, error } = await supabase
-                            .from('chat_messages')
-                            .select('*')
-                            .eq('job_id', job.id)
-                            .order('created_at', { ascending: false })
-                            .limit(1);
+            await Promise.all(involvedJobs.map(async (job) => {
+                try {
+                    // Fetch most recent message for this job
+                    const { data, error } = await supabase
+                        .from('chat_messages')
+                        .select('*')
+                        .eq('job_id', job.id)
+                        .order('created_at', { ascending: false })
+                        .limit(1);
 
-                        if (data && data.length > 0) {
-                            const msg = data[0];
-                            map[job.id] = {
-                                id: msg.id,
-                                jobId: msg.job_id,
-                                senderId: msg.sender_id,
-                                receiverId: msg.receiver_id,
-                                text: msg.text,
-                                translatedText: msg.translated_text,
-                                timestamp: new Date(msg.created_at).getTime(),
-                                isDeleted: msg.is_deleted
-                            };
-                        }
-                    } catch (innerErr) { }
-                }));
-            } catch (err) { }
+                    if (error) throw error;
+
+                    if (data && data.length > 0) {
+                        const msg = data[0];
+                        map[job.id] = {
+                            id: msg.id,
+                            jobId: msg.job_id,
+                            senderId: msg.sender_id,
+                            receiverId: msg.receiver_id,
+                            text: msg.text,
+                            timestamp: new Date(msg.created_at).getTime(),
+                            isDeleted: msg.is_deleted
+                        };
+                    }
+                } catch (innerErr) {
+                    // Silent fail for individual previews
+                }
+            }));
 
             setLastMessagesMap(map);
             setIsLoadingPreviews(false);
@@ -116,29 +120,30 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
         fetchPreviews();
     }, [isOpen, involvedJobs.length]);
 
-    // 3. Filter "Relevant" chats (Hiring/Working vs Archived/Completed)
+    // 3. Final Filter for Inbox vs Archived
     const allChatJobs = useMemo(() => {
+        if (!isOpen) return []; // Skip processing when closed
+
         return involvedJobs.filter(j => {
             const isCompleted = j.status === 'COMPLETED';
             const isManuallyArchived = archivedChats.has(j.id);
             const isDeleted = deletedChats.has(j.id);
 
+            // Hide deleted
             if (isDeleted) return false;
 
-            // In "Main" View (Active Jobs)
+            // Simple separation logic
             if (!showArchived) {
-                // Hide if manually archived OR if the job is completed
+                // In Active: Hide if manually archived OR if the job is completed
                 if (isManuallyArchived || isCompleted) return false;
-            }
-            // In "Archived" View
-            else {
-                // Show if manually archived OR if the job is completed
+            } else {
+                // In Archive: Only show if manually archived OR if job is completed
                 if (!isManuallyArchived && !isCompleted) return false;
             }
 
             return true;
         });
-    }, [involvedJobs, showArchived, archivedChats, deletedChats]);
+    }, [involvedJobs, showArchived, archivedChats, deletedChats, isOpen]);
 
     // 4. Final Filter Logic (Tabs + Search)
     const filteredJobs = useMemo(() => {
