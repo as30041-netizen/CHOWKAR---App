@@ -344,13 +344,49 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  // Real-time subscription for notifications
+  // Real-time subscription for notifications (HYBRID: Broadcast + postgres_changes)
   useEffect(() => {
     if (!isLoggedIn || !user.id) return;
 
-    console.log('[Realtime] Setting up notification subscription for user:', user.id);
-    const subscription = supabase
-      .channel(`notifications_${user.id}`) // Unique channel per user
+    console.log('[Realtime] Setting up HYBRID notification subscription for user:', user.id);
+
+    // Handler for incoming notifications (shared between broadcast and postgres_changes)
+    const handleIncomingNotification = (notifData: any) => {
+      console.log('[Realtime] Notification received via hybrid channel:', notifData);
+
+      const newNotif: Notification = {
+        id: notifData.id || `n${Date.now()}`,
+        userId: notifData.user_id || notifData.userId || user.id,
+        title: notifData.title,
+        message: notifData.message,
+        type: (notifData.type as 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR') || 'INFO',
+        read: notifData.read ?? false,
+        timestamp: notifData.created_at ? new Date(notifData.created_at).getTime() : Date.now(),
+        relatedJobId: notifData.related_job_id || notifData.relatedJobId || undefined
+      };
+
+      // Update state (avoid duplicates)
+      setNotifications(prev => {
+        if (prev.some(n => n.id === newNotif.id)) return prev;
+        return [newNotif, ...prev];
+      });
+
+      // Show live alert
+      if (!newNotif.read) {
+        showAlert(`${newNotif.title}: ${newNotif.message}`, 'info');
+      }
+    };
+
+    const channel = supabase
+      .channel(`user_notifications_${user.id}`)
+      // Method 1: Supabase Broadcast (Instant, bypasses RLS for delivery)
+      .on('broadcast', { event: 'new_notification' }, (payload) => {
+        console.log('[Realtime] Broadcast notification received:', payload);
+        if (payload.payload) {
+          handleIncomingNotification(payload.payload);
+        }
+      })
+      // Method 2: postgres_changes (Backup, RLS-dependent)
       .on(
         'postgres_changes',
         {
@@ -360,38 +396,18 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           filter: `user_id=eq.${user.id}`
         },
         (payload) => {
-          console.log('[Realtime] Notification INSERT received:', payload.new);
-
-          // Map DB to App type
-          const newNotif: Notification = {
-            id: payload.new.id,
-            userId: payload.new.user_id,
-            title: payload.new.title,
-            message: payload.new.message,
-            type: payload.new.type as 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR',
-            read: payload.new.read,
-            timestamp: new Date(payload.new.created_at).getTime(),
-            relatedJobId: payload.new.related_job_id || undefined
-          };
-
-          // Update state and show a live alert for better UX
-          setNotifications(prev => {
-            if (prev.some(n => n.id === newNotif.id)) return prev;
-            return [newNotif, ...prev];
-          });
-
-          // Standard notification pulse/sound or alert
-          if (!newNotif.read) {
-            showAlert(`${newNotif.title}: ${newNotif.message}`, 'info');
+          console.log('[Realtime] postgres_changes notification received:', payload.new);
+          if (payload.new) {
+            handleIncomingNotification(payload.new);
           }
         }
       )
       .subscribe((status) => {
-        console.log(`[Realtime] Notification subscription status:`, status);
+        console.log(`[Realtime] Hybrid notification subscription status:`, status);
       });
 
     return () => {
-      subscription.unsubscribe();
+      supabase.removeChannel(channel);
     };
   }, [isLoggedIn, user.id]);
 
@@ -568,10 +584,38 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
         setNotifications(prev => [newNotif, ...prev]);
       } else {
-        // FOR OTHERS: Fire and forget. DO NOT use .select()! 
-        // This prevents 403 Forbidden errors when RLS blocks reading others' notifs.
-        const { error } = await supabase.from('notifications').insert(payload);
-        if (error) throw error;
+        // FOR OTHERS: Fire and forget to DB
+        const { data, error } = await supabase.from('notifications').insert(payload).select().single();
+
+        // INSTANT DELIVERY: Broadcast to the recipient's channel (bypasses RLS)
+        const broadcastPayload = {
+          id: data?.id || `n${Date.now()}`,
+          user_id: userId,
+          userId: userId,
+          title,
+          message,
+          type,
+          read: false,
+          related_job_id: relatedJobId,
+          relatedJobId: relatedJobId,
+          created_at: new Date().toISOString()
+        };
+
+        // Send via Supabase Broadcast to the recipient's channel
+        const channel = supabase.channel(`user_notifications_${userId}`);
+        await channel.subscribe();
+        await channel.send({
+          type: 'broadcast',
+          event: 'new_notification',
+          payload: broadcastPayload
+        });
+        supabase.removeChannel(channel);
+
+        console.log('[Notification] Broadcast sent to user:', userId);
+
+        if (error) {
+          console.warn('[Notification] DB insert error (broadcast still sent):', error);
+        }
       }
     } catch (error) {
       console.error('Error adding notification:', error);

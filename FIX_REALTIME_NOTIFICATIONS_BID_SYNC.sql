@@ -8,11 +8,32 @@ ALTER TABLE bids REPLICA IDENTITY FULL;
 ALTER TABLE jobs REPLICA IDENTITY FULL;
 ALTER TABLE notifications REPLICA IDENTITY FULL;
 
--- 2. Ensure bids are included in the publication
+-- 2. Ensure bids/notifications/jobs are included in the publication (SKIP IF ALREADY EXISTS)
 -- This is often the reason why 'postgres_changes' doesn't fire for some tables.
-ALTER PUBLICATION supabase_realtime ADD TABLE bids;
-ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
-ALTER PUBLICATION supabase_realtime ADD TABLE jobs;
+-- We wrap in a DO block to prevent errors if already a member.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' AND tablename = 'bids'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE bids;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' AND tablename = 'notifications'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' AND tablename = 'jobs'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE jobs;
+    END IF;
+END $$;
 
 -- 3. Verify RLS for Bids
 -- Users need to be able to SELECT bids to get realtime updates.
