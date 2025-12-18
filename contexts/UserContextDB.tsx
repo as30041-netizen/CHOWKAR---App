@@ -528,24 +528,23 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const addNotification = async (userId: string, title: string, message: string, type: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' = 'INFO', relatedJobId?: string) => {
     try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .insert({
-          user_id: userId,
-          title,
-          message,
-          type,
-          read: false,
-          related_job_id: relatedJobId
-        })
-        .select()
-        .single();
+      const isForMe = userId === user.id;
 
-      if (error) throw error;
+      // If it's for someone else, we just insert and don't try to select/single it back
+      // because RLS might prevent us from reading it, which causes an error.
+      const query = supabase.from('notifications').insert({
+        user_id: userId,
+        title,
+        message,
+        type,
+        read: false,
+        related_job_id: relatedJobId
+      });
 
-      // Real-time subscription will handle adding to state
-      // But if it's for the current user, add it immediately for responsive UI
-      if (userId === user.id) {
+      if (isForMe) {
+        const { data, error } = await query.select().single();
+        if (error) throw error;
+
         const newNotif: Notification = {
           id: data.id,
           userId: data.user_id,
@@ -557,21 +556,27 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           relatedJobId: data.related_job_id || undefined
         };
         setNotifications(prev => [newNotif, ...prev]);
+      } else {
+        const { error } = await query;
+        if (error) throw error;
+        // No local update needed for other users' state
       }
     } catch (error) {
       console.error('Error adding notification:', error);
-      // Fallback to local state only
-      const newNotif: Notification = {
-        id: `n${Date.now()}`,
-        userId,
-        title,
-        message,
-        type,
-        read: false,
-        timestamp: Date.now(),
-        relatedJobId
-      };
-      setNotifications(prev => [newNotif, ...prev]);
+      // Only add to local state if it's for the current user
+      if (userId === user.id) {
+        const newNotif: Notification = {
+          id: `n${Date.now()}`,
+          userId,
+          title,
+          message,
+          type,
+          read: false,
+          timestamp: Date.now(),
+          relatedJobId
+        };
+        setNotifications(prev => [newNotif, ...prev]);
+      }
     }
   };
 
