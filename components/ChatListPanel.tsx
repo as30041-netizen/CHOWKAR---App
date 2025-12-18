@@ -61,46 +61,17 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
         loadChatStates();
     }, [user.id]);
 
-    // 1. Get potentially relevant jobs (no message-state dependency for core list, but uses preview map)
-    const relevantJobs = useMemo(() => {
+    // 1. Get ALL jobs where the user is a participant (Poster or Bidder)
+    // This is the "Search Space" for finding messages.
+    const involvedJobs = useMemo(() => {
         return jobs.filter(j => {
             const isPoster = j.posterId === user.id;
             const isBidder = j.bids.some(b => b.workerId === user.id);
-            const hasAcceptedBid = j.bids.some(b => b.status === 'ACCEPTED');
-            const hasMessages = lastMessagesMap[j.id] !== undefined || liveMessages.some(m => m.jobId === j.id);
-
-            // CORE RULE: Show if there's an accepted bid OR if messages exist
-            if (!hasAcceptedBid && !hasMessages) return false;
-
-            // User must be one of the participants
-            const isAcceptedWorker = j.bids.some(b => b.status === 'ACCEPTED' && b.workerId === user.id);
-            const isMessagingBidder = isBidder && hasMessages;
-
-            if (!isPoster && !isAcceptedWorker && !isMessagingBidder) return false;
-
-            // Apply Database-level Archive/Delete filters
-            if (deletedChats.has(j.id)) return false;
-            if (!showArchived && archivedChats.has(j.id)) return false;
-            if (showArchived && !archivedChats.has(j.id)) return false;
-
-            return true;
+            return isPoster || isBidder;
         });
-    }, [jobs, user.id, showArchived, archivedChats, deletedChats, liveMessages, lastMessagesMap]);
+    }, [jobs, user.id]);
 
-    // 2. Final display list (after search/tabs and preview loading)
-    const allChatJobs = useMemo(() => {
-        // Filter out jobs with no messages after previews are loaded (unless it's an accepted bid)
-        return relevantJobs.filter(j => {
-            const hasPreview = lastMessagesMap[j.id] !== undefined;
-            const hasLiveMsg = liveMessages.some(m => m.jobId === j.id);
-            const hasAcceptedBid = j.bids.some(b => b.status === 'ACCEPTED');
-
-            // Show if it has messages OR has an accepted bid
-            return hasPreview || hasLiveMsg || hasAcceptedBid;
-        });
-    }, [relevantJobs, lastMessagesMap, liveMessages]);
-
-    // 3. Fetch last messages for previews (only once on open or when relevant jobs change)
+    // 2. Fetch last messages for previews (only once on open or when involved jobs change)
     useEffect(() => {
         if (!isOpen) return;
 
@@ -109,8 +80,8 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
             const map: Record<string, ChatMessage> = {};
 
             try {
-                // Parallel fetch for speed - use relevantJobs to avoid circular dependency
-                await Promise.all(relevantJobs.map(async (job) => {
+                // Parallel fetch for speed - use involvedJobs to find all possible messages
+                await Promise.all(involvedJobs.map(async (job) => {
                     try {
                         const { data, error } = await supabase
                             .from('chat_messages')
@@ -120,23 +91,18 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                             .limit(1)
                             .single();
 
-                        if (error && error.code !== 'PGRST116') { // Ignore 'no rows found' error
-                            console.warn(`Error fetching preview for job ${job.id}:`, error);
-                        }
-
                         if (data) {
                             map[job.id] = {
                                 id: data.id,
                                 jobId: data.job_id,
                                 senderId: data.sender_id,
                                 text: data.text,
-                                translatedText: data.translated_text,
                                 timestamp: new Date(data.created_at).getTime(),
                                 isDeleted: data.is_deleted
                             };
                         }
                     } catch (innerErr) {
-                        console.error(`Failed to fetch preview for job ${job.id}`, innerErr);
+                        // Ignore individual fetch errors
                     }
                 }));
             } catch (err) {
@@ -148,7 +114,32 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
         };
 
         fetchPreviews();
-    }, [isOpen, relevantJobs.length]); // Only depend on length to avoid re-fetching on every render
+    }, [isOpen, involvedJobs.length]); // Only depend on length to avoid re-fetching on every change
+
+    // 3. Filter the broad list down to "Relevant" chats (Accepted Bid OR Messages Exist)
+    const allChatJobs = useMemo(() => {
+        return involvedJobs.filter(j => {
+            const hasAcceptedBid = j.bids.some(b => b.status === 'ACCEPTED');
+            const hasMessages = lastMessagesMap[j.id] !== undefined || liveMessages.some(m => m.jobId === j.id);
+
+            // CORE RULE: Show if there's an accepted bid OR if messages exist
+            if (!hasAcceptedBid && !hasMessages) return false;
+
+            // User must be one of the participants
+            const isPoster = j.posterId === user.id;
+            const isAcceptedWorker = j.bids.some(b => b.status === 'ACCEPTED' && b.workerId === user.id);
+            const isMessagingBidder = j.bids.some(b => b.workerId === user.id) && hasMessages;
+
+            if (!isPoster && !isAcceptedWorker && !isMessagingBidder) return false;
+
+            // Apply Database-level Archive/Delete filters
+            if (deletedChats.has(j.id)) return false;
+            if (!showArchived && archivedChats.has(j.id)) return false;
+            if (showArchived && !archivedChats.has(j.id)) return false;
+
+            return true;
+        });
+    }, [involvedJobs, lastMessagesMap, liveMessages, showArchived, archivedChats, deletedChats, user.id]);
 
     // 4. Final Filter Logic (Tabs + Search)
     const filteredJobs = useMemo(() => {
