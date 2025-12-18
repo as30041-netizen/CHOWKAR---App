@@ -291,6 +291,7 @@ const AppContent: React.FC = () => {
       } else if (action === 'REJECT') {
         const updatedJob = { ...job, bids: job.bids.filter(b => b.id !== bidId) };
         await updateJob(updatedJob);
+        await addNotification(job.posterId, "Counter Declined", `${bid.workerName} declined your counter offer.`, "WARNING", jobId);
         showAlert(t.alertJobDeleted, 'info');
       } else if (action === 'COUNTER' && amount) {
         const updatedBid = { ...bid, amount, negotiationHistory: [...(bid.negotiationHistory || []), { amount, by: UserRole.WORKER, timestamp: Date.now() }] };
