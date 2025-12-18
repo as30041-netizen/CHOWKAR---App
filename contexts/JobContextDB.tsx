@@ -1,5 +1,5 @@
-import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
-import { Job } from '../types';
+import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback } from 'react';
+import { Job, Bid, JobStatus } from '../types';
 import { fetchJobs, createJob as createJobDB, updateJob as updateJobDB, deleteJob as deleteJobDB, createBid as createBidDB, updateBid as updateBidDB } from '../services/jobService';
 import { supabase } from '../lib/supabase';
 
@@ -18,6 +18,47 @@ interface JobContextType {
 
 const JobContext = createContext<JobContextType | undefined>(undefined);
 
+// --- Surgical Sync Helpers ---
+// Convert a DB job row to our App Job type (without bids, they are handled separately)
+const dbJobToAppJob = (dbJob: any): Omit<Job, 'bids'> => ({
+  id: dbJob.id,
+  posterId: dbJob.poster_id,
+  posterName: dbJob.poster_name,
+  posterPhone: dbJob.poster_phone,
+  posterPhoto: dbJob.poster_photo || undefined,
+  title: dbJob.title,
+  description: dbJob.description,
+  category: dbJob.category,
+  location: dbJob.location,
+  coordinates: dbJob.latitude && dbJob.longitude ? { lat: Number(dbJob.latitude), lng: Number(dbJob.longitude) } : undefined,
+  jobDate: dbJob.job_date,
+  duration: dbJob.duration,
+  budget: dbJob.budget,
+  status: dbJob.status as JobStatus,
+  acceptedBidId: dbJob.accepted_bid_id || undefined,
+  image: dbJob.image || undefined,
+  createdAt: new Date(dbJob.created_at).getTime(),
+});
+
+// Convert a DB bid row to our App Bid type
+const dbBidToAppBid = (dbBid: any): Bid => ({
+  id: dbBid.id,
+  jobId: dbBid.job_id,
+  workerId: dbBid.worker_id,
+  workerName: dbBid.worker_name,
+  workerPhone: dbBid.worker_phone,
+  workerRating: Number(dbBid.worker_rating),
+  workerLocation: dbBid.worker_location,
+  workerCoordinates: dbBid.worker_latitude && dbBid.worker_longitude ? { lat: Number(dbBid.worker_latitude), lng: Number(dbBid.worker_longitude) } : undefined,
+  workerPhoto: dbBid.worker_photo || undefined,
+  amount: dbBid.amount,
+  message: dbBid.message,
+  status: dbBid.status as 'PENDING' | 'ACCEPTED' | 'REJECTED',
+  negotiationHistory: dbBid.negotiation_history || [],
+  createdAt: new Date(dbBid.created_at).getTime(),
+  posterId: dbBid.poster_id,
+});
+
 export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,37 +69,80 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     refreshJobs();
   }, []);
 
-  // Real-time subscription for jobs and bids
-  useEffect(() => {
-    console.log('[Realtime] Subscribing to jobs and bids changes...');
+  // --- Surgical Sync Handlers ---
+  const handleJobChange = useCallback((eventType: string, payload: any) => {
+    console.log(`[Realtime] Surgical Job ${eventType}:`, payload.new?.id || payload.old?.id);
 
-    // Listen for ALL changes to jobs and bids
-    const channel = supabase.channel('job_system_sync')
+    if (eventType === 'INSERT' && payload.new) {
+      const newJob: Job = { ...dbJobToAppJob(payload.new), bids: [] };
+      setJobs(prev => [newJob, ...prev.filter(j => j.id !== newJob.id)]); // Prepend, avoid duplicates
+    } else if (eventType === 'UPDATE' && payload.new) {
+      setJobs(prev => prev.map(j => {
+        if (j.id === payload.new.id) {
+          return { ...dbJobToAppJob(payload.new), bids: j.bids }; // Keep existing bids
+        }
+        return j;
+      }));
+    } else if (eventType === 'DELETE' && payload.old) {
+      setJobs(prev => prev.filter(j => j.id !== payload.old.id));
+    }
+  }, []);
+
+  const handleBidChange = useCallback((eventType: string, payload: any) => {
+    console.log(`[Realtime] Surgical Bid ${eventType}:`, payload.new?.id || payload.old?.id);
+
+    if (eventType === 'INSERT' && payload.new) {
+      const newBid = dbBidToAppBid(payload.new);
+      setJobs(prev => prev.map(j => {
+        if (j.id === newBid.jobId) {
+          // Only add if not already present (avoid duplicates from optimistic UI)
+          const exists = j.bids.some(b => b.id === newBid.id);
+          return exists ? j : { ...j, bids: [...j.bids, newBid] };
+        }
+        return j;
+      }));
+    } else if (eventType === 'UPDATE' && payload.new) {
+      const updatedBid = dbBidToAppBid(payload.new);
+      setJobs(prev => prev.map(j => {
+        if (j.id === updatedBid.jobId) {
+          return { ...j, bids: j.bids.map(b => b.id === updatedBid.id ? updatedBid : b) };
+        }
+        return j;
+      }));
+    } else if (eventType === 'DELETE' && payload.old) {
+      setJobs(prev => prev.map(j => {
+        if (j.id === payload.old.job_id) {
+          return { ...j, bids: j.bids.filter(b => b.id !== payload.old.id) };
+        }
+        return j;
+      }));
+    }
+  }, []);
+
+  // Real-time subscription for jobs and bids (Surgical Sync)
+  useEffect(() => {
+    console.log('[Realtime] Subscribing to jobs and bids with Surgical Sync...');
+
+    const channel = supabase.channel('job_system_surgical_sync')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'jobs' },
-        (payload) => {
-          console.log('[Realtime] Job change detected:', payload.eventType);
-          refreshJobs();
-        }
+        (payload) => handleJobChange(payload.eventType, payload)
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'bids' },
-        (payload) => {
-          console.log('[Realtime] Bid change detected:', payload.eventType, payload.new?.id);
-          refreshJobs();
-        }
+        (payload) => handleBidChange(payload.eventType, payload)
       )
       .subscribe((status) => {
-        console.log(`[Realtime] Job system subscription status: ${status}`);
+        console.log(`[Realtime] Surgical Sync subscription status: ${status}`);
       });
 
     return () => {
-      console.log('[Realtime] Cleaning up job system subscription');
+      console.log('[Realtime] Cleaning up Surgical Sync subscription');
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [handleJobChange, handleBidChange]);
 
   const refreshJobs = async () => {
     try {
@@ -188,7 +272,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const { success, error } = await updateBidDB(bid);
 
       if (!success || error) {
-        loadJobs();
+        refreshJobs();
         throw new Error(error || 'Failed to update bid');
       }
     } catch (err) {
