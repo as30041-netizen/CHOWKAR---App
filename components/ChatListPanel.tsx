@@ -12,7 +12,7 @@ interface ChatListPanelProps {
 }
 
 export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, onChatSelect }) => {
-    const { user, t, language, messages: liveMessages, notifications } = useUser();
+    const { user, t, language, messages: liveMessages, notifications, setNotifications } = useUser();
     const { jobs } = useJobs();
     const [lastMessagesMap, setLastMessagesMap] = useState<Record<string, ChatMessage>>({});
     const [isLoadingPreviews, setIsLoadingPreviews] = useState(true);
@@ -24,6 +24,42 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
     const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
     const [archivedChats, setArchivedChats] = useState<Set<string>>(new Set());
     const [deletedChats, setDeletedChats] = useState<Set<string>>(new Set());
+
+    // Load archived/deleted chats from database on mount
+    useEffect(() => {
+        const loadChatStates = async () => {
+            if (!user.id) return;
+            try {
+                const { data, error } = await supabase
+                    .from('chats')
+                    .select('job_id, user1_id, user2_id, user1_archived, user2_archived, user1_deleted_until, user2_deleted_until')
+                    .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`);
+
+                if (error) {
+                    console.warn('Could not load chat states:', error);
+                    return;
+                }
+
+                const archived = new Set<string>();
+                const deleted = new Set<string>();
+
+                (data || []).forEach(chat => {
+                    const isUser1 = chat.user1_id === user.id;
+                    if (isUser1 && chat.user1_archived) archived.add(chat.job_id);
+                    if (!isUser1 && chat.user2_archived) archived.add(chat.job_id);
+                    if (isUser1 && chat.user1_deleted_until) deleted.add(chat.job_id);
+                    if (!isUser1 && chat.user2_deleted_until) deleted.add(chat.job_id);
+                });
+
+                setArchivedChats(archived);
+                setDeletedChats(deleted);
+            } catch (err) {
+                console.error('Error loading chat states:', err);
+            }
+        };
+
+        loadChatStates();
+    }, [user.id]);
 
     // 1. Get all potentially relevant jobs (before message check)
     const relevantJobs = useMemo(() => {
@@ -179,7 +215,17 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
 
         try {
             await supabase.rpc('delete_chat', { p_job_id: jobId });
+
+            // Also delete related notifications
+            await supabase
+                .from('notifications')
+                .delete()
+                .eq('user_id', user.id)
+                .eq('related_job_id', jobId);
+
+            // Update local state
             setDeletedChats(prev => new Set(prev).add(jobId));
+            setNotifications(prev => prev.filter(n => n.relatedJobId !== jobId));
             setActiveMenuId(null);
         } catch (error) {
             console.error('Error deleting chat:', error);
