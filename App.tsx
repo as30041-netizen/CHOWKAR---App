@@ -234,28 +234,39 @@ const AppContent: React.FC = () => {
 
   const handleCompleteJob = async () => {
     if (!chatOpen.job) return;
+    const currentJob = chatOpen.job;
+
     try {
-      const updatedJob = { ...chatOpen.job, status: JobStatus.COMPLETED };
+      console.log('[App] Marking job as completed:', currentJob.id);
+      const updatedJob = { ...currentJob, status: JobStatus.COMPLETED };
+
+      // Update DB and wait for response
       await updateJob(updatedJob);
 
-      // Prompt for review
-      const acceptedBid = chatOpen.job.bids.find(b => b.id === chatOpen.job?.acceptedBidId);
+      // Prompt for review if there's an accepted worker
+      const acceptedBid = currentJob.bids.find(b => b.id === currentJob.acceptedBidId);
       if (acceptedBid) {
         setReviewModalData({
           isOpen: true,
           revieweeId: acceptedBid.workerId,
           revieweeName: acceptedBid.workerName,
-          jobId: chatOpen.job.id
+          jobId: currentJob.id
         });
-        await addNotification(acceptedBid.workerId, t.notifJobCompleted, t.jobCompletedAlert, 'SUCCESS', chatOpen.job.id);
+
+        try {
+          await addNotification(acceptedBid.workerId, t.notifJobCompleted, t.jobCompletedAlert, 'SUCCESS', currentJob.id);
+        } catch (notifErr) {
+          console.warn('[App] Failed to send completion notification:', notifErr);
+        }
       }
 
       setChatOpen({ isOpen: false, job: null });
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), 3000);
       showAlert(t.jobCompletedAlert, 'success');
-    } catch {
-      showAlert('Failed to complete job', 'error');
+    } catch (err: any) {
+      console.error('[App] Error in handleCompleteJob:', err);
+      showAlert(`Failed to complete job: ${err.message || 'Unknown error'}`, 'error');
     }
   };
 
