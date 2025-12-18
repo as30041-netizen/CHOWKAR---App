@@ -99,6 +99,7 @@ export interface ChatMessage {
   text: string;
   timestamp: number;
   translatedText?: string;
+  isDeleted?: boolean;
 }
 
 export interface Transaction {

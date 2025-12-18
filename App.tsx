@@ -162,6 +162,10 @@ const AppContent: React.FC = () => {
     setShowChatList(false);
   };
 
+  const handleMessageUpdate = (updatedMsg: ChatMessage) => {
+    setMessages(prev => prev.map(m => m.id === updatedMsg.id ? updatedMsg : m));
+  };
+
   const handleSendMessage = async (text: string) => {
     if (!chatOpen.job) return;
 
@@ -531,6 +535,7 @@ const AppContent: React.FC = () => {
           onTranslateMessage={handleTranslateMessage}
           onDeleteMessage={handleDeleteMessage}
           onIncomingMessage={(msg) => setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])}
+          onMessageUpdate={handleMessageUpdate}
           isPremium={user.isPremium}
           remainingTries={user.isPremium ? 999 : (2 - (user.aiUsageCount || 0))}
         />

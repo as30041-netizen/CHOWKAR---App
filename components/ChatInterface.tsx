@@ -19,6 +19,7 @@ interface ChatInterfaceProps {
   onViewJobDetails?: () => void; // New prop optional
   isPremium?: boolean;
   remainingTries?: number;
+  onMessageUpdate?: (msg: ChatMessage) => void;
 }
 
 const QUICK_REPLIES_WORKER = [
@@ -51,7 +52,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   onDeleteMessage,
   onViewJobDetails,
   isPremium,
-  remainingTries
+  remainingTries,
+  onMessageUpdate
 }) => {
   // Derived Constants
   const isPoster = job.posterId === currentUser.id;
@@ -127,6 +129,29 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
           typingTimeoutRef.current = setTimeout(() => setIsOtherTyping(false), 3000);
           scrollToBottom();
+        }
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'chat_messages',
+        filter: `job_id=eq.${job.id}`
+      }, (payload) => {
+        // Handle deletion or edit
+        const newMsg = payload.new as any;
+        if (newMsg && onMessageUpdate) {
+          // Need to map DB fields to ChatMessage type if they differ, or rely on consistent naming
+          // The DB has created_at etc, standard mapping:
+          const updated: ChatMessage = {
+            id: newMsg.id,
+            jobId: newMsg.job_id,
+            senderId: newMsg.sender_id,
+            text: newMsg.is_deleted ? 'This message was deleted' : newMsg.text,
+            timestamp: new Date(newMsg.created_at).getTime(),
+            translatedText: newMsg.translated_text,
+            isDeleted: newMsg.is_deleted
+          };
+          onMessageUpdate(updated);
         }
       })
       .subscribe(async (status) => {

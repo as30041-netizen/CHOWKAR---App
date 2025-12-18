@@ -140,7 +140,7 @@ export const Home: React.FC<HomeProps> = ({
                         if (j.status !== JobStatus.OPEN && !myBid) return false;
                         if (searchQuery && !j.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
                         if (selectedCategory !== 'All' && j.category !== selectedCategory) return false;
-                        if (filterLocation && !j.location.toLowerCase().includes(filterLocation.toLowerCase())) return false;
+                        if (filterLocation && !(j.location || '').toLowerCase().includes(filterLocation.toLowerCase())) return false;
                         if (filterMinBudget && j.budget < parseInt(filterMinBudget)) return false;
                         if (filterMaxDistance && j.distance !== undefined && j.distance > parseInt(filterMaxDistance)) return false;
                         return true;

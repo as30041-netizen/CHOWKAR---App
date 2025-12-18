@@ -452,13 +452,16 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 // Insert notification into DB (which will trigger the other listener to update UI)
                 const preview = newMsg.text.length > 50 ? newMsg.text.substring(0, 50) + '...' : newMsg.text;
 
-                await addNotification(
-                  user.id,
-                  "New Message",
-                  preview,
-                  "INFO",
-                  newMsg.jobId
-                );
+                // REMOVED: Backend Trigger 'on_chat_message_created' now handles this reliably (even if offline).
+                // await addNotification(
+                //   user.id,
+                //   "New Message",
+                //   preview,
+                //   "INFO",
+                //   newMsg.jobId
+                // );
+
+                // Also show a local toast for immediate "wow" factor
 
                 // Also show a local toast for immediate "wow" factor
                 showAlert(`New message: ${preview}`, 'info');

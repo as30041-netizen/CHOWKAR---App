@@ -54,7 +54,8 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                         senderId: data.sender_id,
                         text: data.text,
                         translatedText: data.translated_text,
-                        timestamp: new Date(data.created_at).getTime()
+                        timestamp: new Date(data.created_at).getTime(),
+                        isDeleted: data.is_deleted
                     };
                 }
             }));
@@ -238,7 +239,7 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                                             <div className="flex items-center justify-between">
                                                 <p className={`text-sm truncate ${lastMsg ? 'text-gray-600' : 'text-emerald-600 italic'}`}>
                                                     {lastMsg
-                                                        ? (lastMsg.translatedText || lastMsg.text)
+                                                        ? (lastMsg.isDeleted ? <span className="italic text-gray-400">This message was deleted</span> : (lastMsg.translatedText || lastMsg.text))
                                                         : 'Start the conversation...'
                                                     }
                                                 </p>
