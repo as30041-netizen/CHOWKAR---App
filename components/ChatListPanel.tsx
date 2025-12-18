@@ -61,54 +61,44 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
         loadChatStates();
     }, [user.id]);
 
-    // 1. Get all potentially relevant jobs (before message check)
+    // 1. Get potentially relevant jobs (no message-state dependency for core list, but uses preview map)
     const relevantJobs = useMemo(() => {
         return jobs.filter(j => {
-            // Basic status check
-            const isValidStatus = j.status === 'IN_PROGRESS' || j.status === 'COMPLETED' || j.status === 'OPEN';
-            if (!isValidStatus) return false;
-
-            // User must be involved
             const isPoster = j.posterId === user.id;
             const isBidder = j.bids.some(b => b.workerId === user.id);
-            if (!isPoster && !isBidder) return false;
-
-            // Must have accepted bid OR be IN_PROGRESS/COMPLETED
             const hasAcceptedBid = j.bids.some(b => b.status === 'ACCEPTED');
-            const isActive = j.status === 'IN_PROGRESS' || j.status === 'COMPLETED';
+            const hasMessages = lastMessagesMap[j.id] !== undefined || liveMessages.some(m => m.jobId === j.id);
 
-            // Only require accepted bid for OPEN jobs
-            if (j.status === 'OPEN' && !hasAcceptedBid) {
-                // Check if there are live messages for this job
-                const hasLiveMessages = liveMessages.some(m => m.jobId === j.id);
-                if (!hasLiveMessages) return false;
-            }
+            // CORE RULE: Show if there's an accepted bid OR if messages exist
+            if (!hasAcceptedBid && !hasMessages) return false;
 
-            // Filter archived chats unless "Show Archived" is enabled
+            // User must be one of the participants
+            const isAcceptedWorker = j.bids.some(b => b.status === 'ACCEPTED' && b.workerId === user.id);
+            const isMessagingBidder = isBidder && hasMessages;
+
+            if (!isPoster && !isAcceptedWorker && !isMessagingBidder) return false;
+
+            // Apply Database-level Archive/Delete filters
+            if (deletedChats.has(j.id)) return false;
             if (!showArchived && archivedChats.has(j.id)) return false;
             if (showArchived && !archivedChats.has(j.id)) return false;
 
-            // Filter deleted chats completely
-            if (deletedChats.has(j.id)) return false;
-
             return true;
         });
-    }, [jobs, user.id, showArchived, archivedChats, deletedChats, liveMessages]);
+    }, [jobs, user.id, showArchived, archivedChats, deletedChats, liveMessages, lastMessagesMap]);
 
-    // 2. Final filtered jobs (after previews loaded)
+    // 2. Final display list (after search/tabs and preview loading)
     const allChatJobs = useMemo(() => {
-        // Filter out jobs with no messages after previews are loaded
-        if (isLoadingPreviews) return relevantJobs;
-
+        // Filter out jobs with no messages after previews are loaded (unless it's an accepted bid)
         return relevantJobs.filter(j => {
             const hasPreview = lastMessagesMap[j.id] !== undefined;
             const hasLiveMsg = liveMessages.some(m => m.jobId === j.id);
             const hasAcceptedBid = j.bids.some(b => b.status === 'ACCEPTED');
 
-            // Show if has messages OR has accepted bid
+            // Show if it has messages OR has an accepted bid
             return hasPreview || hasLiveMsg || hasAcceptedBid;
         });
-    }, [relevantJobs, lastMessagesMap, liveMessages, isLoadingPreviews]);
+    }, [relevantJobs, lastMessagesMap, liveMessages]);
 
     // 3. Fetch last messages for previews (only once on open or when relevant jobs change)
     useEffect(() => {
@@ -160,17 +150,31 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
         fetchPreviews();
     }, [isOpen, relevantJobs.length]); // Only depend on length to avoid re-fetching on every render
 
-    // 3. Filter Logic
+    // 4. Final Filter Logic (Tabs + Search)
     const filteredJobs = useMemo(() => {
         return allChatJobs.filter(job => {
             // Role Filter
             if (activeTab === 'AS_POSTER' && job.posterId !== user.id) return false;
             if (activeTab === 'AS_WORKER' && job.posterId === user.id) return false;
 
-            // Determine display name for search
-            const otherPersonName = job.posterId === user.id
-                ? (job.bids.find(b => b.status === 'ACCEPTED')?.workerName || 'Worker')
-                : job.posterName;
+            // Determine display name for search - sync with UI logic
+            const isPoster = job.posterId === user.id;
+            const acceptedBid = job.bids.find(b => b.status === 'ACCEPTED');
+            const lastMsg = lastMessagesMap[job.id] || liveMessages.find(m => m.jobId === job.id);
+
+            let partnerId: string | undefined;
+            if (isPoster) {
+                if (acceptedBid) {
+                    partnerId = acceptedBid.workerId;
+                } else if (lastMsg) {
+                    partnerId = lastMsg.senderId === user.id ? lastMsg.receiverId : lastMsg.senderId;
+                }
+            }
+
+            const bidderDetail = partnerId ? job.bids.find(b => b.workerId === partnerId) : null;
+            const otherPersonName = isPoster
+                ? (acceptedBid?.workerName || bidderDetail?.workerName || 'Worker')
+                : (job.posterName || 'Poster');
 
             // Search Filter
             if (searchTerm) {
@@ -181,7 +185,7 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
 
             return true;
         });
-    }, [allChatJobs, activeTab, searchTerm, user.id]);
+    }, [allChatJobs, activeTab, searchTerm, user.id, lastMessagesMap, liveMessages]);
 
     // Archive/Delete Helper Functions
     const handleArchiveChat = async (jobId: string) => {
@@ -326,20 +330,33 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                                 lastMsg = liveLastMsg || fetchedLastMsg;
                             }
 
-                            // Determine Other Person Details
+                            // Determine Other Person Details using specification logic
                             const isPoster = job.posterId === user.id;
                             const acceptedBid = job.bids.find(b => b.status === 'ACCEPTED');
+
+                            // If poster, try to find who we are chatting with
+                            let partnerId: string | undefined;
+                            if (isPoster) {
+                                if (acceptedBid) {
+                                    partnerId = acceptedBid.workerId;
+                                } else if (lastMsg) {
+                                    partnerId = lastMsg.senderId === user.id ? lastMsg.receiverId : lastMsg.senderId;
+                                }
+                            }
+
+                            // Find the partner's name from bids or job details
+                            const bidderDetail = partnerId ? job.bids.find(b => b.workerId === partnerId) : null;
+
                             const otherPerson = isPoster
-                                ? (acceptedBid?.workerName || 'Worker')
+                                ? (acceptedBid?.workerName || bidderDetail?.workerName || 'Worker')
                                 : job.posterName;
 
                             const otherPersonPhoto = isPoster
-                                ? acceptedBid?.workerPhoto
+                                ? (acceptedBid?.workerPhoto || bidderDetail?.workerPhoto)
                                 : job.posterPhoto;
 
-                            const otherPersonPhone = isPoster
-                                ? acceptedBid?.workerPhone
-                                : job.posterPhone;
+                            const roleLabel = isPoster ? 'Hiring' : 'Job';
+                            const roleClass = isPoster ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600';
 
                             // Formatter for time
                             const timeDisplay = lastMsg
@@ -414,8 +431,8 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                                                 </div>
 
                                                 <div className="flex items-center gap-1.5 mb-1">
-                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${isPoster ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'}`}>
-                                                        {isPoster ? 'Hiring' : 'Job'}
+                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${roleClass}`}>
+                                                        {roleLabel}
                                                     </span>
                                                     <p className="text-xs font-medium text-gray-500 truncate">{job.title}</p>
                                                 </div>

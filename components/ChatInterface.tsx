@@ -40,6 +40,8 @@ const QUICK_REPLIES_POSTER = [
 
 // ... CONSTANTS ...
 
+import { useUser } from '../contexts/UserContextDB';
+
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   job,
   currentUser,
@@ -55,6 +57,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   remainingTries,
   onMessageUpdate
 }) => {
+  const { markNotificationsAsReadForJob } = useUser();
   // Derived Constants
   const isPoster = job.posterId === currentUser.id;
   const acceptedBid = job.bids.find(b => b.id === job.acceptedBidId);
@@ -110,19 +113,14 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   useEffect(() => {
     const markAsRead = async () => {
       try {
-        // Mark messages as read
+        // 1. DB: Mark messages as read via RPC
         await supabase.rpc('mark_messages_read', {
           p_job_id: job.id,
           p_user_id: currentUser.id
         });
 
-        // Mark related notifications as read
-        await supabase
-          .from('notifications')
-          .update({ read: true })
-          .eq('user_id', currentUser.id)
-          .eq('related_job_id', job.id)
-          .eq('read', false);
+        // 2. Local + DB: Mark notifications as read using context helper
+        await markNotificationsAsReadForJob(job.id);
 
         console.log('[Chat] Marked messages and notifications as read for job:', job.id);
       } catch (error) {
@@ -133,7 +131,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     if (job.id && currentUser.id) {
       markAsRead();
     }
-  }, [job.id, currentUser.id]);
+  }, [job.id, currentUser.id, markNotificationsAsReadForJob]);
 
   useEffect(() => {
     const newChannel = supabase.channel(`chat_room:${job.id}`, {
@@ -505,9 +503,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                             <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                             {isMe && (
                               msg.read ? (
-                                <CheckCheck size={14} className="opacity-80" title="Read" />
+                                <CheckCheck size={14} className="opacity-80" />
                               ) : (
-                                <Check size={14} className="opacity-80" title="Delivered" />
+                                <Check size={14} className="opacity-80" />
                               )
                             )}
                           </div>
