@@ -348,6 +348,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     if (!isLoggedIn || !user.id) return;
 
+    console.log('[Realtime] Setting up notification subscription for user:', user.id);
     const subscription = supabase
       .channel('notifications')
       .on(
@@ -359,6 +360,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           filter: `user_id=eq.${user.id}`
         },
         (payload) => {
+          console.log('[Realtime] Notification INSERT received:', payload.new);
           const newNotif: Notification = {
             id: payload.new.id,
             userId: payload.new.user_id,
@@ -369,6 +371,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             timestamp: new Date(payload.new.created_at).getTime(),
             relatedJobId: payload.new.related_job_id || undefined
           };
+          console.log('[Realtime] Adding notification to state:', newNotif);
           setNotifications(prev => [newNotif, ...prev]);
         }
       )
