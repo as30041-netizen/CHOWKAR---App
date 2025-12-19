@@ -146,11 +146,16 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                         // Reset form
                         setNewJobTitle(''); setNewJobDesc(''); setNewJobBudget(''); setNewJobDate(''); setNewJobDuration(''); setNewJobCoords(undefined); setNewJobImage(undefined);
                         onSuccess();
+                        return; // IMPORTANT: Stop here
                     } else {
-                        showAlert(walletError || 'Wallet deduction failed', 'error');
+                        // Wallet deduction failed - show Razorpay instead
+                        console.log('Wallet deduction failed, falling back to Razorpay:', walletError);
+                        setPendingJob(newJob);
+                        setShowPaymentModal(true);
+                        return; // IMPORTANT: Stop here
                     }
                 } else {
-                    // Show payment modal for Razorpay
+                    // Wallet insufficient - show payment modal for Razorpay
                     setPendingJob(newJob);
                     setShowPaymentModal(true);
                 }
