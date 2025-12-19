@@ -119,11 +119,25 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, []);
 
-  // Real-time subscription for jobs and bids (Surgical Sync)
+  // Real-time subscription for jobs and bids (HYBRID: Broadcast + postgres_changes)
   useEffect(() => {
-    console.log('[Realtime] Subscribing to jobs and bids with Surgical Sync...');
+    console.log('[Realtime] Subscribing to jobs and bids with HYBRID Sync...');
 
-    const channel = supabase.channel('job_system_surgical_sync')
+    const channel = supabase.channel('job_system_hybrid_sync')
+      // Broadcast listener for instant bid updates (bypasses RLS)
+      .on('broadcast', { event: 'bid_updated' }, (payload) => {
+        console.log('[Realtime] Broadcast bid_updated received:', payload);
+        if (payload.payload) {
+          handleBidChange('UPDATE', { new: payload.payload, eventType: 'UPDATE' });
+        }
+      })
+      .on('broadcast', { event: 'bid_inserted' }, (payload) => {
+        console.log('[Realtime] Broadcast bid_inserted received:', payload);
+        if (payload.payload) {
+          handleBidChange('INSERT', { new: payload.payload, eventType: 'INSERT' });
+        }
+      })
+      // postgres_changes as backup (RLS-dependent)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'jobs' },
@@ -135,11 +149,11 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         (payload) => handleBidChange(payload.eventType, payload)
       )
       .subscribe((status) => {
-        console.log(`[Realtime] Surgical Sync subscription status: ${status}`);
+        console.log(`[Realtime] Hybrid Sync subscription status: ${status}`);
       });
 
     return () => {
-      console.log('[Realtime] Cleaning up Surgical Sync subscription');
+      console.log('[Realtime] Cleaning up Hybrid Sync subscription');
       supabase.removeChannel(channel);
     };
   }, [handleJobChange, handleBidChange]);
@@ -274,6 +288,40 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (!success || error) {
         refreshJobs();
         throw new Error(error || 'Failed to update bid');
+      }
+
+      // BROADCAST bid update for instant sync to all clients
+      try {
+        const broadcastPayload = {
+          id: bid.id,
+          job_id: bid.jobId,
+          worker_id: bid.workerId,
+          worker_name: bid.workerName,
+          worker_phone: bid.workerPhone,
+          worker_rating: bid.workerRating,
+          worker_location: bid.workerLocation,
+          worker_latitude: bid.workerCoordinates?.lat,
+          worker_longitude: bid.workerCoordinates?.lng,
+          worker_photo: bid.workerPhoto,
+          amount: bid.amount,
+          message: bid.message,
+          status: bid.status,
+          negotiation_history: bid.negotiationHistory,
+          created_at: new Date(bid.createdAt).toISOString(),
+          poster_id: bid.posterId
+        };
+
+        const channel = supabase.channel('job_system_hybrid_sync');
+        await channel.subscribe();
+        await channel.send({
+          type: 'broadcast',
+          event: 'bid_updated',
+          payload: broadcastPayload
+        });
+        console.log('[Bid] Broadcast sent for bid update:', bid.id);
+        // Don't remove channel - it's the shared sync channel
+      } catch (broadcastErr) {
+        console.warn('[Bid] Broadcast failed (DB update succeeded):', broadcastErr);
       }
     } catch (err) {
       console.error('Error updating bid:', err);
