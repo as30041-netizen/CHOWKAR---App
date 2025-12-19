@@ -127,7 +127,6 @@ export const Home: React.FC<HomeProps> = ({
                         <input
                             style={{ colorScheme: 'light', backgroundColor: '#ffffff', color: '#000000', caretColor: '#000000' }}
                             type="text"
-                            type="text"
                             placeholder={role === UserRole.WORKER ? t.searchWork : (language === "en" ? "Search my jobs..." : "मेरे जॉब्स खोजें...")}
                             className="w-full pl-10 pr-10 py-2.5 appearance-none bg-white text-black border border-emerald-100 rounded-xl text-sm outline-none shadow-sm placeholder-gray-400"
                             value={searchQuery}
@@ -209,47 +208,47 @@ export const Home: React.FC<HomeProps> = ({
             {/* Job List */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {jobs.map(j => ({ ...j, distance: (user.coordinates && j.coordinates) ? calculateDistance(user.coordinates.lat, user.coordinates.lng, j.coordinates.lat, j.coordinates.lng) : undefined }))
-                }).filter(j => {
+                    .filter(j => {
                         // POSTER MODE: Show My Jobs (Filtered by Dashboard Tab)
                         if (role === UserRole.POSTER) {
                             if (j.posterId !== user.id) return false;
-                if (dashboardTab !== 'ALL' && j.status !== dashboardTab) return false;
-                return true;
+                            if (dashboardTab !== 'ALL' && j.status !== dashboardTab) return false;
+                            return true;
                         }
 
-                // WORKER MODE: Show Nearby Jobs / Applications
-                const isMyJob = j.posterId === user.id;
+                        // WORKER MODE: Show Nearby Jobs / Applications
+                        const isMyJob = j.posterId === user.id;
                         const myBid = j.bids.find(b => b.workerId === user.id);
 
-                if (isMyJob) return false; // Don't show own jobs in finder
-                if (showMyBidsOnly && !myBid) return false;
-                if (j.status !== JobStatus.OPEN && !myBid) return false;
+                        if (isMyJob) return false; // Don't show own jobs in finder
+                        if (showMyBidsOnly && !myBid) return false;
+                        if (j.status !== JobStatus.OPEN && !myBid) return false;
 
-                // Apply Filters
-                if (searchQuery && !j.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-                if (selectedCategory !== 'All' && j.category !== selectedCategory) return false;
-                if (filterLocation && !(j.location || '').toLowerCase().includes(filterLocation.toLowerCase())) return false;
-                if (filterMinBudget && j.budget < parseInt(filterMinBudget)) return false;
+                        // Apply Filters
+                        if (searchQuery && !j.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+                        if (selectedCategory !== 'All' && j.category !== selectedCategory) return false;
+                        if (filterLocation && !(j.location || '').toLowerCase().includes(filterLocation.toLowerCase())) return false;
+                        if (filterMinBudget && j.budget < parseInt(filterMinBudget)) return false;
                         if (filterMaxDistance && j.distance !== undefined && j.distance > parseInt(filterMaxDistance)) return false;
 
-                return true;
+                        return true;
                     }).map(job => (
-                <div key={job.id} className="animate-fade-in-up h-full">
-                    <JobCard job={job} currentUserId={user.id} userRole={role} distance={job.distance} language={language}
-                        hasUnreadBids={notifications.some(n =>
-                            n.relatedJobId === job.id &&
-                            !n.read &&
-                            n.title === 'New Bid'
-                        )}
-                        onBid={(id) => onBid(id)}
-                        onViewBids={(j) => onViewBids(j)}
-                        onChat={onChat}
-                        onEdit={onEdit}
-                        onClick={() => onClick(job)}
-                        onReplyToCounter={onReplyToCounter}
-                        onWithdrawBid={onWithdrawBid}
-                    />
-                </div>
+                        <div key={job.id} className="animate-fade-in-up h-full">
+                            <JobCard job={job} currentUserId={user.id} userRole={role} distance={job.distance} language={language}
+                                hasUnreadBids={notifications.some(n =>
+                                    n.relatedJobId === job.id &&
+                                    !n.read &&
+                                    n.title === 'New Bid'
+                                )}
+                                onBid={(id) => onBid(id)}
+                                onViewBids={(j) => onViewBids(j)}
+                                onChat={onChat}
+                                onEdit={onEdit}
+                                onClick={() => onClick(job)}
+                                onReplyToCounter={onReplyToCounter}
+                                onWithdrawBid={onWithdrawBid}
+                            />
+                        </div>
                     ))}
             </div>
 
