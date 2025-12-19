@@ -4,7 +4,7 @@ import { UserProvider, useUser } from './contexts/UserContextDB';
 import { JobProvider, useJobs } from './contexts/JobContextDB';
 import { ChatMessage, Coordinates, Job, JobStatus, UserRole } from './types';
 import { Confetti } from './components/Confetti';
-import { POSTER_FEE } from './constants';
+import { POSTER_FEE, WORKER_COMMISSION_RATE } from './constants';
 import { ChatInterface } from './components/ChatInterface';
 import { ReviewModal } from './components/ReviewModal';
 import {
@@ -34,7 +34,7 @@ import { LandingPage } from './components/LandingPage';
 // Services
 import { signInWithGoogle, completeProfile } from './services/authService';
 import { useDeepLinkHandler } from './hooks/useDeepLinkHandler';
-import { cancelJob } from './services/jobService';
+import { cancelJob, chargeWorkerCommission } from './services/jobService';
 
 const AppContent: React.FC = () => {
   const {
@@ -174,10 +174,28 @@ const AppContent: React.FC = () => {
   const handleLogout = async () => { await logout(); };
 
   const handleChatOpen = (job: Job, receiverId?: string) => {
+    // VALIDATE: Chat only for IN_PROGRESS jobs
+    if (job.status !== JobStatus.IN_PROGRESS) {
+      showAlert(language === 'en'
+        ? 'Chat is only available after job is accepted'
+        : 'चैट केवल जॉब स्वीकार होने के बाद उपलब्ध है', 'info');
+      return;
+    }
+
+    // VALIDATE: Only poster or accepted worker can chat
+    const acceptedBid = job.bids.find(b => b.id === job.acceptedBidId);
+    const isParticipant = user.id === job.posterId || user.id === acceptedBid?.workerId;
+    if (!isParticipant) {
+      showAlert(language === 'en'
+        ? 'You are not a participant in this job'
+        : 'आप इस जॉब में भागीदार नहीं हैं', 'error');
+      return;
+    }
+
     setChatOpen({ isOpen: true, job, receiverId });
     setActiveChatId(job.id);
-    setActiveJobId(job.id); // Track active job for notification suppression
-    clearNotificationsForJob(job.id); // Remove all notifications for this job
+    setActiveJobId(job.id);
+    clearNotificationsForJob(job.id);
     setShowChatList(false);
   };
 
@@ -303,21 +321,53 @@ const AppContent: React.FC = () => {
     const job = jobs.find(j => j.id === jobId); if (!job) return;
     try {
       const bid = job.bids.find(b => b.id === bidId); if (!bid) return;
+
       if (action === 'ACCEPT') {
-        const updatedBid = { ...bid, negotiationHistory: [...(bid.negotiationHistory || []), { amount: bid.amount, by: UserRole.WORKER, timestamp: Date.now(), message: "Accepted Counter Offer" }] };
-        await updateBid(updatedBid);
-        await addNotification(job.posterId, "Counter Accepted", `"${job.title}": ${bid.workerName} accepted ₹${bid.amount}!`, "SUCCESS", jobId);
+        // WORKER ACCEPTS COUNTER = JOB FINALIZED
+        // 1. Call accept_bid RPC to finalize the job
+        const { error: acceptError } = await supabase.rpc('accept_bid', {
+          p_job_id: jobId,
+          p_bid_id: bidId,
+          p_poster_id: job.posterId,
+          p_worker_id: bid.workerId,
+          p_amount: bid.amount,
+          p_poster_fee: POSTER_FEE
+        });
+        if (acceptError) throw acceptError;
+
+        // 2. Charge Worker Commission
+        const { error: commissionError } = await chargeWorkerCommission(bid.workerId, jobId, bid.amount);
+        if (commissionError) {
+          console.warn('[Accept] Worker commission charge failed:', commissionError);
+        }
+
+        // 3. Notify Poster
+        const commission = Math.ceil(bid.amount * WORKER_COMMISSION_RATE);
+        await addNotification(
+          job.posterId,
+          "Job Accepted",
+          `"${job.title}": ${bid.workerName} accepted ₹${bid.amount}. Chat is now unlocked!`,
+          "SUCCESS",
+          jobId
+        );
+
+        showAlert(t.contactUnlocked || 'Job accepted! Chat unlocked.', 'success');
+
       } else if (action === 'REJECT') {
         const updatedJob = { ...job, bids: job.bids.filter(b => b.id !== bidId) };
         await updateJob(updatedJob);
         await addNotification(job.posterId, "Counter Declined", `"${job.title}": ${bid.workerName} declined your offer.`, "WARNING", jobId);
         showAlert(t.alertJobDeleted, 'info');
+
       } else if (action === 'COUNTER' && amount) {
         const updatedBid = { ...bid, amount, negotiationHistory: [...(bid.negotiationHistory || []), { amount, by: UserRole.WORKER, timestamp: Date.now() }] };
         await updateBid(updatedBid);
         await addNotification(job.posterId, "Counter Offer", `"${job.title}": ${bid.workerName} countered ₹${amount}`, "INFO", jobId);
       }
-    } catch { showAlert('Failed to process counter.', 'error'); }
+    } catch (err: any) {
+      console.error('[WorkerReply] Error:', err);
+      showAlert(`Failed: ${err.message || 'Unknown error'}`, 'error');
+    }
   };
 
   const handleWithdrawBid = async (jobId: string, bidId: string) => {
