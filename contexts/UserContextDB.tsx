@@ -283,82 +283,71 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     try {
-      // 1. Fetch latest profile data directly (skip auth check for speed)
-      // We already have the user.id from the optimistic state
-      const { user: refreshedUser, error: profileError } = await getUserProfile(user.id);
+      console.log('[Data] Fetching user data in parallel...');
+
+      // OPTIMIZATION: Fetch all user data in parallel instead of sequentially
+      const [profileResult, transactionsResult, notificationsResult] = await Promise.all([
+        getUserProfile(user.id),
+        supabase.from('transactions').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
+        supabase.from('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50)
+      ]);
+
+      // Process profile
+      const { user: refreshedUser, error: profileError } = profileResult;
       if (!profileError && refreshedUser) {
         setUser(refreshedUser);
       }
 
-      // Fetch transactions
-      console.log('[Data] Fetching transactions...');
-      const { data: transactionsData, error: transError } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
+      // Process transactions
+      const { data: transactionsData, error: transError } = transactionsResult;
       if (transError) {
         console.error('[Data] Error fetching transactions:', transError);
-        throw transError;
+      } else {
+        const txs: Transaction[] = transactionsData?.map(tx => ({
+          id: tx.id,
+          userId: tx.user_id,
+          amount: tx.amount,
+          type: tx.type as 'CREDIT' | 'DEBIT',
+          description: tx.description,
+          timestamp: new Date(tx.created_at).getTime()
+        })) || [];
+        setTransactions(txs);
+        // console.log('[Data] Transactions loaded:', txs.length);
       }
 
-      const txs: Transaction[] = transactionsData?.map(tx => ({
-        id: tx.id,
-        userId: tx.user_id,
-        amount: tx.amount,
-        type: tx.type as 'CREDIT' | 'DEBIT',
-        description: tx.description,
-        timestamp: new Date(tx.created_at).getTime()
-      })) || [];
-
-      setTransactions(txs);
-      console.log('[Data] Transactions loaded:', txs.length);
-
-      // Fetch notifications
-      console.log('[Data] Fetching notifications...');
-      const { data: notificationsData, error: notifError } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(50);
-
+      // Process notifications
+      const { data: notificationsData, error: notifError } = notificationsResult;
       if (notifError) {
         console.error('[Data] Error fetching notifications:', notifError);
-        throw notifError;
+      } else {
+        const notifs: Notification[] = notificationsData?.map(notif => ({
+          id: notif.id,
+          userId: notif.user_id,
+          title: notif.title,
+          message: notif.message,
+          type: notif.type as 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR',
+          read: notif.read,
+          timestamp: new Date(notif.created_at).getTime(),
+          relatedJobId: notif.related_job_id || undefined
+        })) || [];
+        setNotifications(notifs);
+        console.log('[Data] Notifications loaded:', notifs.length);
       }
-
-      const notifs: Notification[] = notificationsData?.map(notif => ({
-        id: notif.id,
-        userId: notif.user_id,
-        title: notif.title,
-        message: notif.message,
-        type: notif.type as 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR',
-        read: notif.read,
-        timestamp: new Date(notif.created_at).getTime(),
-        relatedJobId: notif.related_job_id || undefined
-      })) || [];
-
-      setNotifications(notifs);
-      console.log('[Data] Notifications loaded:', notifs.length);
 
       // OPTIMIZATION: We do NOT fetch full chat history here anymore to save bandwidth.
       // Chat components will fetch their own history on demand.
-      // We only track *new* messages via Realtime in this context.
       setMessages([]);
-      console.log('[Data] Chat history fetch skipped (Lazy Loading Enabled)');
-      console.log('[Data] All user data loaded successfully');
+      console.log('[Data] All user data loaded successfully (parallel fetch)');
 
-      // Register for push notifications on native platforms
+      // Register for push notifications on native platforms (don't await this)
       if (isPushSupported()) {
-        console.log('[Push] Registering for push notifications...');
-        const { success, token, error } = await registerPushNotifications(user.id);
-        if (success) {
-          console.log('[Push] Registered successfully, token:', token?.substring(0, 20) + '...');
-        } else {
-          console.log('[Push] Registration failed:', error);
-        }
+        registerPushNotifications(user.id).then(({ success, token, error }) => {
+          if (success) {
+            console.log('[Push] Registered successfully, token:', token?.substring(0, 20) + '...');
+          } else {
+            console.log('[Push] Registration failed:', error);
+          }
+        });
       }
 
     } catch (error) {

@@ -136,7 +136,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                     id: `j${Date.now()}`,
                     posterId: user.id,
                     posterName: user.name,
-                    posterPhone: user.phone,
+                    posterPhone: user.phone || '', // Safe fallback
                     posterPhoto: user.profilePhoto,
                     title: newJobTitle,
                     description: newJobDesc,
@@ -545,7 +545,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                     : (language === 'en' ? `Post Job (₹${postingFee})` : `नौकरी पोस्ट करें (₹${postingFee})`)
                 } <ChevronRight size={20} />
             </button>
-            {!isEditing && user.walletBalance >= postingFee && (
+            {!isEditing && (user.walletBalance || 0) >= postingFee && (
                 <p className="text-center text-sm text-emerald-600 mt-2 flex items-center justify-center gap-1">
                     <Wallet size={14} />
                     {language === 'en'

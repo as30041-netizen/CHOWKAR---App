@@ -6,7 +6,7 @@ import { JobCardSkeleton } from '../components/Skeleton';
 import { Job, UserRole, JobStatus } from '../types';
 import { calculateDistance } from '../utils/geo';
 import { CATEGORIES, CATEGORY_TRANSLATIONS } from '../constants';
-import { Search, SlidersHorizontal, CheckCircle2, Mic, MicOff, Briefcase, RotateCw } from 'lucide-react';
+import { Search, SlidersHorizontal, CheckCircle2, Mic, MicOff, Briefcase, RotateCw, Loader2 } from 'lucide-react';
 
 interface HomeProps {
     onBid: (jobId: string) => void;
@@ -27,7 +27,7 @@ export const Home: React.FC<HomeProps> = ({
     setShowFilterModal: _setShowFilterModal, showAlert
 }) => {
     const { user, role, t, language, notifications } = useUser();
-    const { jobs, loading, error, refreshJobs } = useJobs();
+    const { jobs, loading, error, refreshJobs, fetchMoreJobs, hasMore, isLoadingMore } = useJobs();
 
     // Local state for search/filter within Home
     const [searchQuery, setSearchQuery] = useState('');
@@ -163,6 +163,32 @@ export const Home: React.FC<HomeProps> = ({
                         </div>
                     ))}
             </div>
+
+            {/* Load More Button */}
+            {hasMore && !loading && (
+                <div className="mt-8 mb-10 flex justify-center">
+                    <button
+                        onClick={fetchMoreJobs}
+                        disabled={isLoadingMore}
+                        className={`px-8 py-3 rounded-xl font-bold transition-all shadow-md flex items-center gap-2 ${isLoadingMore
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-white border-2 border-emerald-100 text-emerald-800 hover:bg-emerald-50 active:scale-95'
+                            }`}
+                    >
+                        {isLoadingMore ? (
+                            <>
+                                <Loader2 size={18} className="animate-spin text-emerald-600" />
+                                {language === 'en' ? 'Loading...' : 'लोड हो रहा है...'}
+                            </>
+                        ) : (
+                            <>
+                                <RotateCw size={18} className="text-emerald-600" />
+                                {language === 'en' ? 'Load More Jobs' : 'और जॉब देखें'}
+                            </>
+                        )}
+                    </button>
+                </div>
+            )}
 
             {loading && (
                 <div className="space-y-4">

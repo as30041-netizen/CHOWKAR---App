@@ -12,7 +12,10 @@ interface JobContextType {
   addBid: (bid: Bid) => Promise<void>;
   updateBid: (bid: Bid) => Promise<void>;
   refreshJobs: () => Promise<void>;
+  fetchMoreJobs: () => Promise<void>;
   loading: boolean;
+  isLoadingMore: boolean;
+  hasMore: boolean;
   error: string | null;
 }
 
@@ -164,20 +167,26 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
   }, [handleJobChange, handleBidChange]);
 
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   const refreshJobs = async () => {
     try {
       setLoading(true);
+      setHasMore(true);
 
       // Check for expired 24-hour bid deadlines first
       await checkExpiredBidDeadlines();
 
-      const { jobs: fetchedJobs, error: fetchError } = await fetchJobs();
+      // Fetch first page (default limit 100, offset 0)
+      const { jobs: fetchedJobs, error: fetchError, hasMore: moreAvailable } = await fetchJobs(20, 0);
 
       if (fetchError) {
         setError(fetchError);
         console.error('Error loading jobs:', fetchError);
       } else {
         setJobs(fetchedJobs);
+        setHasMore(moreAvailable || false);
         setError(null);
       }
     } catch (err) {
@@ -185,6 +194,34 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setError('Failed to load jobs');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchMoreJobs = async () => {
+    if (isLoadingMore || !hasMore) return;
+
+    try {
+      setIsLoadingMore(true);
+      const currentOffset = jobs.length;
+      const { jobs: newJobs, error: fetchError, hasMore: moreAvailable } = await fetchJobs(20, currentOffset);
+
+      if (fetchError) {
+        console.error('Error loading more jobs:', fetchError);
+      } else if (newJobs.length > 0) {
+        // Use a Set to ensure we don't add duplicate jobs that might have arrived via Realtime
+        setJobs(prev => {
+          const existingIds = new Set(prev.map(j => j.id));
+          const uniqueNewJobs = newJobs.filter(j => !existingIds.has(j.id));
+          return [...prev, ...uniqueNewJobs];
+        });
+        setHasMore(moreAvailable || false);
+      } else {
+        setHasMore(false);
+      }
+    } catch (err) {
+      console.error('Error in fetchMoreJobs:', err);
+    } finally {
+      setIsLoadingMore(false);
     }
   };
 
@@ -348,7 +385,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   return (
-    <JobContext.Provider value={{ jobs, setJobs, addJob, updateJob, deleteJob, addBid, updateBid, refreshJobs, loading, error }}>
+    <JobContext.Provider value={{ jobs, setJobs, addJob, updateJob, deleteJob, addBid, updateBid, refreshJobs, fetchMoreJobs, loading, isLoadingMore, hasMore, error }}>
       {children}
     </JobContext.Provider>
   );

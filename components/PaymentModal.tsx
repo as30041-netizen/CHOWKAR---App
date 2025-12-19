@@ -78,7 +78,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                         : 'Unlock Chat - Connection Fee',
                     orderId: paymentId, // Using our payment ID as order reference
                     prefillName: user.name,
-                    prefillPhone: user.phone
+                    prefillPhone: user.phone || ''
                 },
                 async (response) => {
                     // Success callback

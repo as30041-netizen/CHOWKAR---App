@@ -1,35 +1,37 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import { UserProvider, useUser } from './contexts/UserContextDB';
 import { JobProvider, useJobs } from './contexts/JobContextDB';
 import { ChatMessage, Coordinates, Job, JobStatus, UserRole } from './types';
-import { Confetti } from './components/Confetti';
-import { ChatInterface } from './components/ChatInterface';
-import { ReviewModal } from './components/ReviewModal';
-import { PaymentModal } from './components/PaymentModal';
 import {
   MapPin, UserCircle, ArrowLeftRight, Bell, MessageCircle, Languages, Loader2
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 
-// Import Pages
-import { Home } from './pages/Home';
-import { Profile } from './pages/Profile';
-import { Wallet as WalletPage } from './pages/Wallet';
-import { PostJob } from './pages/PostJob';
+// --- Lazy loaded Pages ---
+const Home = lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
+const Profile = lazy(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
+const WalletPage = lazy(() => import('./pages/Wallet').then(m => ({ default: m.Wallet })));
+const PostJob = lazy(() => import('./pages/PostJob').then(m => ({ default: m.PostJob })));
 
-// Import Components
+// --- Lazy loaded Components ---
+const Confetti = lazy(() => import('./components/Confetti').then(m => ({ default: m.Confetti })));
+const ChatInterface = lazy(() => import('./components/ChatInterface').then(m => ({ default: m.ChatInterface })));
+const ReviewModal = lazy(() => import('./components/ReviewModal').then(m => ({ default: m.ReviewModal })));
+const PaymentModal = lazy(() => import('./components/PaymentModal').then(m => ({ default: m.PaymentModal })));
+const BidModal = lazy(() => import('./components/BidModal').then(m => ({ default: m.BidModal })));
+const JobDetailsModal = lazy(() => import('./components/JobDetailsModal').then(m => ({ default: m.JobDetailsModal })));
+const EditProfileModal = lazy(() => import('./components/EditProfileModal').then(m => ({ default: m.EditProfileModal })));
+const ViewBidsModal = lazy(() => import('./components/ViewBidsModal').then(m => ({ default: m.ViewBidsModal })));
+const CounterModal = lazy(() => import('./components/CounterModal').then(m => ({ default: m.CounterModal })));
+const OnboardingModal = lazy(() => import('./components/OnboardingModal').then(m => ({ default: m.OnboardingModal })));
+const BidHistoryModal = lazy(() => import('./components/BidHistoryModal').then(m => ({ default: m.BidHistoryModal })));
+const NotificationsPanel = lazy(() => import('./components/NotificationsPanel').then(m => ({ default: m.NotificationsPanel })));
+const ChatListPanel = lazy(() => import('./components/ChatListPanel').then(m => ({ default: m.ChatListPanel })));
+const LandingPage = lazy(() => import('./components/LandingPage').then(m => ({ default: m.LandingPage })));
+
+// Import Synchronous Components
 import { BottomNav } from './components/BottomNav';
-import { BidModal } from './components/BidModal';
-import { JobDetailsModal } from './components/JobDetailsModal';
-import { EditProfileModal } from './components/EditProfileModal';
-import { ViewBidsModal } from './components/ViewBidsModal';
-import { CounterModal } from './components/CounterModal';
-import { OnboardingModal } from './components/OnboardingModal';
-import { BidHistoryModal } from './components/BidHistoryModal';
-import { NotificationsPanel } from './components/NotificationsPanel';
-import { ChatListPanel } from './components/ChatListPanel';
-import { LandingPage } from './components/LandingPage';
 
 // Services
 import { signInWithGoogle, completeProfile } from './services/authService';
@@ -605,218 +607,205 @@ const AppContent: React.FC = () => {
       {/* Router View */}
       <main className="flex-1 overflow-y-auto bg-green-50 w-full relative">
         <div className="max-w-7xl mx-auto w-full h-full">
-          <Routes>
-            <Route path="/" element={<Home
-              onBid={(id) => setBidModalOpen({ isOpen: true, jobId: id })}
-              onViewBids={(j) => setViewBidsModal({ isOpen: true, job: j })}
-              onChat={handleChatOpen}
-              onEdit={handleEditJobLink}
-              onClick={(j) => setSelectedJob(j)} // Open job details
-              onReplyToCounter={handleWorkerReplyToCounter}
-              onWithdrawBid={handleWithdrawBid}
-              setShowFilterModal={setShowFilterModal}
-              showAlert={showAlert}
-            />} />
-            <Route path="/wallet" element={<WalletPage onShowBidHistory={() => setShowBidHistory(true)} />} />
-            <Route path="/profile" element={<Profile onEditProfile={() => setShowEditProfile(true)} setShowSubscriptionModal={setShowSubscriptionModal} onLogout={handleLogout} />} />
-            <Route path="/post" element={<PostJob />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          <Suspense fallback={
+            <div className="h-full w-full flex items-center justify-center bg-green-50/50">
+              <Loader2 size={32} className="text-emerald-600 animate-spin" />
+            </div>
+          }>
+            <Routes>
+              <Route path="/" element={<Home
+                onBid={(id) => setBidModalOpen({ isOpen: true, jobId: id })}
+                onViewBids={(j) => setViewBidsModal({ isOpen: true, job: j })}
+                onChat={handleChatOpen}
+                onEdit={handleEditJobLink}
+                onClick={(j) => setSelectedJob(j)} // Open job details
+                onReplyToCounter={handleWorkerReplyToCounter}
+                onWithdrawBid={handleWithdrawBid}
+                setShowFilterModal={setShowFilterModal}
+                showAlert={showAlert}
+              />} />
+              <Route path="/wallet" element={<WalletPage onShowBidHistory={() => setShowBidHistory(true)} />} />
+              <Route path="/profile" element={<Profile onEditProfile={() => setShowEditProfile(true)} setShowSubscriptionModal={setShowSubscriptionModal} onLogout={handleLogout} />} />
+              <Route path="/post" element={<PostJob />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
         </div>
       </main>
 
       <BottomNav />
 
-      {/* --- Global Modals --- */}
+      {/* --- Global Modals (Lazy Loaded) --- */}
+      <Suspense fallback={null}>
+        <BidModal
+          isOpen={bidModalOpen.isOpen}
+          onClose={() => setBidModalOpen({ isOpen: false, jobId: null })}
+          jobId={bidModalOpen.jobId}
+          onSuccess={() => { }}
+          showAlert={showAlert}
+        />
 
-      <BidModal
-        isOpen={bidModalOpen.isOpen}
-        onClose={() => setBidModalOpen({ isOpen: false, jobId: null })}
-        jobId={bidModalOpen.jobId}
-        onSuccess={() => { }}
-        showAlert={showAlert}
-      />
-
-      <JobDetailsModal
-        job={selectedJob}
-        onClose={() => { setSelectedJob(null); setActiveJobId(null); }}
-        onBid={(jobId) => { setSelectedJob(null); setBidModalOpen({ isOpen: true, jobId }); }}
-        onViewBids={(job) => { setSelectedJob(null); setViewBidsModal({ isOpen: true, job }); }}
-        onChat={(job) => { setSelectedJob(null); handleChatOpen(job); }}
-        onEdit={(job) => { setSelectedJob(null); handleEditJobLink(job); }}
-        onCancel={handleCancelJob}
-        onDelete={async (jobId) => {
-          try {
-            await deleteJob(jobId);
-            setSelectedJob(null);
-            showAlert(t.alertJobDeleted, 'success');
-          } catch {
-            showAlert('Failed to delete job', 'error');
-          }
-        }}
-        showAlert={showAlert}
-        onReplyToCounter={handleWorkerReplyToCounter}
-      />
-
-      <EditProfileModal
-        isOpen={showEditProfile}
-        onClose={() => setShowEditProfile(false)}
-        showAlert={showAlert}
-      />
-
-      <ViewBidsModal
-        isOpen={viewBidsModal.isOpen}
-        onClose={() => { setViewBidsModal({ isOpen: false, job: null }); setActiveJobId(null); }}
-        job={viewBidsModal.job}
-        onCounter={(bidId, amount) => {
-          setCounterModalOpen({ isOpen: true, bidId, jobId: viewBidsModal.job!.id, initialAmount: amount.toString() });
-        }}
-        showAlert={showAlert}
-      />
-
-      <CounterModal
-        isOpen={counterModalOpen.isOpen}
-        onClose={() => setCounterModalOpen({ isOpen: false, bidId: null, jobId: null, initialAmount: '' })}
-        bidId={counterModalOpen.bidId}
-        jobId={counterModalOpen.jobId}
-        initialAmount={counterModalOpen.initialAmount}
-        showAlert={showAlert}
-      />
-
-      <NotificationsPanel
-        isOpen={showNotifications}
-        onClose={() => setShowNotifications(false)}
-        onJobClick={(job, notif) => {
-          setShowNotifications(false);
-
-          // Delete the notification after clicking (user has acted on it)
-          deleteNotification(notif.id);
-
-          // Set active job to suppress future notifications for this job
-          setActiveJobId(job.id);
-
-          // Click-to-Action Routing based on notification type and job status
-          const isAcceptedNotif = notif.title === "Bid Accepted" || notif.title === "Job Accepted" || notif.title === "Counter Accepted";
-
-          if (notif.title === t.notifBidReceived || notif.title === "New Bid") {
-            // New bid - poster views bids
-            setViewBidsModal({ isOpen: true, job });
-          } else if (isAcceptedNotif && job.status === JobStatus.IN_PROGRESS) {
-            // Job is accepted and in progress - go to chat
-            handleChatOpen(job);
-          } else if (notif.title === t.notifJobCompleted || notif.title === "Job Completed") {
-            // Job completed - show review modal if poster
-            const acceptedBid = job.bids.find(b => b.id === job.acceptedBidId);
-            if (user.id === job.posterId && acceptedBid) {
-              setReviewModalData({
-                isOpen: true,
-                revieweeId: acceptedBid.workerId,
-                revieweeName: acceptedBid.workerName,
-                jobId: job.id
-              });
-            } else {
-              handleChatOpen(job);
+        <JobDetailsModal
+          job={selectedJob}
+          onClose={() => { setSelectedJob(null); setActiveJobId(null); }}
+          onBid={(jobId) => { setSelectedJob(null); setBidModalOpen({ isOpen: true, jobId }); }}
+          onViewBids={(job) => { setSelectedJob(null); setViewBidsModal({ isOpen: true, job }); }}
+          onChat={(job) => { setSelectedJob(null); handleChatOpen(job); }}
+          onEdit={(job) => { setSelectedJob(null); handleEditJobLink(job); }}
+          onCancel={handleCancelJob}
+          onDelete={async (jobId) => {
+            try {
+              await deleteJob(jobId);
+              setSelectedJob(null);
+              showAlert(t.alertJobDeleted, 'success');
+            } catch {
+              showAlert('Failed to delete job', 'error');
             }
-          } else if (notif.title === t.notifCounterOffer || notif.title === "Counter Offer") {
-            // Counter offer - view in appropriate modal (job still OPEN, no chat yet)
-            if (user.id === job.posterId) {
+          }}
+          showAlert={showAlert}
+          onReplyToCounter={handleWorkerReplyToCounter}
+        />
+
+        <EditProfileModal
+          isOpen={showEditProfile}
+          onClose={() => setShowEditProfile(false)}
+          showAlert={showAlert}
+        />
+
+        <ViewBidsModal
+          isOpen={viewBidsModal.isOpen}
+          onClose={() => { setViewBidsModal({ isOpen: false, job: null }); setActiveJobId(null); }}
+          job={viewBidsModal.job}
+          onCounter={(bidId, amount) => {
+            setCounterModalOpen({ isOpen: true, bidId, jobId: viewBidsModal.job!.id, initialAmount: amount.toString() });
+          }}
+          showAlert={showAlert}
+        />
+
+        <CounterModal
+          isOpen={counterModalOpen.isOpen}
+          onClose={() => setCounterModalOpen({ isOpen: false, bidId: null, jobId: null, initialAmount: '' })}
+          bidId={counterModalOpen.bidId}
+          jobId={counterModalOpen.jobId}
+          initialAmount={counterModalOpen.initialAmount}
+          showAlert={showAlert}
+        />
+
+        <NotificationsPanel
+          isOpen={showNotifications}
+          onClose={() => setShowNotifications(false)}
+          onJobClick={(job, notif) => {
+            setShowNotifications(false);
+            deleteNotification(notif.id);
+            setActiveJobId(job.id);
+            const isAcceptedNotif = notif.title === "Bid Accepted" || notif.title === "Job Accepted" || notif.title === "Counter Accepted";
+            if (notif.title === t.notifBidReceived || notif.title === "New Bid") {
               setViewBidsModal({ isOpen: true, job });
+            } else if (isAcceptedNotif && job.status === JobStatus.IN_PROGRESS) {
+              handleChatOpen(job);
+            } else if (notif.title === t.notifJobCompleted || notif.title === "Job Completed") {
+              const acceptedBid = job.bids.find(b => b.id === job.acceptedBidId);
+              if (user.id === job.posterId && acceptedBid) {
+                setReviewModalData({
+                  isOpen: true,
+                  revieweeId: acceptedBid.workerId,
+                  revieweeName: acceptedBid.workerName,
+                  jobId: job.id
+                });
+              } else {
+                handleChatOpen(job);
+              }
+            } else if (notif.title === t.notifCounterOffer || notif.title === "Counter Offer") {
+              if (user.id === job.posterId) {
+                setViewBidsModal({ isOpen: true, job });
+              } else {
+                setSelectedJob(job);
+              }
+            } else if (notif.title === "Bid Not Selected") {
+              setSelectedJob(job);
+            } else if (job.status === JobStatus.IN_PROGRESS) {
+              handleChatOpen(job);
             } else {
               setSelectedJob(job);
             }
-          } else if (notif.title === "Bid Not Selected") {
-            // Rejected bid - just show job details
-            setSelectedJob(job);
-          } else if (job.status === JobStatus.IN_PROGRESS) {
-            // Default for IN_PROGRESS jobs: Open Chat
-            handleChatOpen(job);
-          } else {
-            // Default for other statuses: Open job details
-            setSelectedJob(job);
-          }
-        }}
-      />
-
-      <ChatListPanel
-        isOpen={showChatList}
-        onClose={() => setShowChatList(false)}
-        onChatSelect={handleChatOpen}
-      />
-
-      <BidHistoryModal
-        isOpen={showBidHistory}
-        onClose={() => setShowBidHistory(false)}
-      />
-
-      {/* Legacy Review Modal (if used) */}
-      <ReviewModal
-        isOpen={reviewModalData?.isOpen || false}
-        onClose={() => setReviewModalData(null)}
-        onSubmit={async (rating, comment) => {
-          if (!reviewModalData) return;
-          try {
-            const { error } = await supabase.from('reviews').insert({
-              reviewer_id: user.id,
-              reviewee_id: reviewModalData.revieweeId,
-              job_id: reviewModalData.jobId,
-              rating,
-              comment,
-              tags: null
-            });
-            if (error) throw error;
-            await addNotification(reviewModalData.revieweeId, "New Review", `You received a ${rating} star review!`, "SUCCESS");
-            setReviewModalData(null);
-            showAlert(t.reviewSubmitted, 'success');
-          } catch { showAlert('Failed to submit review', 'error'); }
-        }}
-        revieweeName={reviewModalData?.revieweeName || ''}
-      />
-
-      {/* Chat Interface */}
-      {chatOpen.isOpen && chatOpen.job && (
-        <ChatInterface
-          job={chatOpen.job}
-          currentUser={user}
-          onClose={() => { setChatOpen({ isOpen: false, job: null }); setActiveChatId(null); setActiveJobId(null); }}
-          messages={messages.filter(m => m.jobId === chatOpen.job?.id)}
-          onSendMessage={handleSendMessage}
-          onCompleteJob={handleCompleteJob}
-          onTranslateMessage={handleTranslateMessage}
-          onDeleteMessage={handleDeleteMessage}
-          onIncomingMessage={(msg) => setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])}
-          onMessageUpdate={handleMessageUpdate}
-          isPremium={user.isPremium}
-          remainingTries={user.isPremium ? 999 : (2 - (user.aiUsageCount || 0))}
+          }}
         />
-      )}
 
-      {/* Onboarding Dialog */}
-      <OnboardingModal
-        isOpen={showOnboarding}
-        onComplete={(selectedRole) => {
-          setRole(selectedRole);
-          localStorage.setItem('chowkar_onboarding_complete', 'true');
-          setShowOnboarding(false);
+        <ChatListPanel
+          isOpen={showChatList}
+          onClose={() => setShowChatList(false)}
+          onChatSelect={handleChatOpen}
+        />
 
-          // Navigate based on choice
-          if (selectedRole === UserRole.POSTER) {
-            navigate('/post');
-          } else {
-            navigate('/');
-          }
-        }}
-      />
+        <BidHistoryModal
+          isOpen={showBidHistory}
+          onClose={() => setShowBidHistory(false)}
+        />
 
-      {/* Worker Payment Modal - for unlocking chat */}
-      <PaymentModal
-        isOpen={workerPaymentModal.isOpen}
-        onClose={() => setWorkerPaymentModal({ isOpen: false, job: null, bidId: null })}
-        paymentType="CONNECTION"
-        relatedJobId={workerPaymentModal.job?.id}
-        relatedBidId={workerPaymentModal.bidId || undefined}
-        onPaymentSuccess={handleWorkerPaymentSuccess}
-        onPaymentFailure={(error) => showAlert(error || 'Payment failed', 'error')}
-      />
+        <ReviewModal
+          isOpen={reviewModalData?.isOpen || false}
+          onClose={() => setReviewModalData(null)}
+          onSubmit={async (rating, comment) => {
+            if (!reviewModalData) return;
+            try {
+              const { error } = await supabase.from('reviews').insert({
+                reviewer_id: user.id,
+                reviewee_id: reviewModalData.revieweeId,
+                job_id: reviewModalData.jobId,
+                rating,
+                comment,
+                tags: null
+              });
+              if (error) throw error;
+              await addNotification(reviewModalData.revieweeId, "New Review", `You received a ${rating} star review!`, "SUCCESS");
+              setReviewModalData(null);
+              showAlert(t.reviewSubmitted, 'success');
+            } catch { showAlert('Failed to submit review', 'error'); }
+          }}
+          revieweeName={reviewModalData?.revieweeName || ''}
+        />
+
+        {chatOpen.isOpen && chatOpen.job && (
+          <ChatInterface
+            job={chatOpen.job}
+            currentUser={user}
+            onClose={() => { setChatOpen({ isOpen: false, job: null }); setActiveChatId(null); setActiveJobId(null); }}
+            messages={messages.filter(m => m.jobId === chatOpen.job?.id)}
+            onSendMessage={handleSendMessage}
+            onCompleteJob={handleCompleteJob}
+            onTranslateMessage={handleTranslateMessage}
+            onDeleteMessage={handleDeleteMessage}
+            onIncomingMessage={(msg) => setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])}
+            onMessageUpdate={handleMessageUpdate}
+            isPremium={user.isPremium}
+            remainingTries={user.isPremium ? 999 : (2 - (user.aiUsageCount || 0))}
+          />
+        )}
+
+        <OnboardingModal
+          isOpen={showOnboarding}
+          onComplete={(selectedRole) => {
+            setRole(selectedRole);
+            localStorage.setItem('chowkar_onboarding_complete', 'true');
+            setShowOnboarding(false);
+            if (selectedRole === UserRole.POSTER) {
+              navigate('/post');
+            } else {
+              navigate('/');
+            }
+          }}
+        />
+
+        <PaymentModal
+          isOpen={workerPaymentModal.isOpen}
+          onClose={() => setWorkerPaymentModal({ isOpen: false, job: null, bidId: null })}
+          paymentType="CONNECTION"
+          relatedJobId={workerPaymentModal.job?.id}
+          relatedBidId={workerPaymentModal.bidId || undefined}
+          onPaymentSuccess={handleWorkerPaymentSuccess}
+          onPaymentFailure={(error) => showAlert(error || 'Payment failed', 'error')}
+        />
+      </Suspense>
 
     </div>
   );

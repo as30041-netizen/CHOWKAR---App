@@ -30,10 +30,10 @@ export interface User {
   id: string;
   name: string;
   email?: string;
-  phone: string;
-  location: string;
-  coordinates?: Coordinates;
-  walletBalance: number;
+  phone?: string; // PRIVATE: Only visible to self or accepted counterparty
+  location?: string; // PRIVATE
+  coordinates?: Coordinates; // PRIVATE
+  walletBalance?: number; // PRIVATE
   rating: number;
   profilePhoto?: string;
   isPremium?: boolean;

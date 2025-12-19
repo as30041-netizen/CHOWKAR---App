@@ -71,29 +71,50 @@ export const checkExpiredBidDeadlines = async (): Promise<{ expiredCount: number
   }
 };
 
-// Fetch all jobs with their bids
-export const fetchJobs = async (): Promise<{ jobs: Job[]; error?: string }> => {
+/**
+ * [SECURITY] Securely fetches contact details for a job
+ * Only works if you are the Poster or the Accepted Worker
+ */
+export const fetchJobContact = async (jobId: string) => {
+  const { data, error } = await supabase.rpc('get_job_contact', { p_job_id: jobId });
+  if (error) throw error;
+  return data;
+};
+
+// Fetch jobs with pagination (optimized for scale)
+export const fetchJobs = async (limit: number = 100, offset: number = 0): Promise<{ jobs: Job[]; error?: string; hasMore?: boolean }> => {
   try {
-    console.log('[JobService] Fetching all jobs and bids...');
+    console.log(`[JobService] Fetching jobs (limit: ${limit}, offset: ${offset})...`);
 
-    // Fetch jobs and bids in parallel for speed
-    const [jobsResult, bidsResult] = await Promise.all([
-      supabase.from('jobs').select('*').order('created_at', { ascending: false }),
-      supabase.from('bids').select('*').order('created_at', { ascending: false })
-    ]);
-
-    const { data: jobsData, error: jobsError } = jobsResult;
-    const { data: bidsData, error: bidsError } = bidsResult;
+    // Step 1: Fetch paginated jobs first
+    const { data: jobsData, error: jobsError } = await supabase
+      .from('jobs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
 
     if (jobsError) {
-      console.error('[JobService] Error fetching jobs table:', jobsError);
+      console.error('[JobService] Error fetching jobs:', jobsError);
       throw jobsError;
     }
 
-    if (bidsError) {
-      console.error('[JobService] Error fetching bids table:', bidsError);
-      // We can continue with 0 bids if bids fail, but strictly throwing is safer for consistency
-      throw bidsError;
+    const jobIds = jobsData?.map(j => j.id) || [];
+
+    // Step 2: Only fetch bids for the jobs we just loaded (major optimization!)
+    let bidsData: any[] = [];
+    if (jobIds.length > 0) {
+      const { data: bids, error: bidsError } = await supabase
+        .from('bids')
+        .select('*')
+        .in('job_id', jobIds)
+        .order('created_at', { ascending: false });
+
+      if (bidsError) {
+        console.error('[JobService] Error fetching bids:', bidsError);
+        // Continue without bids rather than failing completely
+      } else {
+        bidsData = bids || [];
+      }
     }
 
     console.log(`[JobService] Fetched ${jobsData?.length || 0} jobs and ${bidsData?.length || 0} bids.`);
@@ -122,10 +143,13 @@ export const fetchJobs = async (): Promise<{ jobs: Job[]; error?: string }> => {
       }
     }).filter(j => j !== null) as Job[];
 
-    return { jobs };
+    // Check if there are more jobs (for infinite scroll)
+    const hasMore = jobsData && jobsData.length === limit;
+
+    return { jobs, hasMore };
   } catch (error) {
     console.error('[JobService] Critical error fetching jobs:', error);
-    return { jobs: [], error: 'Failed to fetch jobs' };
+    return { jobs: [], error: 'Failed to fetch jobs', hasMore: false };
   }
 };
 

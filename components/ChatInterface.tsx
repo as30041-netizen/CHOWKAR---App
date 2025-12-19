@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchJobMessages } from '../services/chatService';
+import { fetchJobContact } from '../services/jobService';
 import { Job, ChatMessage, User } from '../types';
 import { Send, Phone, CheckCircle, ArrowLeft, LockKeyhole, Paperclip, MoreVertical, Check, CheckCheck, Languages, Mic, MicOff, Loader2, Sparkles, Lock, Volume2, Square, Trash2, ShieldAlert, FileText, Flag } from 'lucide-react';
 import { SafetyTipsModal } from './SafetyTipsModal';
@@ -219,13 +220,24 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const isPhoneVisible = job.status === 'IN_PROGRESS';
   const isArchived = job.status === 'COMPLETED';
 
+  const [securePhone, setSecurePhone] = useState('');
+
+  useEffect(() => {
+    if (isPhoneVisible) {
+      fetchJobContact(job.id).then(contact => {
+        if (contact && contact.phone) setSecurePhone(contact.phone);
+      }).catch(err => console.error('Failed to fetch contact info', err));
+    }
+  }, [job.id, isPhoneVisible]);
+
   if (isPoster) {
     otherPersonName = acceptedBid?.workerName || 'Worker';
-    otherPersonPhone = isPhoneVisible ? (acceptedBid?.workerPhone || '') : '';
+    // Use secure phone if available, otherwise fallback (though fallback might be empty now)
+    otherPersonPhone = securePhone || (isPhoneVisible ? (acceptedBid?.workerPhone || '') : '');
     otherPersonPhoto = acceptedBid?.workerPhoto || '';
   } else {
     otherPersonName = job.posterName;
-    otherPersonPhone = isPhoneVisible ? job.posterPhone : '';
+    otherPersonPhone = securePhone || (isPhoneVisible ? job.posterPhone : '');
     otherPersonPhoto = job.posterPhoto || '';
   }
 
@@ -380,7 +392,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         animate-in slide-in-from-bottom md:slide-in-from-right duration-300">
 
         {/* Header */}
-        <div className="bg-white px-4 py-3 shadow-sm border-b border-gray-100 flex items-center justify-between z-10">
+        <div className="bg-white px-4 py-3 shadow-sm border-b border-gray-100 flex items-center justify-between z-10 pt-safe">
           <div className="flex items-center gap-3">
             <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full text-gray-600 transition-colors">
               <ArrowLeft size={22} />
