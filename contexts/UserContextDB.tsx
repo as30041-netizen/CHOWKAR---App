@@ -410,7 +410,9 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setTimeout(() => showAlert(`${newNotif.title}: ${newNotif.message}`, 'info'), 0);
         }
 
-        return [newNotif, ...prev];
+        // Add new notification and limit to 100 to prevent memory issues
+        const updated = [newNotif, ...prev];
+        return updated.length > 100 ? updated.slice(0, 100) : updated;
       });
     };
 
@@ -643,22 +645,29 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
 
         // Send via Supabase Broadcast to the recipient's channel
+        const channel = supabase.channel(`user_notifications_${userId}`);
         try {
-          const channel = supabase.channel(`user_notifications_${userId}`);
-          await channel.subscribe((status) => {
-            console.log(`[Notification] Broadcast channel status for ${userId}:`, status);
+          // Subscribe and wait for connection
+          await new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('Subscribe timeout')), 3000);
+            channel.subscribe((status) => {
+              if (status === 'SUBSCRIBED') {
+                clearTimeout(timeout);
+                resolve();
+              }
+            });
           });
 
-          const sendResult = await channel.send({
+          await channel.send({
             type: 'broadcast',
             event: 'new_notification',
             payload: broadcastPayload
           });
-
-          console.log('[Notification] Broadcast sent to user:', userId, 'Result:', sendResult);
-          supabase.removeChannel(channel);
         } catch (broadcastError) {
-          console.error('[Notification] Broadcast failed:', broadcastError);
+          console.warn('[Notification] Broadcast failed:', broadcastError);
+        } finally {
+          // Always cleanup channel
+          supabase.removeChannel(channel);
         }
       }
     } catch (error) {
