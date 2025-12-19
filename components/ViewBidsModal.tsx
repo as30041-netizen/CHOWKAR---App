@@ -66,6 +66,31 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                 );
             }
 
+            // 6. Broadcast job update for instant real-time sync
+            try {
+                const updatedJobPayload = {
+                    id: jobId,
+                    status: 'IN_PROGRESS',
+                    accepted_bid_id: bidId,
+                    poster_id: job.posterId,
+                    title: job.title,
+                    description: job.description,
+                    category: job.category,
+                    budget: job.budget,
+                    location: job.location
+                };
+                const channel = supabase.channel('job_system_hybrid_sync');
+                await channel.subscribe();
+                await channel.send({
+                    type: 'broadcast',
+                    event: 'job_updated',
+                    payload: updatedJobPayload
+                });
+                console.log('[ViewBids] Job status broadcast sent');
+            } catch (broadcastErr) {
+                console.warn('[ViewBids] Job broadcast failed:', broadcastErr);
+            }
+
             onClose();
             showAlert(t.contactUnlocked, 'success');
         } catch (error: any) {

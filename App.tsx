@@ -341,7 +341,34 @@ const AppContent: React.FC = () => {
           console.warn('[Accept] Worker commission charge failed:', commissionError);
         }
 
-        // 3. Notify Poster
+        // 3. Broadcast job update for instant real-time sync
+        try {
+          const updatedJobPayload = {
+            id: jobId,
+            status: 'IN_PROGRESS',
+            accepted_bid_id: bidId,
+            poster_id: job.posterId,
+            title: job.title,
+            description: job.description,
+            category: job.category,
+            budget: job.budget,
+            location: job.location,
+            latitude: job.coordinates?.lat,
+            longitude: job.coordinates?.lng
+          };
+          const channel = supabase.channel('job_system_hybrid_sync');
+          await channel.subscribe();
+          await channel.send({
+            type: 'broadcast',
+            event: 'job_updated',
+            payload: updatedJobPayload
+          });
+          console.log('[Accept] Job status broadcast sent');
+        } catch (broadcastErr) {
+          console.warn('[Accept] Job broadcast failed:', broadcastErr);
+        }
+
+        // 4. Notify Poster
         const commission = Math.ceil(bid.amount * WORKER_COMMISSION_RATE);
         await addNotification(
           job.posterId,

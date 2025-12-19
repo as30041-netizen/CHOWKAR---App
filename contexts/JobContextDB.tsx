@@ -124,7 +124,13 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     console.log('[Realtime] Subscribing to jobs and bids with HYBRID Sync...');
 
     const channel = supabase.channel('job_system_hybrid_sync')
-      // Broadcast listener for instant bid updates (bypasses RLS)
+      // Broadcast listeners for instant updates (bypasses RLS)
+      .on('broadcast', { event: 'job_updated' }, (payload) => {
+        console.log('[Realtime] Broadcast job_updated received:', payload);
+        if (payload.payload) {
+          handleJobChange('UPDATE', { new: payload.payload, eventType: 'UPDATE' });
+        }
+      })
       .on('broadcast', { event: 'bid_updated' }, (payload) => {
         console.log('[Realtime] Broadcast bid_updated received:', payload);
         if (payload.payload) {
