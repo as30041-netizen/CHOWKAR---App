@@ -584,12 +584,16 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
         setNotifications(prev => [newNotif, ...prev]);
       } else {
-        // FOR OTHERS: Fire and forget to DB
-        const { data, error } = await supabase.from('notifications').insert(payload).select().single();
+        // FOR OTHERS: Fire and forget to DB (no .select() to avoid RLS issues)
+        const dbInsert = supabase.from('notifications').insert(payload);
+        dbInsert.then(({ error }) => {
+          if (error) console.warn('[Notification] DB insert failed:', error.message);
+          else console.log('[Notification] DB insert success for user:', userId);
+        });
 
         // INSTANT DELIVERY: Broadcast to the recipient's channel (bypasses RLS)
         const broadcastPayload = {
-          id: data?.id || `n${Date.now()}`,
+          id: `n${Date.now()}`,
           user_id: userId,
           userId: userId,
           title,
@@ -602,19 +606,22 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
 
         // Send via Supabase Broadcast to the recipient's channel
-        const channel = supabase.channel(`user_notifications_${userId}`);
-        await channel.subscribe();
-        await channel.send({
-          type: 'broadcast',
-          event: 'new_notification',
-          payload: broadcastPayload
-        });
-        supabase.removeChannel(channel);
+        try {
+          const channel = supabase.channel(`user_notifications_${userId}`);
+          await channel.subscribe((status) => {
+            console.log(`[Notification] Broadcast channel status for ${userId}:`, status);
+          });
 
-        console.log('[Notification] Broadcast sent to user:', userId);
+          const sendResult = await channel.send({
+            type: 'broadcast',
+            event: 'new_notification',
+            payload: broadcastPayload
+          });
 
-        if (error) {
-          console.warn('[Notification] DB insert error (broadcast still sent):', error);
+          console.log('[Notification] Broadcast sent to user:', userId, 'Result:', sendResult);
+          supabase.removeChannel(channel);
+        } catch (broadcastError) {
+          console.error('[Notification] Broadcast failed:', broadcastError);
         }
       }
     } catch (error) {
