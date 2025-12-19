@@ -185,6 +185,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const addJob = async (job: Job) => {
+    const tempId = job.id; // Store temp ID
     try {
       // Optimistically add to state
       setJobs(prev => [job, ...prev]);
@@ -194,8 +195,15 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       if (!success || error) {
         // Rollback on error
-        setJobs(prev => prev.filter(j => j.id !== job.id));
+        setJobs(prev => prev.filter(j => j.id !== tempId));
         throw new Error(error || 'Failed to create job');
+      }
+
+      // Replace optimistic job with real DB ID to prevent duplicates
+      if (data?.id) {
+        setJobs(prev => prev.map(j =>
+          j.id === tempId ? { ...j, id: data.id } : j
+        ));
       }
 
       // Return the real DB ID
