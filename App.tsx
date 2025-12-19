@@ -131,12 +131,13 @@ const AppContent: React.FC = () => {
 
   const unreadCount = notifications.filter(n => n.userId === user.id && !n.read).length;
 
-  // Count chats with unread messages
+  // Count chats with unread messages (only for IN_PROGRESS or COMPLETED jobs)
   const unreadChatCount = notifications.filter(n =>
     n.userId === user.id &&
     !n.read &&
-    // n.title === "New Message" && // Removed check
-    n.relatedJobId
+    n.title === "New Message" && // Only count actual message notifications
+    n.relatedJobId &&
+    jobs.some(j => j.id === n.relatedJobId && j.status !== 'OPEN') // Exclude OPEN jobs
   ).reduce((acc, n) => {
     if (!acc.includes(n.relatedJobId!)) acc.push(n.relatedJobId!);
     return acc;
