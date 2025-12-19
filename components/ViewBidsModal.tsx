@@ -15,7 +15,7 @@ interface ViewBidsModalProps {
 }
 
 export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, job, onCounter, showAlert }) => {
-    const { user, t, addNotification } = useUser();
+    const { user, t, addNotification, language } = useUser();
     const [isAcceptingBid, setIsAcceptingBid] = useState(false);
     const [connectionFee, setConnectionFee] = useState(20);
 
@@ -91,7 +91,7 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
         }
     };
 
-    const language = user.preferredLanguage || 'en';
+    // language is now from context
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -119,6 +119,13 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                                     </div>
                                 </div>
                                 <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg mb-3 italic">"{bid.message}"</p>
+
+                                {/* Visibility hint */}
+                                {job.status === 'OPEN' && (
+                                    <p className="text-[10px] text-gray-400 mb-3 flex items-center gap-1">
+                                        🔒 Contact details visible after accepting this bid
+                                    </p>
+                                )}
 
                                 {/* Negotiation History */}
                                 {bid.negotiationHistory && bid.negotiationHistory.length > 1 && (

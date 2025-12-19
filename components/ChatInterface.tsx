@@ -215,13 +215,17 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   let otherPersonPhone = '';
   let otherPersonPhoto = '';
 
+  // VISIBILITY RULES: Phone only visible for IN_PROGRESS jobs
+  const isPhoneVisible = job.status === 'IN_PROGRESS';
+  const isArchived = job.status === 'COMPLETED';
+
   if (isPoster) {
     otherPersonName = acceptedBid?.workerName || 'Worker';
-    otherPersonPhone = acceptedBid?.workerPhone || '';
+    otherPersonPhone = isPhoneVisible ? (acceptedBid?.workerPhone || '') : '';
     otherPersonPhoto = acceptedBid?.workerPhoto || '';
   } else {
     otherPersonName = job.posterName;
-    otherPersonPhone = job.posterPhone;
+    otherPersonPhone = isPhoneVisible ? job.posterPhone : '';
     otherPersonPhoto = job.posterPhoto || '';
   }
 
@@ -575,6 +579,18 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           )}
 
           <div className="p-3">
+            {/* Archive Banner for COMPLETED jobs */}
+            {isArchived && (
+              <div className="mb-3 bg-gray-100 border border-gray-200 px-4 py-3 rounded-xl flex items-center gap-3">
+                <LockKeyhole size={18} className="text-gray-400" />
+                <div>
+                  <p className="text-sm font-medium text-gray-700">This job has been completed</p>
+                  <p className="text-xs text-gray-500">Chat is read-only. Contact info is no longer visible.</p>
+                </div>
+              </div>
+            )}
+
+            {/* Complete Job button - only for poster in IN_PROGRESS */}
             {isPoster && job.status === 'IN_PROGRESS' && (
               <div className="mb-3 px-1">
                 <button
@@ -586,59 +602,64 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               </div>
             )}
 
-            <div className="flex items-end gap-2">
-              <button
-                onClick={handleVoiceInput}
-                className={`p-3 rounded-full transition-colors ${isListening ? 'bg-red-50 text-red-600 animate-pulse' : 'text-gray-400 hover:bg-gray-100'}`}
-              >
-                {isListening ? <MicOff size={20} /> : <Mic size={20} />}
-              </button>
+            {/* Input area - hidden for archived jobs */}
+            {!isArchived && (
+              <>
+                <div className="flex items-end gap-2">
+                  <button
+                    onClick={handleVoiceInput}
+                    className={`p-3 rounded-full transition-colors ${isListening ? 'bg-red-50 text-red-600 animate-pulse' : 'text-gray-400 hover:bg-gray-100'}`}
+                  >
+                    {isListening ? <MicOff size={20} /> : <Mic size={20} />}
+                  </button>
 
-              <div className="flex-1 bg-gray-100 rounded-2xl flex items-center min-h-[44px] px-4 py-2">
-                <textarea
-                  value={inputText}
-                  onChange={handleInputChange}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSend();
-                    }
-                  }}
-                  placeholder="Type a message..."
-                  className="flex-1 bg-transparent outline-none text-sm text-gray-800 max-h-24 resize-none"
-                  rows={1}
-                  style={{ lineHeight: '1.5' }}
-                />
-              </div>
+                  <div className="flex-1 bg-gray-100 rounded-2xl flex items-center min-h-[44px] px-4 py-2">
+                    <textarea
+                      value={inputText}
+                      onChange={handleInputChange}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSend();
+                        }
+                      }}
+                      placeholder="Type a message..."
+                      className="flex-1 bg-transparent outline-none text-sm text-gray-800 max-h-24 resize-none"
+                      rows={1}
+                      style={{ lineHeight: '1.5' }}
+                    />
+                  </div>
 
-              <button
-                onClick={() => handleSend()}
-                disabled={!inputText.trim()}
-                className={`p-3 rounded-full shadow-md transition-all transform hover:scale-105 active:scale-95 ${inputText.trim()
-                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                  : 'bg-gray-200 text-gray-400 cursor-default'
-                  }`}
-              >
-                <Send size={20} className={inputText.trim() ? "ml-0.5" : ""} />
-              </button>
-            </div>
+                  <button
+                    onClick={() => handleSend()}
+                    disabled={!inputText.trim()}
+                    className={`p-3 rounded-full shadow-md transition-all transform hover:scale-105 active:scale-95 ${inputText.trim()
+                      ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                      : 'bg-gray-200 text-gray-400 cursor-default'
+                      }`}
+                  >
+                    <Send size={20} className={inputText.trim() ? "ml-0.5" : ""} />
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
+
+        <SafetyTipsModal
+          isOpen={showSafetyTips}
+          onClose={() => setShowSafetyTips(false)}
+        />
+
+        <ReportUserModal
+          isOpen={showReportModal}
+          onClose={() => setShowReportModal(false)}
+          reportedUserId={otherPersonId}
+          reportedUserName={otherPersonName}
+          reporterUserId={currentUser.id}
+          jobId={job.id}
+        />
       </div>
-
-      <SafetyTipsModal
-        isOpen={showSafetyTips}
-        onClose={() => setShowSafetyTips(false)}
-      />
-
-      <ReportUserModal
-        isOpen={showReportModal}
-        onClose={() => setShowReportModal(false)}
-        reportedUserId={otherPersonId}
-        reportedUserName={otherPersonName}
-        reporterUserId={currentUser.id}
-        jobId={job.id}
-      />
     </>
   );
 };
