@@ -365,16 +365,32 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         relatedJobId: notifData.related_job_id || notifData.relatedJobId || undefined
       };
 
-      // Update state (avoid duplicates)
+      // Update state (avoid duplicates by checking ID OR content+time)
       setNotifications(prev => {
-        if (prev.some(n => n.id === newNotif.id)) return prev;
+        // Check by ID
+        if (prev.some(n => n.id === newNotif.id)) {
+          console.log('[Realtime] Duplicate notification by ID, skipping');
+          return prev;
+        }
+        // Check by content + time window (5 seconds) to catch broadcast/postgres_changes duplicates
+        const isDuplicateContent = prev.some(n =>
+          n.title === newNotif.title &&
+          n.message === newNotif.message &&
+          n.relatedJobId === newNotif.relatedJobId &&
+          Math.abs(n.timestamp - newNotif.timestamp) < 5000
+        );
+        if (isDuplicateContent) {
+          console.log('[Realtime] Duplicate notification by content, skipping');
+          return prev;
+        }
+
+        // Show live alert only when we're actually adding a new notification
+        if (!newNotif.read) {
+          showAlert(`${newNotif.title}: ${newNotif.message}`, 'info');
+        }
+
         return [newNotif, ...prev];
       });
-
-      // Show live alert
-      if (!newNotif.read) {
-        showAlert(`${newNotif.title}: ${newNotif.message}`, 'info');
-      }
     };
 
     const channel = supabase
