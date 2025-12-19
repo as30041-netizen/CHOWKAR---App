@@ -36,19 +36,15 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
             if (error) throw error;
 
             // 2. Charge Worker Commission immediately
-            // Note: We do this after Poster is charged to ensure connection is valid first.
             const { error: workerChargeError } = await chargeWorkerCommission(workerId, jobId, bidAmount);
-
             if (workerChargeError) {
                 console.error("Failed to charge worker commission:", workerChargeError);
-                // We proceed anyway, connection is made. Admin can reconcile later or we accept the debt.
             }
 
-            // Refresh user wallet immediately to show new balance
+            // 3. Refresh user wallet
             await refreshUser();
 
-            onClose();
-            // Notify Worker with clear message about connection + fee
+            // 4. Notify accepted worker
             const commission = Math.ceil(bidAmount * WORKER_COMMISSION_RATE);
             await addNotification(
                 workerId,
@@ -57,6 +53,20 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                 "SUCCESS",
                 jobId
             );
+
+            // 5. Notify REJECTED workers (all other bids for this job)
+            const otherBids = job.bids.filter(b => b.id !== bidId);
+            for (const rejectedBid of otherBids) {
+                await addNotification(
+                    rejectedBid.workerId,
+                    "Bid Not Selected",
+                    `Another worker was selected for "${job.title}". Keep bidding on other jobs!`,
+                    "INFO",
+                    jobId
+                );
+            }
+
+            onClose();
             showAlert(t.contactUnlocked, 'success');
         } catch (error: any) {
             console.error("Bid accept error:", error);
