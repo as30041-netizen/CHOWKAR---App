@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback } from 'react';
 import { Job, Bid, JobStatus } from '../types';
-import { fetchJobs, createJob as createJobDB, updateJob as updateJobDB, deleteJob as deleteJobDB, createBid as createBidDB, updateBid as updateBidDB } from '../services/jobService';
+import { fetchJobs, createJob as createJobDB, updateJob as updateJobDB, deleteJob as deleteJobDB, createBid as createBidDB, updateBid as updateBidDB, checkExpiredBidDeadlines } from '../services/jobService';
 import { supabase } from '../lib/supabase';
 
 interface JobContextType {
@@ -167,6 +167,10 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const refreshJobs = async () => {
     try {
       setLoading(true);
+
+      // Check for expired 24-hour bid deadlines first
+      await checkExpiredBidDeadlines();
+
       const { jobs: fetchedJobs, error: fetchError } = await fetchJobs();
 
       if (fetchError) {

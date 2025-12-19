@@ -50,7 +50,27 @@ const dbBidToApp = (dbBid: any): Bid => {
   };
 };
 
-// Fetch all jobs with their bids
+// Check and expire bids that missed the 24-hour payment deadline
+export const checkExpiredBidDeadlines = async (): Promise<{ expiredCount: number; error?: string }> => {
+  try {
+    const { data, error } = await supabase.rpc('check_expired_bid_deadlines');
+
+    if (error) {
+      console.warn('[JobService] Error checking expired bids:', error);
+      return { expiredCount: 0, error: error.message };
+    }
+
+    if (data > 0) {
+      console.log(`[JobService] Expired ${data} bids that missed 24hr deadline`);
+    }
+
+    return { expiredCount: data || 0 };
+  } catch (err: any) {
+    console.error('[JobService] Failed to check expired bids:', err);
+    return { expiredCount: 0, error: err.message };
+  }
+};
+
 // Fetch all jobs with their bids
 export const fetchJobs = async (): Promise<{ jobs: Job[]; error?: string }> => {
   try {
@@ -260,20 +280,44 @@ export const updateBid = async (bid: Bid): Promise<{ success: boolean; error?: s
     return { success: false, error: 'Failed to update bid' };
   }
 };
-// Cancel a job with refund
-export const cancelJob = async (jobId: string, reason: string): Promise<{ success: boolean; error?: string }> => {
+// Cancel a job with refund (Poster only)
+export const cancelJob = async (jobId: string, reason: string): Promise<{ success: boolean; error?: string; refundAmount?: number; penalty?: boolean }> => {
   try {
-    const { error } = await supabase.rpc('cancel_job_with_refund', {
+    const { data, error } = await supabase.rpc('cancel_job_with_refund', {
       p_job_id: jobId,
       p_reason: reason
     });
 
     if (error) throw error;
 
-    return { success: true };
+    return {
+      success: true,
+      refundAmount: data?.refund_amount || 0,
+      penalty: data?.penalty || false
+    };
   } catch (error: any) {
     console.error('Error cancelling job:', error);
     return { success: false, error: error.message || 'Failed to cancel job' };
+  }
+};
+
+// Worker withdraws from a job (no refund after payment)
+export const withdrawFromJob = async (jobId: string, bidId: string): Promise<{ success: boolean; error?: string; message?: string }> => {
+  try {
+    const { data, error } = await supabase.rpc('withdraw_from_job', {
+      p_job_id: jobId,
+      p_bid_id: bidId
+    });
+
+    if (error) throw error;
+
+    return {
+      success: true,
+      message: data?.message || 'Withdrawn successfully'
+    };
+  } catch (error: any) {
+    console.error('Error withdrawing from job:', error);
+    return { success: false, error: error.message || 'Failed to withdraw' };
   }
 };
 

@@ -82,6 +82,17 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
 
         try {
             if (isEditing && initialJob) {
+                // CHECK: Can only edit OPEN jobs
+                if (initialJob.status !== 'OPEN') {
+                    showAlert(
+                        initialJob.status === 'IN_PROGRESS'
+                            ? 'Cannot edit a job that is in progress. Please contact the worker directly.'
+                            : 'Cannot edit a completed or cancelled job.',
+                        'error'
+                    );
+                    return;
+                }
+
                 // Update existing job (no payment required for editing)
                 const updatedJob: Job = {
                     ...initialJob,
@@ -97,7 +108,24 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
 
                 await updateJob(updatedJob);
                 showAlert('Job updated successfully!', 'success');
+
+                // Notify poster
                 await addNotification(user.id, 'Job Updated', `Job "${newJobTitle}" has been updated.`, "SUCCESS", initialJob.id);
+
+                // If job has bids, notify the workers
+                if (initialJob.bids && initialJob.bids.length > 0) {
+                    for (const bid of initialJob.bids) {
+                        if (bid.status === 'PENDING') {
+                            await addNotification(
+                                bid.workerId,
+                                'Job Updated',
+                                `The job "${newJobTitle}" you bid on has been updated. Please review the changes.`,
+                                'INFO',
+                                initialJob.id
+                            );
+                        }
+                    }
+                }
 
                 // Reset form
                 setNewJobTitle(''); setNewJobDesc(''); setNewJobBudget(''); setNewJobDate(''); setNewJobDuration(''); setNewJobCoords(undefined); setNewJobImage(undefined);
