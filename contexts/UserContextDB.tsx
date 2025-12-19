@@ -3,6 +3,7 @@ import { User, UserRole, Transaction, Notification, ChatMessage } from '../types
 import { MOCK_USER, TRANSLATIONS, FREE_AI_USAGE_LIMIT } from '../constants';
 import { supabase } from '../lib/supabase';
 import { updateWalletBalance, incrementAIUsage as incrementAIUsageDB, updateUserProfile, getCurrentUser, getUserProfile, signOut } from '../services/authService';
+import { registerPushNotifications, setupPushListeners, removePushListeners, isPushSupported } from '../services/pushService';
 
 interface UserContextType {
   user: User;
@@ -348,6 +349,17 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setMessages([]);
       console.log('[Data] Chat history fetch skipped (Lazy Loading Enabled)');
       console.log('[Data] All user data loaded successfully');
+
+      // Register for push notifications on native platforms
+      if (isPushSupported()) {
+        console.log('[Push] Registering for push notifications...');
+        const { success, token, error } = await registerPushNotifications(user.id);
+        if (success) {
+          console.log('[Push] Registered successfully, token:', token?.substring(0, 20) + '...');
+        } else {
+          console.log('[Push] Registration failed:', error);
+        }
+      }
 
     } catch (error) {
       console.error('[Data] Error fetching user data:', error);

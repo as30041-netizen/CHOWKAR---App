@@ -232,7 +232,7 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
         <div className="fixed inset-0 z-50 flex items-start justify-end">
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}></div>
 
-            <div className="relative w-full max-w-sm bg-white h-full shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col border-l border-gray-100">
+            <div className="relative w-full max-w-sm bg-white h-full shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col border-l border-gray-100 pt-safe pb-safe">
 
                 {/* Header */}
                 <div className="bg-white px-4 py-4 border-b border-gray-100 z-10 sticky top-0">

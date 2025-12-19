@@ -1,5 +1,5 @@
 import React from 'react';
-import { XCircle, MapPin, Star, AlertCircle, Pencil, ExternalLink, IndianRupee } from 'lucide-react';
+import { XCircle, MapPin, Star, AlertCircle, Pencil, ExternalLink, IndianRupee, UserCircle, Users, ChevronRight } from 'lucide-react';
 import { Job, UserRole, JobStatus } from '../types';
 import { useUser } from '../contexts/UserContextDB';
 import { LeafletMap } from './LeafletMap';
@@ -157,6 +157,66 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                         >
                             <ExternalLink size={14} /> Open Maps
                         </a>
+                    </div>
+                )}
+
+                {/* Bids Preview (for Poster viewing their OPEN job with bids) */}
+                {role === UserRole.POSTER && job.posterId === user.id && job.status === JobStatus.OPEN && job.bids.length > 0 && (
+                    <div className="mb-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                                <Users size={16} className="text-emerald-600" />
+                                {language === 'en' ? 'Bids Received' : 'प्राप्त बोलियां'} ({job.bids.length})
+                            </h4>
+                            <button
+                                onClick={() => onViewBids(job)}
+                                className="text-xs text-emerald-600 font-bold flex items-center gap-1 hover:underline"
+                            >
+                                {language === 'en' ? 'View All' : 'सभी देखें'} <ChevronRight size={14} />
+                            </button>
+                        </div>
+                        <div className="space-y-2">
+                            {job.bids.slice(0, 3).map(bid => (
+                                <div
+                                    key={bid.id}
+                                    onClick={() => onViewBids(job)}
+                                    className="bg-gray-50 rounded-xl p-3 flex items-center gap-3 border border-gray-100 cursor-pointer hover:bg-emerald-50 hover:border-emerald-200 transition-colors"
+                                >
+                                    <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden flex-shrink-0">
+                                        {bid.workerPhoto ? (
+                                            <img src={bid.workerPhoto} alt={bid.workerName} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <UserCircle size={40} className="text-gray-400" />
+                                        )}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-bold text-gray-900 text-sm truncate">{bid.workerName}</p>
+                                        <div className="flex items-center gap-1 text-xs text-gray-500">
+                                            <Star size={10} className="text-amber-500 fill-amber-500" />
+                                            <span>{bid.workerRating?.toFixed(1) || '5.0'}</span>
+                                            <span className="mx-1">•</span>
+                                            <span className="text-gray-400">{bid.workerLocation}</span>
+                                        </div>
+                                    </div>
+                                    <div className="text-right flex-shrink-0">
+                                        <p className="text-lg font-bold text-emerald-600">₹{bid.amount}</p>
+                                        <p className={`text-[10px] font-medium ${bid.status === 'PENDING' ? 'text-blue-500' :
+                                                bid.status === 'ACCEPTED' ? 'text-green-500' : 'text-gray-400'
+                                            }`}>
+                                            {bid.status}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
+                            {job.bids.length > 3 && (
+                                <button
+                                    onClick={() => onViewBids(job)}
+                                    className="w-full py-2 text-center text-sm text-emerald-600 font-bold bg-emerald-50 rounded-xl hover:bg-emerald-100 transition-colors"
+                                >
+                                    +{job.bids.length - 3} {language === 'en' ? 'more bids' : 'और बोलियां'}
+                                </button>
+                            )}
+                        </div>
                     </div>
                 )}
 

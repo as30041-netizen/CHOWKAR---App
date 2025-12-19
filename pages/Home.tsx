@@ -26,7 +26,7 @@ export const Home: React.FC<HomeProps> = ({
     onBid, onViewBids, onChat, onEdit, onClick, onReplyToCounter, onWithdrawBid,
     setShowFilterModal: _setShowFilterModal, showAlert
 }) => {
-    const { user, role, t, language } = useUser();
+    const { user, role, t, language, notifications } = useUser();
     const { jobs, loading, error, refreshJobs } = useJobs();
 
     // Local state for search/filter within Home
@@ -147,6 +147,11 @@ export const Home: React.FC<HomeProps> = ({
                     }).map(job => (
                         <div key={job.id} className="animate-fade-in-up h-full">
                             <JobCard job={job} currentUserId={user.id} userRole={role} distance={job.distance} language={language}
+                                hasUnreadBids={notifications.some(n =>
+                                    n.relatedJobId === job.id &&
+                                    !n.read &&
+                                    n.title === 'New Bid'
+                                )}
                                 onBid={(id) => onBid(id)}
                                 onViewBids={(j) => onViewBids(j)}
                                 onChat={onChat}

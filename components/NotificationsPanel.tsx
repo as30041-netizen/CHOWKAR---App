@@ -50,7 +50,7 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ isOpen, 
     return (
         <div className="fixed inset-0 z-50 flex items-start justify-end pointer-events-none">
             <div className="absolute inset-0 bg-black/40 pointer-events-auto backdrop-blur-sm" onClick={onClose}></div>
-            <div className="relative w-full max-w-sm bg-white h-full shadow-xl animate-slide-in-right flex flex-col pointer-events-auto pb-safe">
+            <div className="relative w-full max-w-sm bg-white h-full shadow-xl animate-slide-in-right flex flex-col pointer-events-auto pt-safe pb-safe">
                 <div className="shrink-0 bg-white border-b z-10">
                     <div className="p-4 flex justify-between items-center pb-2">
                         <h2 className="text-lg font-bold text-gray-900">{t.notifications}</h2>

@@ -9,6 +9,7 @@ interface JobCardProps {
   userRole: UserRole;
   distance?: number; // Optional distance in km
   language: 'en' | 'hi';
+  hasUnreadBids?: boolean; // Whether there are unread bid notifications for this job
   onBid: (jobId: string) => void;
   onViewBids: (job: Job) => void;
   onChat: (job: Job) => void;
@@ -35,6 +36,7 @@ export const JobCard: React.FC<JobCardProps> = ({
   userRole,
   distance,
   language,
+  hasUnreadBids = false,
   onBid,
   onViewBids,
   onChat,
@@ -338,7 +340,10 @@ export const JobCard: React.FC<JobCardProps> = ({
               >
                 {t.viewBids}
                 {job.bids.length > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm min-w-[20px] text-center border-2 border-white">
+                  <span className={`absolute -top-2 -right-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm min-w-[20px] text-center border-2 border-white ${hasUnreadBids
+                      ? 'bg-red-500 text-white animate-pulse'
+                      : 'bg-gray-200 text-gray-600'
+                    }`}>
                     {job.bids.length}
                   </span>
                 )}
