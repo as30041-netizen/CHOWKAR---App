@@ -171,7 +171,7 @@ export const initiateUPIPayment = async (
 
 // ============= WALLET FUNCTIONS =============
 
-// Deduct amount from user's wallet
+// Deduct amount from user's wallet using secure RPC
 export const deductFromWallet = async (
     userId: string,
     amount: number,
@@ -180,31 +180,18 @@ export const deductFromWallet = async (
     relatedJobId?: string
 ): Promise<{ success: boolean; newBalance: number; error: string | null }> => {
     try {
-        // Get current balance
-        const { data: profile, error: fetchError } = await supabase
-            .from('profiles')
-            .select('wallet_balance')
-            .eq('id', userId)
-            .single();
+        // Use the secure RPC to process transaction (negative amount for debit)
+        const { data, error } = await supabase.rpc('process_transaction', {
+            p_amount: amount,
+            p_type: 'DEBIT',
+            p_description: description
+        });
 
-        if (fetchError) throw fetchError;
+        if (error) throw error;
 
-        const currentBalance = profile?.wallet_balance || 0;
-        if (currentBalance < amount) {
-            return { success: false, newBalance: currentBalance, error: 'Insufficient wallet balance' };
-        }
+        const newBalance = data?.new_balance ?? 0;
 
-        const newBalance = currentBalance - amount;
-
-        // Update balance
-        const { error: updateError } = await supabase
-            .from('profiles')
-            .update({ wallet_balance: newBalance })
-            .eq('id', userId);
-
-        if (updateError) throw updateError;
-
-        // Record transaction
+        // Also record in payments table for tracking
         await supabase.from('payments').insert({
             user_id: userId,
             amount: amount,
@@ -217,6 +204,9 @@ export const deductFromWallet = async (
         return { success: true, newBalance, error: null };
     } catch (error: any) {
         console.error('Wallet deduction failed:', error);
+        if (error.message?.includes('Insufficient')) {
+            return { success: false, newBalance: 0, error: 'Insufficient wallet balance' };
+        }
         return { success: false, newBalance: 0, error: error.message };
     }
 };
@@ -229,27 +219,18 @@ export const creditToWallet = async (
     relatedJobId?: string
 ): Promise<{ success: boolean; newBalance: number; error: string | null }> => {
     try {
-        // Get current balance
-        const { data: profile, error: fetchError } = await supabase
-            .from('profiles')
-            .select('wallet_balance')
-            .eq('id', userId)
-            .single();
+        // Use the secure RPC to process transaction
+        const { data, error } = await supabase.rpc('process_transaction', {
+            p_amount: amount,
+            p_type: 'CREDIT',
+            p_description: description
+        });
 
-        if (fetchError) throw fetchError;
+        if (error) throw error;
 
-        const currentBalance = profile?.wallet_balance || 0;
-        const newBalance = currentBalance + amount;
+        const newBalance = data?.new_balance ?? 0;
 
-        // Update balance
-        const { error: updateError } = await supabase
-            .from('profiles')
-            .update({ wallet_balance: newBalance })
-            .eq('id', userId);
-
-        if (updateError) throw updateError;
-
-        // Record transaction
+        // Also record in payments table for tracking
         await supabase.from('payments').insert({
             user_id: userId,
             amount: amount,
