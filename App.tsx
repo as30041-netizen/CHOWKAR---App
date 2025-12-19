@@ -129,7 +129,7 @@ const AppContent: React.FC = () => {
     }
   }, [jobs, viewBidsModal.isOpen, viewBidsModal.job, selectedJob]);
 
-  const unreadCount = notifications.filter(n => n.userId === user.id && !n.read).length;
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   // Count chats with unread messages (only for IN_PROGRESS or COMPLETED jobs)
   const unreadChatCount = notifications.filter(n =>
