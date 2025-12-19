@@ -43,7 +43,7 @@ export const CounterModal: React.FC<CounterModalProps> = ({ isOpen, onClose, bid
                 }
 
                 const workerId = job.bids.find(b => b.id === bidId)?.workerId;
-                if (workerId) await addNotification(workerId, "Counter Offer", `Poster countered with ₹${newAmount}`, "INFO", job.id);
+                if (workerId) await addNotification(workerId, "Counter Offer", `Counter for "${job.title}": ₹${newAmount}`, "INFO", job.id);
 
                 showAlert("Counter offer sent!", "success");
                 onClose();

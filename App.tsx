@@ -287,16 +287,16 @@ const AppContent: React.FC = () => {
       if (action === 'ACCEPT') {
         const updatedBid = { ...bid, negotiationHistory: [...(bid.negotiationHistory || []), { amount: bid.amount, by: UserRole.WORKER, timestamp: Date.now(), message: "Accepted Counter Offer" }] };
         await updateBid(updatedBid);
-        await addNotification(job.posterId, "Counter Accepted", `${bid.workerName} accepted your offer!`, "SUCCESS", jobId);
+        await addNotification(job.posterId, "Counter Accepted", `"${job.title}": ${bid.workerName} accepted ₹${bid.amount}!`, "SUCCESS", jobId);
       } else if (action === 'REJECT') {
         const updatedJob = { ...job, bids: job.bids.filter(b => b.id !== bidId) };
         await updateJob(updatedJob);
-        await addNotification(job.posterId, "Counter Declined", `${bid.workerName} declined your counter offer.`, "WARNING", jobId);
+        await addNotification(job.posterId, "Counter Declined", `"${job.title}": ${bid.workerName} declined your offer.`, "WARNING", jobId);
         showAlert(t.alertJobDeleted, 'info');
       } else if (action === 'COUNTER' && amount) {
         const updatedBid = { ...bid, amount, negotiationHistory: [...(bid.negotiationHistory || []), { amount, by: UserRole.WORKER, timestamp: Date.now() }] };
         await updateBid(updatedBid);
-        await addNotification(job.posterId, "Counter Offer", `${bid.workerName} countered with ₹${amount}`, "INFO", jobId);
+        await addNotification(job.posterId, "Counter Offer", `"${job.title}": ${bid.workerName} countered ₹${amount}`, "INFO", jobId);
       }
     } catch { showAlert('Failed to process counter.', 'error'); }
   };
