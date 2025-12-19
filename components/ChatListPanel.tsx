@@ -61,15 +61,18 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
         loadChatStates();
     }, [user.id]);
 
-    // 1. Determine involved jobs (those where user is poster or bidder)
+    // 1. Determine involved jobs (only IN_PROGRESS or COMPLETED - not OPEN)
     const involvedJobs = useMemo(() => {
         // PERF: Skip heavy filtering if panel is closed
         if (!isOpen) return [];
 
         return jobs.filter(j => {
+            // Only show jobs where chat is possible (not OPEN jobs)
+            if (j.status === 'OPEN') return false;
+
             const isPoster = j.posterId === user.id;
             const isBidder = j.bids.some(b => b.workerId === user.id);
-            // Also include jobs with live messages (even if not bid on yet)
+            // Also include jobs with live messages
             const hasLiveMsg = liveMessages.some(m => m.jobId === j.id);
             return isPoster || isBidder || hasLiveMsg;
         });

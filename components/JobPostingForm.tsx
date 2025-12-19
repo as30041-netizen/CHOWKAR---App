@@ -16,7 +16,7 @@ interface JobPostingFormProps {
 }
 
 export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCancel, initialJob }) => {
-    const { user, t, language, checkFreeLimit, incrementAiUsage, addNotification, showAlert } = useUser();
+    const { user, t, language, checkFreeLimit, incrementAiUsage, addNotification, showAlert, refreshUser } = useUser();
     const { addJob, updateJob } = useJobs();
 
     const [newJobTitle, setNewJobTitle] = useState('');
@@ -134,6 +134,9 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                     );
 
                     if (success) {
+                        // Refresh user to update wallet balance in UI
+                        await refreshUser();
+
                         // Create job immediately
                         const createdJobId = await addJob(newJob);
                         if (createdJobId) {
