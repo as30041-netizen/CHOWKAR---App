@@ -4,9 +4,9 @@ import { UserProvider, useUser } from './contexts/UserContextDB';
 import { JobProvider, useJobs } from './contexts/JobContextDB';
 import { ChatMessage, Coordinates, Job, JobStatus, UserRole } from './types';
 import { Confetti } from './components/Confetti';
-import { POSTER_FEE, WORKER_COMMISSION_RATE } from './constants';
 import { ChatInterface } from './components/ChatInterface';
 import { ReviewModal } from './components/ReviewModal';
+import { PaymentModal } from './components/PaymentModal';
 import {
   MapPin, UserCircle, ArrowLeftRight, Bell, MessageCircle, Languages, Loader2
 } from 'lucide-react';
@@ -34,7 +34,8 @@ import { LandingPage } from './components/LandingPage';
 // Services
 import { signInWithGoogle, completeProfile } from './services/authService';
 import { useDeepLinkHandler } from './hooks/useDeepLinkHandler';
-import { cancelJob, chargeWorkerCommission } from './services/jobService';
+import { cancelJob } from './services/jobService';
+import { checkWalletBalance, deductFromWallet, getAppConfig } from './services/paymentService';
 
 const AppContent: React.FC = () => {
   const {
@@ -77,6 +78,9 @@ const AppContent: React.FC = () => {
   const [reviewModalData, setReviewModalData] = useState<{ isOpen: boolean, revieweeId: string, revieweeName: string, jobId: string } | null>(null);
   const [viewBidsModal, setViewBidsModal] = useState<{ isOpen: boolean; job: Job | null }>({ isOpen: false, job: null });
   const [counterModalOpen, setCounterModalOpen] = useState<{ isOpen: boolean; bidId: string | null; jobId: string | null; initialAmount: string }>({ isOpen: false, bidId: null, jobId: null, initialAmount: '' });
+
+  // Worker Payment Modal State (for unlocking chat after bid accepted)
+  const [workerPaymentModal, setWorkerPaymentModal] = useState<{ isOpen: boolean; job: Job | null; bidId: string | null }>({ isOpen: false, job: null, bidId: null });
 
   // --- Job Editing State (Used in Home Page -> Edit) ---
   const [editingJob, setEditingJob] = useState<Job | null>(null);
@@ -173,7 +177,7 @@ const AppContent: React.FC = () => {
 
   const handleLogout = async () => { await logout(); };
 
-  const handleChatOpen = (job: Job, receiverId?: string) => {
+  const handleChatOpen = async (job: Job, receiverId?: string) => {
     // VALIDATE: Chat only for IN_PROGRESS jobs
     if (job.status !== JobStatus.IN_PROGRESS) {
       showAlert(language === 'en'
@@ -192,6 +196,49 @@ const AppContent: React.FC = () => {
       return;
     }
 
+    // WORKER PAYMENT CHECK: If user is the accepted worker, check if they've paid
+    if (user.id === acceptedBid?.workerId && acceptedBid) {
+      // Check connection_payment_status from database
+      const { data: bidData } = await supabase
+        .from('bids')
+        .select('connection_payment_status')
+        .eq('id', acceptedBid.id)
+        .single();
+
+      if (bidData?.connection_payment_status !== 'PAID') {
+        // Worker hasn't paid - check wallet first
+        const config = await getAppConfig();
+        const connectionFee = config.connection_fee;
+        const { sufficient } = await checkWalletBalance(user.id, connectionFee);
+
+        if (sufficient) {
+          // Deduct from wallet and mark as paid
+          const { success } = await deductFromWallet(user.id, connectionFee, 'Connection Fee', 'CONNECTION', job.id);
+          if (success) {
+            // Update bid payment status
+            await supabase.from('bids').update({ connection_payment_status: 'PAID' }).eq('id', acceptedBid.id);
+
+            // Notify poster
+            await addNotification(job.posterId, "Chat is now active", `Chat unlocked for "${job.title}"!`, "SUCCESS", job.id);
+            showAlert(language === 'en' ? `Chat unlocked! ₹${connectionFee} deducted from wallet.` : `चैट अनलॉक! वॉलेट से ₹${connectionFee} काटे गए।`, 'success');
+
+            // Open chat
+            setChatOpen({ isOpen: true, job, receiverId: job.posterId });
+            setActiveChatId(job.id);
+            setActiveJobId(job.id);
+            markNotificationsAsReadForJob(job.id);
+            setShowChatList(false);
+            return;
+          }
+        }
+
+        // Wallet insufficient - show payment modal
+        setWorkerPaymentModal({ isOpen: true, job, bidId: acceptedBid.id });
+        return;
+      }
+    }
+
+    // Either poster or paid worker - open chat
     setChatOpen({ isOpen: true, job, receiverId });
     setActiveChatId(job.id);
     setActiveJobId(job.id);
@@ -323,25 +370,19 @@ const AppContent: React.FC = () => {
       const bid = job.bids.find(b => b.id === bidId); if (!bid) return;
 
       if (action === 'ACCEPT') {
-        // WORKER ACCEPTS COUNTER = JOB FINALIZED
-        // 1. Call accept_bid RPC to finalize the job
+        // WORKER ACCEPTS COUNTER = JOB FINALIZED (but worker needs to pay to unlock chat)
+        // 1. Call accept_bid RPC (no fees anymore)
         const { error: acceptError } = await supabase.rpc('accept_bid', {
           p_job_id: jobId,
           p_bid_id: bidId,
           p_poster_id: job.posterId,
           p_worker_id: bid.workerId,
           p_amount: bid.amount,
-          p_poster_fee: POSTER_FEE
+          p_poster_fee: 0 // No fee - already paid when posting
         });
         if (acceptError) throw acceptError;
 
-        // 2. Charge Worker Commission
-        const { error: commissionError } = await chargeWorkerCommission(bid.workerId, jobId, bid.amount);
-        if (commissionError) {
-          console.warn('[Accept] Worker commission charge failed:', commissionError);
-        }
-
-        // 3. Broadcast job update for instant real-time sync
+        // 2. Broadcast job update for instant real-time sync
         try {
           const updatedJobPayload = {
             id: jobId,
@@ -363,22 +404,22 @@ const AppContent: React.FC = () => {
             event: 'job_updated',
             payload: updatedJobPayload
           });
-          console.log('[Accept] Job status broadcast sent');
         } catch (broadcastErr) {
           console.warn('[Accept] Job broadcast failed:', broadcastErr);
         }
 
-        // 4. Notify Poster
-        const commission = Math.ceil(bid.amount * WORKER_COMMISSION_RATE);
+        // 3. Notify Poster - waiting for worker to pay
         await addNotification(
           job.posterId,
           "Job Accepted",
-          `"${job.title}": ${bid.workerName} accepted ₹${bid.amount}. Chat is now unlocked!`,
+          `"${job.title}": ${bid.workerName} accepted ₹${bid.amount}. Waiting for worker to unlock chat.`,
           "SUCCESS",
           jobId
         );
 
-        showAlert(t.contactUnlocked || 'Job accepted! Chat unlocked.', 'success');
+        // 4. Show worker their payment modal to unlock chat
+        setWorkerPaymentModal({ isOpen: true, job, bidId });
+        showAlert(language === 'en' ? 'Counter accepted! Pay to unlock chat.' : 'काउंटर स्वीकार! चैट अनलॉक करने के लिए भुगतान करें।', 'success');
 
       } else if (action === 'REJECT') {
         const updatedJob = { ...job, bids: job.bids.filter(b => b.id !== bidId) };
@@ -441,6 +482,44 @@ const AppContent: React.FC = () => {
     } catch (e) {
       console.error(e);
       showAlert('Error during cancellation', 'error');
+    }
+  };
+
+  // Worker Payment Success Handler - Updates bid and opens chat
+  const handleWorkerPaymentSuccess = async (paymentId: string) => {
+    if (!workerPaymentModal.job || !workerPaymentModal.bidId) return;
+
+    try {
+      // Update bid connection_payment_status to PAID
+      const { error } = await supabase
+        .from('bids')
+        .update({
+          connection_payment_status: 'PAID',
+          connection_payment_id: paymentId
+        })
+        .eq('id', workerPaymentModal.bidId);
+
+      if (error) throw error;
+
+      // Notify poster that chat is now unlocked
+      await addNotification(
+        workerPaymentModal.job.posterId,
+        "Chat Unlocked",
+        `Worker has paid and chat is now active for "${workerPaymentModal.job.title}"!`,
+        "SUCCESS",
+        workerPaymentModal.job.id
+      );
+
+      // Close payment modal and open chat
+      const job = workerPaymentModal.job;
+      setWorkerPaymentModal({ isOpen: false, job: null, bidId: null });
+      setChatOpen({ isOpen: true, job, receiverId: job.posterId });
+      setActiveChatId(job.id);
+      setActiveJobId(job.id);
+      showAlert(language === 'en' ? 'Payment successful! Chat unlocked.' : 'भुगतान सफल! चैट अनलॉक।', 'success');
+    } catch (error) {
+      console.error('Error updating payment status:', error);
+      showAlert('Payment recorded but chat unlock failed. Try again.', 'error');
     }
   };
 
@@ -725,6 +804,17 @@ const AppContent: React.FC = () => {
             navigate('/');
           }
         }}
+      />
+
+      {/* Worker Payment Modal - for unlocking chat */}
+      <PaymentModal
+        isOpen={workerPaymentModal.isOpen}
+        onClose={() => setWorkerPaymentModal({ isOpen: false, job: null, bidId: null })}
+        paymentType="CONNECTION"
+        relatedJobId={workerPaymentModal.job?.id}
+        relatedBidId={workerPaymentModal.bidId || undefined}
+        onPaymentSuccess={handleWorkerPaymentSuccess}
+        onPaymentFailure={(error) => showAlert(error || 'Payment failed', 'error')}
       />
 
     </div>

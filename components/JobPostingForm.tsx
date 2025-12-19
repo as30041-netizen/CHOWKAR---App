@@ -5,7 +5,9 @@ import { Job, JobStatus, Coordinates } from '../types';
 import { CATEGORIES, CATEGORY_TRANSLATIONS, FREE_AI_USAGE_LIMIT } from '../constants';
 import { enhanceJobDescriptionStream, estimateWage, analyzeImageForJob } from '../services/geminiService';
 import { getDeviceLocation } from '../utils/geo';
-import { Mic, MicOff, Sparkles, Lock, Loader2, Calculator, MapPin, ChevronRight, ArrowDownWideNarrow, Camera, X } from 'lucide-react';
+import { Mic, MicOff, Sparkles, Lock, Loader2, Calculator, MapPin, ChevronRight, ArrowDownWideNarrow, Camera, X, Wallet } from 'lucide-react';
+import { PaymentModal } from './PaymentModal';
+import { getAppConfig, deductFromWallet, checkWalletBalance } from '../services/paymentService';
 
 interface JobPostingFormProps {
     onSuccess: () => void;
@@ -30,12 +32,20 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
     const [isEstimating, setIsEstimating] = useState(false);
     const [isListening, setIsListening] = useState(false);
     const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [pendingJob, setPendingJob] = useState<Job | null>(null);
+    const [postingFee, setPostingFee] = useState<number>(10);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const remainingFreeTries = FREE_AI_USAGE_LIMIT - (user.aiUsageCount || 0);
     const showLockIcon = !user.isPremium && remainingFreeTries <= 0;
     const isEditing = !!initialJob;
+
+    // Load posting fee on mount
+    useEffect(() => {
+        getAppConfig().then(config => setPostingFee(config.job_posting_fee));
+    }, []);
 
     // Prefill form when editing
     useEffect(() => {
@@ -72,7 +82,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
 
         try {
             if (isEditing && initialJob) {
-                // Update existing job
+                // Update existing job (no payment required for editing)
                 const updatedJob: Job = {
                     ...initialJob,
                     title: newJobTitle,
@@ -88,8 +98,12 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                 await updateJob(updatedJob);
                 showAlert('Job updated successfully!', 'success');
                 await addNotification(user.id, 'Job Updated', `Job "${newJobTitle}" has been updated.`, "SUCCESS", initialJob.id);
+
+                // Reset form
+                setNewJobTitle(''); setNewJobDesc(''); setNewJobBudget(''); setNewJobDate(''); setNewJobDuration(''); setNewJobCoords(undefined); setNewJobImage(undefined);
+                onSuccess();
             } else {
-                // Create new job
+                // NEW JOB: Prepare job data
                 const newJob: Job = {
                     id: `j${Date.now()}`,
                     posterId: user.id,
@@ -110,20 +124,67 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                     image: newJobImage
                 };
 
-                const createdJobId = await addJob(newJob);
+                // CHECK WALLET FIRST
+                const { sufficient, balance } = await checkWalletBalance(user.id, postingFee);
 
-                if (createdJobId) {
-                    await addNotification(user.id, "Job Posted", `"${newJobTitle}" is now live!`, "SUCCESS", createdJobId);
+                if (sufficient) {
+                    // Deduct from wallet and create job directly
+                    const { success, error: walletError } = await deductFromWallet(
+                        user.id, postingFee, 'Job Posting Fee', 'JOB_POSTING'
+                    );
+
+                    if (success) {
+                        // Create job immediately
+                        const createdJobId = await addJob(newJob);
+                        if (createdJobId) {
+                            await addNotification(user.id, "Job Posted", `"${newJobTitle}" is now live!`, "SUCCESS", createdJobId);
+                        }
+                        showAlert(language === 'en'
+                            ? `Job posted! ₹${postingFee} deducted from wallet.`
+                            : `जॉब पोस्ट हुई! वॉलेट से ₹${postingFee} काटे गए।`, 'success');
+
+                        // Reset form
+                        setNewJobTitle(''); setNewJobDesc(''); setNewJobBudget(''); setNewJobDate(''); setNewJobDuration(''); setNewJobCoords(undefined); setNewJobImage(undefined);
+                        onSuccess();
+                    } else {
+                        showAlert(walletError || 'Wallet deduction failed', 'error');
+                    }
+                } else {
+                    // Show payment modal for Razorpay
+                    setPendingJob(newJob);
+                    setShowPaymentModal(true);
                 }
-                showAlert('Job posted successfully!', 'success');
             }
+        } catch (error) {
+            console.error(isEditing ? "Failed to update job:" : "Failed to prepare job:", error);
+            showAlert(`An error occurred while ${isEditing ? 'updating' : 'preparing'} the job. Please try again.`, 'error');
+        }
+    };
+
+    // Called after payment is successful
+    const handlePaymentSuccess = async (paymentId: string) => {
+        if (!pendingJob) return;
+
+        try {
+            // Create the job now that payment is confirmed
+            const createdJobId = await addJob({
+                ...pendingJob,
+                // @ts-ignore - payment_id will be stored in DB
+                payment_id: paymentId
+            });
+
+            if (createdJobId) {
+                await addNotification(user.id, "Job Posted", `"${pendingJob.title}" is now live!`, "SUCCESS", createdJobId);
+            }
+            showAlert('Job posted successfully!', 'success');
 
             // Reset form
             setNewJobTitle(''); setNewJobDesc(''); setNewJobBudget(''); setNewJobDate(''); setNewJobDuration(''); setNewJobCoords(undefined); setNewJobImage(undefined);
+            setPendingJob(null);
             onSuccess();
         } catch (error) {
-            console.error(isEditing ? "Failed to update job:" : "Failed to post job:", error);
-            showAlert(`An error occurred while ${isEditing ? 'updating' : 'posting'} the job. Please try again.`, 'error');
+            console.error("Failed to post job after payment:", error);
+            showAlert('Payment successful but failed to create job. Please contact support.', 'error');
         }
     };
 
@@ -443,8 +504,19 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                 onClick={handlePostJob}
                 className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 hover:bg-emerald-700 active:scale-95 transition-all mt-4 relative z-10"
             >
-                {isEditing ? (language === 'en' ? 'Update Job' : 'नौकरी अपडेट करें') : t.postJobBtn} <ChevronRight size={20} />
+                {isEditing
+                    ? (language === 'en' ? 'Update Job' : 'नौकरी अपडेट करें')
+                    : (language === 'en' ? `Post Job (₹${postingFee})` : `नौकरी पोस्ट करें (₹${postingFee})`)
+                } <ChevronRight size={20} />
             </button>
+            {!isEditing && user.walletBalance >= postingFee && (
+                <p className="text-center text-sm text-emerald-600 mt-2 flex items-center justify-center gap-1">
+                    <Wallet size={14} />
+                    {language === 'en'
+                        ? `Will use ₹${postingFee} from wallet (Balance: ₹${user.walletBalance})`
+                        : `वॉलेट से ₹${postingFee} का उपयोग होगा (शेष: ₹${user.walletBalance})`}
+                </p>
+            )}
             {onCancel && (
                 <button
                     type="button"
@@ -454,6 +526,20 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                     {language === 'en' ? 'Cancel' : 'रद्द करें'}
                 </button>
             )}
+
+            {/* Payment Modal for new job posting */}
+            <PaymentModal
+                isOpen={showPaymentModal}
+                onClose={() => {
+                    setShowPaymentModal(false);
+                    setPendingJob(null);
+                }}
+                paymentType="JOB_POSTING"
+                onPaymentSuccess={handlePaymentSuccess}
+                onPaymentFailure={(error) => {
+                    showAlert(error || 'Payment failed', 'error');
+                }}
+            />
         </div>
     );
 };

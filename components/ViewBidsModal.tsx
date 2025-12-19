@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { XCircle, UserCircle, Star } from 'lucide-react';
 import { Job, UserRole } from '../types';
 import { useUser } from '../contexts/UserContextDB';
-import { POSTER_FEE, WORKER_COMMISSION_RATE } from '../constants';
-import { supabase } from '../lib/supabase'; // Direct supabase usage as per original App.tsx
-import { useJobs } from '../contexts/JobContextDB'; // Need context to refresh wallet if needed, though props might suffice
-import { chargeWorkerCommission } from '../services/jobService';
+import { supabase } from '../lib/supabase';
+import { useJobs } from '../contexts/JobContextDB';
+import { getAppConfig } from '../services/paymentService';
 
 interface ViewBidsModalProps {
     isOpen: boolean;
@@ -16,45 +15,37 @@ interface ViewBidsModalProps {
 }
 
 export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, job, onCounter, showAlert }) => {
-    const { user, t, addNotification, refreshUser } = useUser();
+    const { user, t, addNotification } = useUser();
     const [isAcceptingBid, setIsAcceptingBid] = useState(false);
+    const [connectionFee, setConnectionFee] = useState(20);
+
+    // Load connection fee from admin config
+    useEffect(() => {
+        getAppConfig().then(config => setConnectionFee(config.connection_fee));
+    }, []);
 
     if (!isOpen || !job) return null;
 
     const handleAcceptBid = async (jobId: string, bidId: string, bidAmount: number, workerId: string) => {
-        if (user.walletBalance < POSTER_FEE) {
-            showAlert(`${t.alertInsufficientBalance}${POSTER_FEE}`, 'error');
-            return;
-        }
-
+        // NO WALLET CHECK NEEDED - Poster already paid when posting
         setIsAcceptingBid(true);
         try {
-            // 1. Charge Poster & Accept Logic (RPC)
+            // 1. Accept Bid (RPC - no fees anymore)
             const { error } = await supabase.rpc('accept_bid', {
-                p_job_id: jobId, p_bid_id: bidId, p_poster_id: user.id, p_worker_id: workerId, p_amount: bidAmount, p_poster_fee: POSTER_FEE
+                p_job_id: jobId, p_bid_id: bidId, p_poster_id: user.id, p_worker_id: workerId, p_amount: bidAmount, p_poster_fee: 0
             });
             if (error) throw error;
 
-            // 2. Charge Worker Commission immediately
-            const { error: workerChargeError } = await chargeWorkerCommission(workerId, jobId, bidAmount);
-            if (workerChargeError) {
-                console.error("Failed to charge worker commission:", workerChargeError);
-            }
-
-            // 3. Refresh user wallet
-            await refreshUser();
-
-            // 4. Notify accepted worker
-            const commission = Math.ceil(bidAmount * WORKER_COMMISSION_RATE);
+            // 2. Notify accepted worker - they need to pay to unlock chat
             await addNotification(
                 workerId,
                 "Bid Accepted",
-                `Congrats! Your bid for "${job.title}" was accepted. A ₹${commission} platform fee was deducted.`,
+                `Congratulations! Your bid for "${job.title}" was accepted. Unlock chat for ₹${connectionFee} to start working!`,
                 "SUCCESS",
                 jobId
             );
 
-            // 5. Notify REJECTED workers (all other bids for this job)
+            // 3. Notify REJECTED workers
             const otherBids = job.bids.filter(b => b.id !== bidId);
             for (const rejectedBid of otherBids) {
                 await addNotification(
@@ -66,7 +57,7 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                 );
             }
 
-            // 6. Broadcast job update for instant real-time sync
+            // 4. Broadcast job update for instant real-time sync
             try {
                 const updatedJobPayload = {
                     id: jobId,
@@ -86,13 +77,12 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                     event: 'job_updated',
                     payload: updatedJobPayload
                 });
-                console.log('[ViewBids] Job status broadcast sent');
             } catch (broadcastErr) {
                 console.warn('[ViewBids] Job broadcast failed:', broadcastErr);
             }
 
             onClose();
-            showAlert(t.contactUnlocked, 'success');
+            showAlert(language === 'en' ? 'Bid accepted! Waiting for worker to unlock chat.' : 'बोली स्वीकार! कर्मचारी के चैट खोलने की प्रतीक्षा करें।', 'success');
         } catch (error: any) {
             console.error("Bid accept error:", error);
             showAlert(`Failed to accept bid: ${error.message || 'Unknown error'}`, 'error');
@@ -100,6 +90,8 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
             setIsAcceptingBid(false);
         }
     };
+
+    const language = user.preferredLanguage || 'en';
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -143,11 +135,7 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                                 {user.id === job?.posterId && bid.status === 'PENDING' && (
                                     <div className="flex gap-2 mt-2">
                                         <button
-                                            onClick={() => {
-                                                if (confirm(t.acceptingBidFeeWarn.replace('{fee}', POSTER_FEE.toString()))) {
-                                                    handleAcceptBid(job!.id, bid.id, bid.amount, bid.workerId);
-                                                }
-                                            }}
+                                            onClick={() => handleAcceptBid(job!.id, bid.id, bid.amount, bid.workerId)}
                                             disabled={isAcceptingBid}
                                             className="flex-1 bg-emerald-600 text-white py-2 rounded-lg font-bold text-sm shadow-md hover:bg-emerald-700"
                                         >

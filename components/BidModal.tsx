@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { XCircle, LayoutGrid } from 'lucide-react';
 import { useUser } from '../contexts/UserContextDB';
 import { useJobs } from '../contexts/JobContextDB';
-import { WORKER_COMMISSION_RATE } from '../constants';
 import { Bid, UserRole } from '../types';
 import { enhanceBidMessageStream } from '../services/geminiService';
+import { getAppConfig } from '../services/paymentService';
 
 interface BidModalProps {
     isOpen: boolean;
@@ -103,11 +103,11 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
                             <div className="w-4 h-4 bg-emerald-100 rounded-full flex items-center justify-center"><LayoutGrid size={10} /></div> {isEnhancingBid ? 'Enhancing...' : 'Enhance with AI'}
                         </button>
                     </div>
-                    <div className="bg-orange-50 p-3 rounded-lg border border-orange-100 mb-2">
-                        <p className="text-xs text-orange-800">
+                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 mb-2">
+                        <p className="text-xs text-blue-800">
                             {contextLanguage === 'en'
-                                ? `Note: A ${(WORKER_COMMISSION_RATE * 100)}% platform fee (₹${Math.ceil(Number(bidAmount || 0) * WORKER_COMMISSION_RATE)}) will be deducted from your wallet when your bid is accepted.`
-                                : `ध्यान दें: आपकी बोली स्वीकार होने पर आपके वॉलेट से ${(WORKER_COMMISSION_RATE * 100)}% प्लेटफॉर्म फीस (₹${Math.ceil(Number(bidAmount || 0) * WORKER_COMMISSION_RATE)}) काट ली जाएगी।`}
+                                ? `Bidding is FREE! If your bid is accepted, you'll pay a small connection fee to unlock chat and contact details.`
+                                : `बोली लगाना मुफ्त है! यदि आपकी बोली स्वीकार की जाती है, तो चैट और संपर्क विवरण अनलॉक करने के लिए एक छोटी कनेक्शन फीस का भुगतान करना होगा।`}
                         </p>
                     </div>
                     <button onClick={handlePlaceBid} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-emerald-700">{contextT.sendBid}</button>
