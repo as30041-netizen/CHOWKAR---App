@@ -155,11 +155,11 @@ const AppContent: React.FC = () => {
     setActiveJobId(null);
   }, [location.pathname]);
 
-  // Track when ViewBidsModal opens to set active job and clear notifications
+  // Track when ViewBidsModal opens to set active job and mark notifications as read
   useEffect(() => {
     if (viewBidsModal.isOpen && viewBidsModal.job) {
       setActiveJobId(viewBidsModal.job.id);
-      clearNotificationsForJob(viewBidsModal.job.id);
+      markNotificationsAsReadForJob(viewBidsModal.job.id);
     }
   }, [viewBidsModal.isOpen, viewBidsModal.job?.id]);
 
@@ -167,7 +167,7 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     if (selectedJob) {
       setActiveJobId(selectedJob.id);
-      clearNotificationsForJob(selectedJob.id);
+      markNotificationsAsReadForJob(selectedJob.id);
     }
   }, [selectedJob?.id]);
 
@@ -195,7 +195,7 @@ const AppContent: React.FC = () => {
     setChatOpen({ isOpen: true, job, receiverId });
     setActiveChatId(job.id);
     setActiveJobId(job.id);
-    clearNotificationsForJob(job.id);
+    markNotificationsAsReadForJob(job.id);
     setShowChatList(false);
   };
 
