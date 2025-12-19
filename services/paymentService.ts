@@ -112,7 +112,7 @@ export const initiateRazorpayPayment = (
         currency?: string;
         name: string;
         description: string;
-        orderId: string;
+        orderId: string; // Our internal payment ID for reference
         prefillName?: string;
         prefillEmail?: string;
         prefillPhone?: string;
@@ -121,7 +121,15 @@ export const initiateRazorpayPayment = (
     onError: (error: any) => void
 ) => {
     // Razorpay Key ID - should be in environment variable
-    const RAZORPAY_KEY_ID = import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_YOUR_KEY_HERE';
+    const RAZORPAY_KEY_ID = import.meta.env.VITE_RAZORPAY_KEY_ID;
+
+    if (!RAZORPAY_KEY_ID || RAZORPAY_KEY_ID === 'rzp_test_YOUR_KEY_HERE') {
+        console.error('[Payment] Razorpay key not configured!');
+        onError({ message: 'Payment gateway not configured. Please contact support.' });
+        return;
+    }
+
+    console.log('[Payment] Initiating Razorpay with key:', RAZORPAY_KEY_ID.substring(0, 12) + '...');
 
     const razorpayOptions = {
         key: RAZORPAY_KEY_ID,
@@ -129,8 +137,20 @@ export const initiateRazorpayPayment = (
         currency: options.currency || 'INR',
         name: options.name,
         description: options.description,
-        order_id: options.orderId,
-        handler: onSuccess,
+        // NOTE: Not passing order_id - using simple checkout mode
+        // For production, you should create orders via your backend
+        notes: {
+            internal_payment_id: options.orderId // Store our reference
+        },
+        handler: (response: any) => {
+            console.log('[Payment] Success response:', response);
+            // In simple mode, razorpay_order_id may be undefined
+            onSuccess({
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id || options.orderId,
+                razorpay_signature: response.razorpay_signature || ''
+            });
+        },
         prefill: {
             name: options.prefillName,
             email: options.prefillEmail,
@@ -141,21 +161,29 @@ export const initiateRazorpayPayment = (
         },
         modal: {
             ondismiss: () => {
+                console.log('[Payment] User dismissed modal');
                 onError({ message: 'Payment cancelled by user' });
             }
         }
     };
 
     if (typeof window.Razorpay === 'undefined') {
-        onError({ message: 'Payment gateway not loaded. Please try again.' });
+        console.error('[Payment] Razorpay SDK not loaded!');
+        onError({ message: 'Payment gateway not loaded. Please refresh and try again.' });
         return;
     }
 
-    const rzp = new window.Razorpay(razorpayOptions);
-    rzp.on('payment.failed', (response: any) => {
-        onError(response.error);
-    });
-    rzp.open();
+    try {
+        const rzp = new window.Razorpay(razorpayOptions);
+        rzp.on('payment.failed', (response: any) => {
+            console.error('[Payment] Payment failed:', response.error);
+            onError(response.error);
+        });
+        rzp.open();
+    } catch (err: any) {
+        console.error('[Payment] Failed to open Razorpay:', err);
+        onError({ message: err.message || 'Failed to open payment gateway' });
+    }
 };
 
 // For mobile apps, use UPI Intent
