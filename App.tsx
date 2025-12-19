@@ -589,9 +589,7 @@ const AppContent: React.FC = () => {
                 </span>
               )}
             </button>
-            <button onClick={() => { setRole(r => r === UserRole.WORKER ? UserRole.POSTER : UserRole.WORKER); }} className="px-3 py-1.5 bg-emerald-50 rounded-full text-xs font-semibold text-emerald-800 border border-emerald-100 flex items-center gap-1 hover:bg-emerald-100">
-              <ArrowLeftRight size={14} />{role === UserRole.WORKER ? t.switchHiring : t.switchWorking}
-            </button>
+
           </div>
         </div>
       </header>
