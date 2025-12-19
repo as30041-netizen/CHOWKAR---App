@@ -385,7 +385,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         relatedJobId
       };
 
-      // Update state (avoid duplicates by checking ID OR content+time)
+      // Check for duplicates BEFORE updating state
       setNotifications(prev => {
         // Check by ID
         if (prev.some(n => n.id === newNotif.id)) {
@@ -404,9 +404,10 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           return prev;
         }
 
-        // Show live alert only when we're actually adding a new notification
+        // Show alert for new notifications (inside callback to ensure we only alert on actual additions)
         if (!newNotif.read) {
-          showAlert(`${newNotif.title}: ${newNotif.message}`, 'info');
+          // Use setTimeout to escape the state update context
+          setTimeout(() => showAlert(`${newNotif.title}: ${newNotif.message}`, 'info'), 0);
         }
 
         return [newNotif, ...prev];

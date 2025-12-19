@@ -501,7 +501,11 @@ const AppContent: React.FC = () => {
             </button>
             <button onClick={() => setShowNotifications(true)} className="relative p-2 hover:bg-gray-100 rounded-full">
               <Bell size={20} className="text-gray-600" />
-              {unreadCount > 0 && <span className="absolute top-1.5 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>}
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-2 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </button>
             <button onClick={() => { setRole(r => r === UserRole.WORKER ? UserRole.POSTER : UserRole.WORKER); }} className="px-3 py-1.5 bg-emerald-50 rounded-full text-xs font-semibold text-emerald-800 border border-emerald-100 flex items-center gap-1 hover:bg-emerald-100">
               <ArrowLeftRight size={14} />{role === UserRole.WORKER ? t.switchHiring : t.switchWorking}
