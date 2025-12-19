@@ -43,7 +43,8 @@ const AppContent: React.FC = () => {
     notifications, messages, setMessages,
     addNotification, logout, t,
     showSubscriptionModal, setShowSubscriptionModal,
-    showAlert, currentAlert, updateUserInDB, refreshUser, setActiveChatId, markNotificationsAsReadForJob
+    showAlert, currentAlert, updateUserInDB, refreshUser, setActiveChatId,
+    markNotificationsAsReadForJob, setActiveJobId, deleteNotification, clearNotificationsForJob
   } = useUser();
 
   const { jobs, updateJob, deleteJob, updateBid } = useJobs();
@@ -151,14 +152,32 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     setChatOpen({ isOpen: false, job: null });
     setActiveChatId(null);
+    setActiveJobId(null);
   }, [location.pathname]);
+
+  // Track when ViewBidsModal opens to set active job and clear notifications
+  useEffect(() => {
+    if (viewBidsModal.isOpen && viewBidsModal.job) {
+      setActiveJobId(viewBidsModal.job.id);
+      clearNotificationsForJob(viewBidsModal.job.id);
+    }
+  }, [viewBidsModal.isOpen, viewBidsModal.job?.id]);
+
+  // Track when JobDetailsModal (selectedJob) opens
+  useEffect(() => {
+    if (selectedJob) {
+      setActiveJobId(selectedJob.id);
+      clearNotificationsForJob(selectedJob.id);
+    }
+  }, [selectedJob?.id]);
 
   const handleLogout = async () => { await logout(); };
 
   const handleChatOpen = (job: Job, receiverId?: string) => {
     setChatOpen({ isOpen: true, job, receiverId });
     setActiveChatId(job.id);
-    markNotificationsAsReadForJob(job.id);
+    setActiveJobId(job.id); // Track active job for notification suppression
+    clearNotificationsForJob(job.id); // Remove all notifications for this job
     setShowChatList(false);
   };
 
@@ -459,7 +478,7 @@ const AppContent: React.FC = () => {
 
       <JobDetailsModal
         job={selectedJob}
-        onClose={() => setSelectedJob(null)}
+        onClose={() => { setSelectedJob(null); setActiveJobId(null); }}
         onBid={(jobId) => { setSelectedJob(null); setBidModalOpen({ isOpen: true, jobId }); }}
         onViewBids={(job) => { setSelectedJob(null); setViewBidsModal({ isOpen: true, job }); }}
         onChat={(job) => { setSelectedJob(null); handleChatOpen(job); }}
@@ -486,11 +505,9 @@ const AppContent: React.FC = () => {
 
       <ViewBidsModal
         isOpen={viewBidsModal.isOpen}
-        onClose={() => setViewBidsModal({ isOpen: false, job: null })}
+        onClose={() => { setViewBidsModal({ isOpen: false, job: null }); setActiveJobId(null); }}
         job={viewBidsModal.job}
         onCounter={(bidId, amount) => {
-          // setViewBidsModal({ isOpen: false, job: null }); // Optional: keep bids view open or close? Original code didn't close it explicitly, just opened counter logic
-          // Actually, we want to open counter modal.
           setCounterModalOpen({ isOpen: true, bidId, jobId: viewBidsModal.job!.id, initialAmount: amount.toString() });
         }}
         showAlert={showAlert}
@@ -510,6 +527,12 @@ const AppContent: React.FC = () => {
         onClose={() => setShowNotifications(false)}
         onJobClick={(job, notif) => {
           setShowNotifications(false);
+
+          // Delete the notification after clicking (user has acted on it)
+          deleteNotification(notif.id);
+
+          // Set active job to suppress future notifications for this job
+          setActiveJobId(job.id);
 
           // Click-to-Action Logic
           if (notif.title === t.notifBidReceived || notif.title === "New Bid" || notif.title === "Counter Accepted") {
@@ -580,7 +603,7 @@ const AppContent: React.FC = () => {
         <ChatInterface
           job={chatOpen.job}
           currentUser={user}
-          onClose={() => { setChatOpen({ isOpen: false, job: null }); setActiveChatId(null); }}
+          onClose={() => { setChatOpen({ isOpen: false, job: null }); setActiveChatId(null); setActiveJobId(null); }}
           messages={messages.filter(m => m.jobId === chatOpen.job?.id)}
           onSendMessage={handleSendMessage}
           onCompleteJob={handleCompleteJob}

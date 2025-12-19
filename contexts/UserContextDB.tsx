@@ -35,7 +35,11 @@ interface UserContextType {
   refreshUser: () => Promise<void>;
   activeChatId: string | null;
   setActiveChatId: (id: string | null) => void;
+  activeJobId: string | null;
+  setActiveJobId: (id: string | null) => void;
   markNotificationsAsReadForJob: (jobId: string) => Promise<void>;
+  deleteNotification: (notifId: string) => Promise<void>;
+  clearNotificationsForJob: (jobId: string) => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -79,6 +83,14 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const setActiveChatId = (id: string | null) => {
     setActiveChatIdState(id);
     activeChatIdRef.current = id;
+  };
+
+  // Track active job to suppress notifications when user is viewing that job
+  const [activeJobId, setActiveJobIdState] = useState<string | null>(null);
+  const activeJobIdRef = useRef<string | null>(null);
+  const setActiveJobId = (id: string | null) => {
+    setActiveJobIdState(id);
+    activeJobIdRef.current = id;
   };
 
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
@@ -354,6 +366,14 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const handleIncomingNotification = (notifData: any) => {
       console.log('[Realtime] Notification received via hybrid channel:', notifData);
 
+      const relatedJobId = notifData.related_job_id || notifData.relatedJobId || undefined;
+
+      // SUPPRESS: If user is actively viewing this job, don't show notification
+      if (relatedJobId && activeJobIdRef.current === relatedJobId) {
+        console.log('[Realtime] Suppressing notification - user is viewing this job:', relatedJobId);
+        return; // Silently ignore - user already sees the content
+      }
+
       const newNotif: Notification = {
         id: notifData.id || `n${Date.now()}`,
         userId: notifData.user_id || notifData.userId || user.id,
@@ -362,7 +382,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         type: (notifData.type as 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR') || 'INFO',
         read: notifData.read ?? false,
         timestamp: notifData.created_at ? new Date(notifData.created_at).getTime() : Date.now(),
-        relatedJobId: notifData.related_job_id || notifData.relatedJobId || undefined
+        relatedJobId
       };
 
       // Update state (avoid duplicates by checking ID OR content+time)
@@ -681,6 +701,36 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  // Delete a single notification (used when user clicks on it)
+  const deleteNotification = async (notifId: string) => {
+    // Optimistic update
+    setNotifications(prev => prev.filter(n => n.id !== notifId));
+
+    // DB delete
+    if (user.id) {
+      await supabase
+        .from('notifications')
+        .delete()
+        .eq('id', notifId)
+        .eq('user_id', user.id);
+    }
+  };
+
+  // Clear all notifications for a specific job (used when opening job context)
+  const clearNotificationsForJob = async (jobId: string) => {
+    // Optimistic update
+    setNotifications(prev => prev.filter(n => n.relatedJobId !== jobId));
+
+    // DB delete
+    if (user.id) {
+      await supabase
+        .from('notifications')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('related_job_id', jobId);
+    }
+  };
+
   const checkFreeLimit = () => {
     const isFreeLimitReached = !user.isPremium && (user.aiUsageCount || 0) >= FREE_AI_USAGE_LIMIT;
     if (isFreeLimitReached) {
@@ -816,7 +866,11 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       refreshUser: fetchUserData,
       activeChatId,
       setActiveChatId,
-      markNotificationsAsReadForJob
+      activeJobId,
+      setActiveJobId,
+      markNotificationsAsReadForJob,
+      deleteNotification,
+      clearNotificationsForJob
     }}>
       {children}
     </UserContext.Provider>
