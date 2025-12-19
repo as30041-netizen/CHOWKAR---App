@@ -584,11 +584,17 @@ const AppContent: React.FC = () => {
           // Set active job to suppress future notifications for this job
           setActiveJobId(job.id);
 
-          // Click-to-Action Logic
-          if (notif.title === t.notifBidReceived || notif.title === "New Bid" || notif.title === "Counter Accepted") {
+          // Click-to-Action Routing based on notification type and job status
+          const isAcceptedNotif = notif.title === "Bid Accepted" || notif.title === "Job Accepted" || notif.title === "Counter Accepted";
+
+          if (notif.title === t.notifBidReceived || notif.title === "New Bid") {
+            // New bid - poster views bids
             setViewBidsModal({ isOpen: true, job });
+          } else if (isAcceptedNotif && job.status === JobStatus.IN_PROGRESS) {
+            // Job is accepted and in progress - go to chat
+            handleChatOpen(job);
           } else if (notif.title === t.notifJobCompleted || notif.title === "Job Completed") {
-            // If poster, show review modal for worker
+            // Job completed - show review modal if poster
             const acceptedBid = job.bids.find(b => b.id === job.acceptedBidId);
             if (user.id === job.posterId && acceptedBid) {
               setReviewModalData({
@@ -601,14 +607,21 @@ const AppContent: React.FC = () => {
               handleChatOpen(job);
             }
           } else if (notif.title === t.notifCounterOffer || notif.title === "Counter Offer") {
+            // Counter offer - view in appropriate modal (job still OPEN, no chat yet)
             if (user.id === job.posterId) {
               setViewBidsModal({ isOpen: true, job });
             } else {
               setSelectedJob(job);
             }
-          } else {
-            // Default: Open Chat
+          } else if (notif.title === "Bid Not Selected") {
+            // Rejected bid - just show job details
+            setSelectedJob(job);
+          } else if (job.status === JobStatus.IN_PROGRESS) {
+            // Default for IN_PROGRESS jobs: Open Chat
             handleChatOpen(job);
+          } else {
+            // Default for other statuses: Open job details
+            setSelectedJob(job);
           }
         }}
       />
