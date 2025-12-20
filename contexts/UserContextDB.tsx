@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase';
 import { updateWalletBalance, incrementAIUsage as incrementAIUsageDB, updateUserProfile, getCurrentUser, getUserProfile, signOut } from '../services/authService';
 import { registerPushNotifications, setupPushListeners, removePushListeners, isPushSupported } from '../services/pushService';
 import { initializeAppStateTracking, setAppLoginState, cleanupAppStateTracking, shouldSendPushNotification } from '../services/appStateService';
+import { LocalNotifications } from '@capacitor/local-notifications';
+import { Capacitor } from '@capacitor/core';
 
 interface UserContextType {
   user: User;
@@ -441,7 +443,27 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Show alert for new notifications (inside callback to ensure we only alert on actual additions)
         if (!newNotif.read) {
           // Use setTimeout to escape the state update context
-          setTimeout(() => showAlert(`${newNotif.title}: ${newNotif.message}`, 'info'), 0);
+          setTimeout(() => {
+            showAlert(`${newNotif.title}: ${newNotif.message}`, 'info');
+
+            // Trigger System Tray Notification (Native Only)
+            if (Capacitor.isNativePlatform()) {
+              LocalNotifications.schedule({
+                notifications: [{
+                  title: newNotif.title,
+                  body: newNotif.message,
+                  id: Math.floor(Date.now() % 100000000), // Integer ID required
+                  schedule: { at: new Date(Date.now() + 100) },
+                  sound: undefined,
+                  attachments: undefined,
+                  actionTypeId: "",
+                  extra: {
+                    jobId: newNotif.relatedJobId
+                  }
+                }]
+              }).catch(err => console.error('[LocalNotification] Error:', err));
+            }
+          }, 0);
         }
 
         // Add new notification and limit to 100 to prevent memory issues
