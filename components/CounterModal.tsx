@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useUser } from '../contexts/UserContextDB';
 import { useJobs } from '../contexts/JobContextDB';
 import { UserRole } from '../types';
+import { supabase } from '../lib/supabase';
 
 interface CounterModalProps {
     isOpen: boolean;
@@ -13,7 +14,7 @@ interface CounterModalProps {
 }
 
 export const CounterModal: React.FC<CounterModalProps> = ({ isOpen, onClose, bidId, jobId, initialAmount, showAlert }) => {
-    const { t, addNotification } = useUser();
+    const { t } = useUser();
     const { jobs, updateBid } = useJobs();
     const [counterInputAmount, setCounterInputAmount] = useState('');
 
@@ -40,10 +41,35 @@ export const CounterModal: React.FC<CounterModalProps> = ({ isOpen, onClose, bid
                         negotiationHistory: [...(bid.negotiationHistory || []), { amount: newAmount, by: UserRole.POSTER, timestamp: Date.now() }]
                     };
                     await updateBid(updatedBid);
-                }
 
-                const workerId = job.bids.find(b => b.id === bidId)?.workerId;
-                if (workerId) await addNotification(workerId, "Counter Offer", `Counter for "${job.title}": ₹${newAmount}`, "INFO", job.id);
+                    // Send PUSH notification to worker (DB trigger handles in-app notification)
+                    // This ensures worker gets push even when app is closed
+                    const workerId = bid.workerId;
+                    if (workerId) {
+                        try {
+                            const { data: { session } } = await supabase.auth.getSession();
+                            if (session?.access_token) {
+                                const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+                                await fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${session.access_token}`
+                                    },
+                                    body: JSON.stringify({
+                                        userId: workerId,
+                                        title: 'Counter Offer',
+                                        body: `New offer of ₹${newAmount} for "${job.title}"`,
+                                        data: { jobId: job.id, type: 'counter_offer' }
+                                    })
+                                });
+                                console.log('[Push] Counter offer push sent to worker:', workerId);
+                            }
+                        } catch (pushError) {
+                            console.warn('[Push] Failed to send counter push:', pushError);
+                        }
+                    }
+                }
 
                 showAlert("Counter offer sent!", "success");
                 onClose();

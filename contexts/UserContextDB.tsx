@@ -706,13 +706,9 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           supabase.removeChannel(channel);
         }
 
-        // Send push notification via edge function (ONLY if app is in background)
-        // Check: 1) User is logged in AND 2) App is not in foreground
-        if (!shouldSendPushNotification()) {
-          console.log('[Push] Skipping push - app in foreground or user not logged in');
-          // Broadcast was already sent above for in-app notification
-          return;
-        }
+        // Send push notification via edge function to the OTHER user
+        // We ALWAYS send push for notifications to other users - they may have app closed
+        // Note: The edge function will handle cases where user has no push token
 
         try {
           const { data: { session } } = await supabase.auth.getSession();
