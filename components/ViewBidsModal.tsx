@@ -201,6 +201,31 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
         }
     };
 
+    // Helper function for relative time display
+    const getRelativeTime = (timestamp: number): string => {
+        const now = Date.now();
+        const diff = now - timestamp;
+        const minutes = Math.floor(diff / 60000);
+        const hours = Math.floor(diff / 3600000);
+        const days = Math.floor(diff / 86400000);
+
+        if (minutes < 1) return 'Just now';
+        if (minutes < 60) return `${minutes} min${minutes > 1 ? 's' : ''} ago`;
+        if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+        if (days < 7) return `${days} day${days > 1 ? 's' : ''} ago`;
+        return new Date(timestamp).toLocaleDateString();
+    };
+
+    // Check if a bid is "new" (less than 1 hour old)
+    const isNewBid = (timestamp: number): boolean => {
+        return Date.now() - timestamp < 3600000; // 1 hour in ms
+    };
+
+    // Sort bids: newest first
+    const sortedBids = [...(localJob.bids || [])].sort((a, b) =>
+        (b.createdAt || 0) - (a.createdAt || 0)
+    );
+
     // language is now from context
 
     return (
@@ -215,59 +240,83 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                     <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors"><XCircle size={24} className="text-gray-500" /></button>
                 </div>
                 <div className="p-4 overflow-y-auto flex-1 space-y-4">
-                    {localJob.bids && localJob.bids.length > 0 ? (
-                        localJob.bids.map(bid => (
-                            <div key={bid.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm relative">
-                                <div className="flex items-start gap-3 mb-3">
-                                    <div className="w-10 h-10 bg-gray-100 rounded-full overflow-hidden">
-                                        {bid.workerPhoto ? <img src={bid.workerPhoto} className="w-full h-full object-cover" /> : <UserCircle size={40} className="text-gray-400" />}
-                                    </div>
-                                    <div>
-                                        <h4 className="font-bold text-gray-900">{bid.workerName}</h4>
-                                        <div className="flex items-center gap-1 text-xs text-yellow-600 font-bold"><Star size={12} fill="currentColor" /> {bid.workerRating}</div>
-                                    </div>
-                                    <div className="ml-auto text-right">
-                                        <div className="text-xl font-black text-emerald-600">₹{bid.amount}</div>
-                                        <div className="text-[10px] text-gray-400">{new Date(bid.createdAt).toLocaleDateString()}</div>
-                                    </div>
-                                </div>
-                                <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg mb-3 italic">"{bid.message}"</p>
+                    {sortedBids.length > 0 ? (
+                        sortedBids.map(bid => {
+                            const isNew = isNewBid(bid.createdAt || 0);
+                            return (
+                                <div
+                                    key={bid.id}
+                                    className={`bg-white border rounded-xl p-4 shadow-sm relative transition-all duration-300 ${isNew
+                                            ? 'border-emerald-400 ring-2 ring-emerald-100 animate-pulse-once'
+                                            : 'border-gray-200'
+                                        }`}
+                                >
+                                    {/* NEW Badge */}
+                                    {isNew && (
+                                        <div className="absolute -top-2 -right-2 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md animate-bounce">
+                                            NEW
+                                        </div>
+                                    )}
 
-                                {/* Visibility hint */}
-                                {localJob.status === 'OPEN' && (
-                                    <p className="text-[10px] text-gray-400 mb-3 flex items-center gap-1">
-                                        🔒 Contact details visible after accepting this bid
-                                    </p>
-                                )}
-
-                                {/* Negotiation History */}
-                                {bid.negotiationHistory && bid.negotiationHistory.length > 1 && (
-                                    <div className="mb-3 pl-3 border-l-2 border-gray-200 space-y-2">
-                                        {bid.negotiationHistory.map((h, i) => (
-                                            <div key={i} className="text-xs">
-                                                <span className={h.by === UserRole.WORKER ? "text-blue-600 font-bold" : "text-emerald-600 font-bold"}>{h.by}: </span>
-                                                <span className="text-gray-700">₹{h.amount}</span>
+                                    <div className="flex items-start gap-3 mb-3">
+                                        <div className="w-10 h-10 bg-gray-100 rounded-full overflow-hidden">
+                                            {bid.workerPhoto ? <img src={bid.workerPhoto} className="w-full h-full object-cover" /> : <UserCircle size={40} className="text-gray-400" />}
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-gray-900">{bid.workerName}</h4>
+                                            <div className="flex items-center gap-1 text-xs text-yellow-600 font-bold"><Star size={12} fill="currentColor" /> {bid.workerRating}</div>
+                                        </div>
+                                        <div className="ml-auto text-right">
+                                            <div className="text-xl font-black text-emerald-600">₹{bid.amount}</div>
+                                            <div className={`text-[10px] ${isNew ? 'text-emerald-600 font-bold' : 'text-gray-400'}`}>
+                                                {getRelativeTime(bid.createdAt || Date.now())}
                                             </div>
-                                        ))}
+                                        </div>
                                     </div>
-                                )}
+                                    <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg mb-3 italic">"{bid.message}"</p>
 
-                                {user.id === localJob?.posterId && bid.status === 'PENDING' && (
-                                    <div className="flex gap-2 mt-2">
-                                        <button
-                                            onClick={() => handleAcceptBid(localJob!.id, bid.id, bid.amount, bid.workerId)}
-                                            disabled={isAcceptingBid}
-                                            className="flex-1 bg-emerald-600 text-white py-2 rounded-lg font-bold text-sm shadow-md hover:bg-emerald-700"
-                                        >
-                                            {isAcceptingBid ? 'Accepting...' : 'Accept Bid'}
-                                        </button>
-                                        <button onClick={() => onCounter(bid.id, bid.amount)} className="flex-1 bg-white border border-emerald-600 text-emerald-600 py-2 rounded-lg font-bold text-sm hover:bg-emerald-50">
-                                            Counter
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        ))
+                                    {/* Visibility hint */}
+                                    {localJob.status === 'OPEN' && (
+                                        <p className="text-[10px] text-gray-400 mb-3 flex items-center gap-1">
+                                            🔒 Contact details visible after accepting this bid
+                                        </p>
+                                    )}
+
+                                    {/* Negotiation History */}
+                                    {bid.negotiationHistory && bid.negotiationHistory.length > 1 && (
+                                        <div className="mb-3 pl-3 border-l-2 border-gray-200 space-y-2">
+                                            <div className="text-[10px] text-gray-500 font-semibold uppercase mb-1">Negotiation History</div>
+                                            {bid.negotiationHistory.map((h, i) => (
+                                                <div key={i} className="text-xs flex items-center gap-2">
+                                                    <span className={`px-1.5 py-0.5 rounded text-[10px] ${h.by === UserRole.WORKER ? "bg-blue-100 text-blue-600 font-bold" : "bg-emerald-100 text-emerald-600 font-bold"}`}>
+                                                        {h.by === UserRole.WORKER ? 'Worker' : 'You'}
+                                                    </span>
+                                                    <span className="text-gray-700 font-semibold">₹{h.amount}</span>
+                                                    {i === bid.negotiationHistory!.length - 1 && (
+                                                        <span className="text-[10px] text-gray-400">(Latest)</span>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {user.id === localJob?.posterId && bid.status === 'PENDING' && (
+                                        <div className="flex gap-2 mt-2">
+                                            <button
+                                                onClick={() => handleAcceptBid(localJob!.id, bid.id, bid.amount, bid.workerId)}
+                                                disabled={isAcceptingBid}
+                                                className="flex-1 bg-emerald-600 text-white py-2 rounded-lg font-bold text-sm shadow-md hover:bg-emerald-700"
+                                            >
+                                                {isAcceptingBid ? 'Accepting...' : 'Accept Bid'}
+                                            </button>
+                                            <button onClick={() => onCounter(bid.id, bid.amount)} className="flex-1 bg-white border border-emerald-600 text-emerald-600 py-2 rounded-lg font-bold text-sm hover:bg-emerald-50">
+                                                Counter
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })
                     ) : <p className="text-center text-gray-400 py-8">No bids yet.</p>}
                 </div>
             </div>
