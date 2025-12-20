@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     MapPin, Users, Briefcase, Star, TrendingUp, Shield,
-    Languages, Loader2, ArrowRight, CheckCircle, Sparkles
+    Languages, Loader2, ArrowRight, CheckCircle, Sparkles, Zap, Clock, MessageCircle
 } from 'lucide-react';
 
 interface LandingPageProps {
@@ -18,6 +18,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     isSigningIn
 }) => {
     const [activeFeature, setActiveFeature] = useState(0);
+    const [scrollY, setScrollY] = useState(0);
+
+    useEffect(() => {
+        const handleScroll = () => setScrollY(window.scrollY);
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
+
+    // Auto-rotate features
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setActiveFeature(prev => (prev + 1) % 4);
+        }, 3000);
+        return () => clearInterval(interval);
+    }, []);
 
     const content = {
         en: {
@@ -26,36 +41,40 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 subtitle: "Post Jobs.",
                 tagline: "Connect Locally.",
                 description: "CHOWKAR connects job seekers and employers in rural India. Find work or hire workers in your area - fast, simple, and secure.",
-                cta: "Get Started",
-                secondary: "Learn More"
+                cta: "Get Started Free",
+                secondary: "See How It Works"
             },
             features: [
                 {
                     icon: MapPin,
                     title: "Local Jobs",
-                    description: "Find work opportunities near you with GPS-based matching"
+                    description: "Find work opportunities near you with GPS-based matching",
+                    color: "from-blue-500 to-cyan-400"
                 },
                 {
-                    icon: Briefcase,
-                    title: "Quick Hiring",
-                    description: "Post jobs and receive bids from skilled workers instantly"
+                    icon: Zap,
+                    title: "Instant Hiring",
+                    description: "Post jobs and receive bids from skilled workers in minutes",
+                    color: "from-amber-500 to-orange-400"
                 },
                 {
                     icon: Star,
                     title: "Trusted Ratings",
-                    description: "Make informed decisions with verified reviews and ratings"
+                    description: "Make informed decisions with verified reviews and ratings",
+                    color: "from-purple-500 to-pink-400"
                 },
                 {
                     icon: Shield,
                     title: "Secure Payments",
-                    description: "Safe wallet system for seamless transactions"
+                    description: "Safe wallet system for seamless transactions",
+                    color: "from-emerald-500 to-green-400"
                 }
             ],
             stats: [
-                { value: "10K+", label: "Active Workers" },
-                { value: "5K+", label: "Jobs Posted" },
-                { value: "4.8", label: "Avg Rating" },
-                { value: "99%", label: "Success Rate" }
+                { value: "10K+", label: "Active Workers", icon: Users },
+                { value: "5K+", label: "Jobs Posted", icon: Briefcase },
+                { value: "4.8", label: "Avg Rating", icon: Star },
+                { value: "99%", label: "Success Rate", icon: TrendingUp }
             ],
             categories: [
                 "Farm Labor", "Construction", "Plumbing",
@@ -63,11 +82,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             ],
             howItWorks: {
                 title: "How It Works",
+                subtitle: "Get started in 4 simple steps",
                 steps: [
-                    { title: "Sign Up", desc: "Create account with Google" },
-                    { title: "Find or Post", desc: "Browse jobs or post your requirement" },
-                    { title: "Connect", desc: "Chat and negotiate with workers" },
-                    { title: "Get It Done", desc: "Complete work and leave reviews" }
+                    { title: "Sign Up", desc: "Create account with Google", icon: Users },
+                    { title: "Find or Post", desc: "Browse jobs or post your requirement", icon: Briefcase },
+                    { title: "Connect", desc: "Chat and negotiate with workers", icon: MessageCircle },
+                    { title: "Get It Done", desc: "Complete work and leave reviews", icon: CheckCircle }
                 ]
             },
             testimonial: {
@@ -82,36 +102,40 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 subtitle: "काम दें।",
                 tagline: "जुड़ें स्थानीय रूप से।",
                 description: "CHOWKAR ग्रामीण भारत में काम खोजने वालों और मालिकों को जोड़ता है। अपने क्षेत्र में काम खोजें या मजदूर रखें - तेज, आसान और सुरक्षित।",
-                cta: "शुरू करें",
-                secondary: "और जानें"
+                cta: "मुफ्त शुरू करें",
+                secondary: "देखें कैसे काम करता है"
             },
             features: [
                 {
                     icon: MapPin,
                     title: "स्थानीय काम",
-                    description: "GPS के साथ अपने पास के काम खोजें"
+                    description: "GPS के साथ अपने पास के काम खोजें",
+                    color: "from-blue-500 to-cyan-400"
                 },
                 {
-                    icon: Briefcase,
-                    title: "तेज़ भर्ती",
-                    description: "काम पोस्ट करें और तुरंत बोलियाँ पाएं"
+                    icon: Zap,
+                    title: "तुरंत भर्ती",
+                    description: "काम पोस्ट करें और मिनटों में बोलियाँ पाएं",
+                    color: "from-amber-500 to-orange-400"
                 },
                 {
                     icon: Star,
                     title: "भरोसेमंद रेटिंग",
-                    description: "सत्यापित रिव्यु और रेटिंग देखें"
+                    description: "सत्यापित रिव्यु और रेटिंग देखें",
+                    color: "from-purple-500 to-pink-400"
                 },
                 {
                     icon: Shield,
                     title: "सुरक्षित भुगतान",
-                    description: "सुरक्षित वॉलेट सिस्टम"
+                    description: "सुरक्षित वॉलेट सिस्टम",
+                    color: "from-emerald-500 to-green-400"
                 }
             ],
             stats: [
-                { value: "10K+", label: "काम करने वाले" },
-                { value: "5K+", label: "काम पोस्ट" },
-                { value: "4.8", label: "औसत रेटिंग" },
-                { value: "99%", label: "सफलता दर" }
+                { value: "10K+", label: "काम करने वाले", icon: Users },
+                { value: "5K+", label: "काम पोस्ट", icon: Briefcase },
+                { value: "4.8", label: "औसत रेटिंग", icon: Star },
+                { value: "99%", label: "सफलता दर", icon: TrendingUp }
             ],
             categories: [
                 "खेत मजदूरी", "निर्माण", "नल फिटिंग",
@@ -119,11 +143,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             ],
             howItWorks: {
                 title: "कैसे काम करता है",
+                subtitle: "4 आसान चरणों में शुरू करें",
                 steps: [
-                    { title: "साइन अप करें", desc: "Google से खाता बनाएं" },
-                    { title: "खोजें या पोस्ट करें", desc: "काम खोजें या अपनी ज़रूरत पोस्ट करें" },
-                    { title: "जुड़ें", desc: "चैट करें और बात करें" },
-                    { title: "पूरा करें", desc: "काम खत्म करें और रिव्यु दें" }
+                    { title: "साइन अप करें", desc: "Google से खाता बनाएं", icon: Users },
+                    { title: "खोजें या पोस्ट करें", desc: "काम खोजें या अपनी ज़रूरत पोस्ट करें", icon: Briefcase },
+                    { title: "जुड़ें", desc: "चैट करें और बात करें", icon: MessageCircle },
+                    { title: "पूरा करें", desc: "काम खत्म करें और रिव्यु दें", icon: CheckCircle }
                 ]
             },
             testimonial: {
@@ -138,119 +163,182 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     const features = t.features;
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 overflow-y-auto">
-            {/* Language Toggle */}
+        <div className="min-h-screen bg-gray-950 text-white overflow-x-hidden">
+            {/* Animated Background */}
+            <div className="fixed inset-0 overflow-hidden pointer-events-none">
+                {/* Gradient orbs */}
+                <div
+                    className="absolute w-[800px] h-[800px] rounded-full opacity-30"
+                    style={{
+                        background: 'radial-gradient(circle, rgba(16,185,129,0.4) 0%, transparent 70%)',
+                        top: '-200px',
+                        left: '-200px',
+                        transform: `translateY(${scrollY * 0.1}px)`
+                    }}
+                />
+                <div
+                    className="absolute w-[600px] h-[600px] rounded-full opacity-20"
+                    style={{
+                        background: 'radial-gradient(circle, rgba(59,130,246,0.4) 0%, transparent 70%)',
+                        top: '40%',
+                        right: '-100px',
+                        transform: `translateY(${scrollY * -0.05}px)`
+                    }}
+                />
+                <div
+                    className="absolute w-[500px] h-[500px] rounded-full opacity-25"
+                    style={{
+                        background: 'radial-gradient(circle, rgba(168,85,247,0.3) 0%, transparent 70%)',
+                        bottom: '-100px',
+                        left: '30%',
+                        transform: `translateY(${scrollY * -0.08}px)`
+                    }}
+                />
+                {/* Grid pattern */}
+                <div
+                    className="absolute inset-0 opacity-[0.03]"
+                    style={{
+                        backgroundImage: `
+                            linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
+                            linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)
+                        `,
+                        backgroundSize: '60px 60px'
+                    }}
+                />
+            </div>
+
+            {/* Language Toggle - Glass effect */}
             <div className="fixed top-6 right-6 z-50">
                 <button
                     onClick={onLanguageToggle}
-                    className="bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-bold text-emerald-800 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 flex items-center gap-2"
+                    className="bg-white/10 backdrop-blur-xl border border-white/20 px-4 py-2.5 rounded-full text-sm font-bold text-white shadow-2xl hover:bg-white/20 transition-all duration-300 hover:scale-105 flex items-center gap-2"
                 >
-                    <Languages size={16} />
+                    <Languages size={16} className="text-emerald-400" />
                     {language === 'en' ? 'हिन्दी' : 'English'}
                 </button>
             </div>
 
             {/* Hero Section */}
             <section className="relative min-h-screen flex items-center justify-center px-6 py-20">
-                {/* Animated Background Elements */}
-                <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                    <div className="absolute top-20 left-10 w-72 h-72 bg-emerald-300/20 rounded-full blur-3xl animate-pulse-slow"></div>
-                    <div className="absolute bottom-20 right-10 w-96 h-96 bg-green-400/20 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '1s' }}></div>
-                </div>
-
                 <div className="relative max-w-6xl mx-auto text-center">
-                    {/* Logo */}
-                    <div className="mb-8 animate-fade-in">
-                        <div className="inline-flex items-center gap-3 bg-white/80 backdrop-blur-sm px-6 py-3 rounded-full shadow-xl">
-                            <MapPin size={32} className="text-emerald-600" fill="#10b981" />
-                            <h1 className="text-3xl font-black text-emerald-950 font-serif-logo">CHOWKAR</h1>
+                    {/* Logo with glow */}
+                    <div className="mb-10">
+                        <div className="inline-flex items-center gap-3 bg-gradient-to-r from-emerald-500/20 to-green-500/20 backdrop-blur-xl border border-emerald-500/30 px-8 py-4 rounded-2xl shadow-[0_0_60px_rgba(16,185,129,0.3)]">
+                            <div className="relative">
+                                <MapPin size={36} className="text-emerald-400" fill="#10b981" />
+                                <div className="absolute inset-0 blur-lg bg-emerald-400 opacity-50" />
+                            </div>
+                            <h1 className="text-4xl font-black bg-gradient-to-r from-emerald-300 to-green-400 bg-clip-text text-transparent font-serif-logo">CHOWKAR</h1>
                         </div>
                     </div>
 
-                    {/* Hero Text */}
-                    <div className="space-y-6 mb-12 animate-slide-up">
-                        <h2 className="text-5xl md:text-7xl font-black text-gray-900 leading-tight">
-                            <span className="text-emerald-600">{t.hero.title}</span>
+                    {/* Hero Text with gradient */}
+                    <div className="space-y-6 mb-14">
+                        <h2 className="text-5xl md:text-7xl lg:text-8xl font-black leading-tight tracking-tight">
+                            <span className="bg-gradient-to-r from-emerald-400 via-green-400 to-teal-400 bg-clip-text text-transparent">{t.hero.title}</span>
                             <br />
-                            <span className="text-gray-800">{t.hero.subtitle}</span>
+                            <span className="text-white">{t.hero.subtitle}</span>
                             <br />
-                            <span className="text-emerald-700 text-4xl md:text-5xl">{t.hero.tagline}</span>
+                            <span className="text-3xl md:text-4xl lg:text-5xl text-gray-400 font-semibold">{t.hero.tagline}</span>
                         </h2>
 
-                        <p className="text-xl md:text-2xl text-gray-700 max-w-3xl mx-auto font-medium">
+                        <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto font-medium leading-relaxed">
                             {t.hero.description}
                         </p>
                     </div>
 
                     {/* CTA Buttons */}
-                    <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16 animate-pop">
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-20">
                         <button
                             onClick={onGetStarted}
                             disabled={isSigningIn}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-4 rounded-2xl text-lg font-bold shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3 min-w-[200px] justify-center"
+                            className="group relative bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-400 hover:to-green-400 text-white px-10 py-5 rounded-2xl text-lg font-bold shadow-[0_0_40px_rgba(16,185,129,0.4)] hover:shadow-[0_0_60px_rgba(16,185,129,0.6)] transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3 min-w-[240px] justify-center overflow-hidden"
                         >
+                            <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
                             {isSigningIn ? (
                                 <>
-                                    <Loader2 className="animate-spin" size={20} />
+                                    <Loader2 className="animate-spin" size={22} />
                                     <span>Loading...</span>
                                 </>
                             ) : (
                                 <>
                                     <span>{t.hero.cta}</span>
-                                    <ArrowRight size={20} />
+                                    <ArrowRight size={22} className="group-hover:translate-x-1 transition-transform" />
                                 </>
                             )}
                         </button>
 
                         <button
                             onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
-                            className="bg-white/90 backdrop-blur-sm hover:bg-white text-emerald-700 px-8 py-4 rounded-2xl text-lg font-bold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 flex items-center gap-2"
+                            className="bg-white/5 backdrop-blur-xl border border-white/20 hover:bg-white/10 hover:border-white/30 text-white px-10 py-5 rounded-2xl text-lg font-bold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 flex items-center gap-2"
                         >
                             {t.hero.secondary}
                         </button>
                     </div>
 
-                    {/* Stats */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto animate-slide-up" style={{ animationDelay: '0.2s' }}>
-                        {t.stats.map((stat, idx) => (
-                            <div key={idx} className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
-                                <div className="text-3xl md:text-4xl font-black text-emerald-600 mb-2">{stat.value}</div>
-                                <div className="text-sm md:text-base font-semibold text-gray-700">{stat.label}</div>
-                            </div>
-                        ))}
+                    {/* Stats - Glass cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
+                        {t.stats.map((stat, idx) => {
+                            const Icon = stat.icon;
+                            return (
+                                <div
+                                    key={idx}
+                                    className="group bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:bg-white/10 hover:border-emerald-500/30 transition-all duration-300 hover:scale-105 hover:shadow-[0_0_30px_rgba(16,185,129,0.2)]"
+                                >
+                                    <Icon size={20} className="text-emerald-400 mb-2 mx-auto opacity-60 group-hover:opacity-100 transition-opacity" />
+                                    <div className="text-3xl md:text-4xl font-black bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-1">{stat.value}</div>
+                                    <div className="text-sm text-gray-500 font-medium">{stat.label}</div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Scroll indicator */}
+                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
+                    <div className="w-6 h-10 border-2 border-white/20 rounded-full flex justify-center pt-2">
+                        <div className="w-1.5 h-3 bg-emerald-400 rounded-full animate-pulse" />
                     </div>
                 </div>
             </section>
 
             {/* Features Section */}
-            <section id="features" className="py-20 px-6 bg-white/50 backdrop-blur-sm">
+            <section id="features" className="py-24 px-6 relative">
                 <div className="max-w-6xl mx-auto">
                     <div className="text-center mb-16">
-                        <div className="inline-flex items-center gap-2 bg-emerald-100 px-4 py-2 rounded-full mb-4">
-                            <Sparkles size={20} className="text-emerald-600" />
-                            <span className="text-emerald-700 font-bold">Features</span>
+                        <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-5 py-2.5 rounded-full mb-6">
+                            <Sparkles size={18} className="text-emerald-400" />
+                            <span className="text-emerald-400 font-bold text-sm uppercase tracking-wider">Features</span>
                         </div>
-                        <h3 className="text-4xl md:text-5xl font-black text-gray-900 mb-4">
+                        <h3 className="text-4xl md:text-5xl font-black text-white mb-4">
                             {language === 'en' ? 'Everything You Need' : 'सब कुछ जो चाहिए'}
                         </h3>
+                        <p className="text-gray-500 text-lg max-w-xl mx-auto">
+                            {language === 'en' ? 'Powerful tools to connect workers and employers' : 'कामगारों और मालिकों को जोड़ने के शक्तिशाली उपकरण'}
+                        </p>
                     </div>
 
                     <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
                         {features.map((feature, idx) => {
                             const Icon = feature.icon;
+                            const isActive = activeFeature === idx;
                             return (
                                 <div
                                     key={idx}
                                     onMouseEnter={() => setActiveFeature(idx)}
-                                    className={`bg-white rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 cursor-pointer ${activeFeature === idx ? 'scale-105 ring-2 ring-emerald-500' : ''
+                                    className={`relative bg-white/5 backdrop-blur-xl border rounded-2xl p-6 transition-all duration-500 cursor-pointer overflow-hidden ${isActive ? 'border-emerald-500/50 scale-105 shadow-[0_0_40px_rgba(16,185,129,0.2)]' : 'border-white/10 hover:border-white/20'
                                         }`}
                                 >
-                                    <div className={`w-14 h-14 rounded-xl flex items-center justify-center mb-4 ${activeFeature === idx ? 'bg-emerald-600' : 'bg-emerald-100'
-                                        } transition-colors duration-300`}>
-                                        <Icon size={28} className={activeFeature === idx ? 'text-white' : 'text-emerald-600'} />
+                                    {/* Gradient overlay on active */}
+                                    {isActive && (
+                                        <div className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-10`} />
+                                    )}
+
+                                    <div className={`relative w-14 h-14 rounded-xl flex items-center justify-center mb-5 bg-gradient-to-br ${feature.color} shadow-lg`}>
+                                        <Icon size={26} className="text-white" />
                                     </div>
-                                    <h4 className="text-xl font-bold text-gray-900 mb-2">{feature.title}</h4>
-                                    <p className="text-gray-600">{feature.description}</p>
+                                    <h4 className="text-xl font-bold text-white mb-2 relative">{feature.title}</h4>
+                                    <p className="text-gray-400 text-sm relative">{feature.description}</p>
                                 </div>
                             );
                         })}
@@ -262,10 +350,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <section className="py-20 px-6">
                 <div className="max-w-6xl mx-auto">
                     <div className="text-center mb-12">
-                        <h3 className="text-3xl md:text-4xl font-black text-gray-900 mb-4">
+                        <h3 className="text-3xl md:text-4xl font-black text-white mb-4">
                             {language === 'en' ? 'Popular Categories' : 'लोकप्रिय श्रेणियाँ'}
                         </h3>
-                        <p className="text-xl text-gray-600">
+                        <p className="text-gray-500 text-lg">
                             {language === 'en' ? 'Find work in various fields' : 'विभिन्न क्षेत्रों में काम खोजें'}
                         </p>
                     </div>
@@ -274,12 +362,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                         {t.categories.map((category, idx) => (
                             <div
                                 key={idx}
-                                className="bg-white rounded-xl p-4 text-center shadow-md hover:shadow-xl transition-all duration-300 hover:scale-105 cursor-pointer group"
+                                className="group bg-white/5 backdrop-blur-xl border border-white/10 rounded-xl p-5 text-center hover:bg-white/10 hover:border-emerald-500/30 transition-all duration-300 hover:scale-105 cursor-pointer"
                             >
-                                <div className="text-3xl mb-2 group-hover:scale-110 transition-transform duration-300">
+                                <div className="text-4xl mb-3 group-hover:scale-125 transition-transform duration-300">
                                     {['🌾', '🏗️', '🔧', '⚡', '🚗', '🧹'][idx % 6]}
                                 </div>
-                                <div className="text-sm font-bold text-gray-800">{category}</div>
+                                <div className="text-sm font-bold text-gray-300">{category}</div>
                             </div>
                         ))}
                     </div>
@@ -287,57 +375,70 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </section>
 
             {/* How It Works */}
-            <section className="py-20 px-6 bg-gradient-to-r from-emerald-600 to-green-600 text-white">
-                <div className="max-w-6xl mx-auto">
+            <section className="py-24 px-6 relative overflow-hidden">
+                {/* Gradient background */}
+                <div className="absolute inset-0 bg-gradient-to-r from-emerald-900/20 via-green-900/30 to-emerald-900/20" />
+
+                <div className="max-w-6xl mx-auto relative">
                     <div className="text-center mb-16">
-                        <h3 className="text-4xl md:text-5xl font-black mb-4">{t.howItWorks.title}</h3>
+                        <h3 className="text-4xl md:text-5xl font-black text-white mb-3">{t.howItWorks.title}</h3>
+                        <p className="text-emerald-400/80 text-lg">{t.howItWorks.subtitle}</p>
                     </div>
 
-                    <div className="grid md:grid-cols-4 gap-8">
-                        {t.howItWorks.steps.map((step, idx) => (
-                            <div key={idx} className="text-center">
-                                <div className="w-16 h-16 bg-white text-emerald-600 rounded-full flex items-center justify-center text-2xl font-black mx-auto mb-4 shadow-xl">
-                                    {idx + 1}
+                    <div className="grid md:grid-cols-4 gap-8 relative">
+                        {/* Connecting line */}
+                        <div className="hidden md:block absolute top-12 left-[12%] right-[12%] h-0.5 bg-gradient-to-r from-emerald-500/20 via-emerald-500/50 to-emerald-500/20" />
+
+                        {t.howItWorks.steps.map((step, idx) => {
+                            const Icon = step.icon;
+                            return (
+                                <div key={idx} className="text-center relative">
+                                    <div className="relative inline-block mb-6">
+                                        <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-green-500 rounded-2xl flex items-center justify-center shadow-[0_0_40px_rgba(16,185,129,0.3)] transform rotate-3 hover:rotate-0 transition-transform duration-300">
+                                            <Icon size={32} className="text-white" />
+                                        </div>
+                                        <div className="absolute -top-2 -right-2 w-8 h-8 bg-gray-900 border-2 border-emerald-500 rounded-full flex items-center justify-center text-sm font-black text-emerald-400">
+                                            {idx + 1}
+                                        </div>
+                                    </div>
+                                    <h4 className="text-xl font-bold text-white mb-2">{step.title}</h4>
+                                    <p className="text-gray-400 text-sm">{step.desc}</p>
                                 </div>
-                                <h4 className="text-xl font-bold mb-2">{step.title}</h4>
-                                <p className="text-emerald-100">{step.desc}</p>
-                                {idx < 3 && (
-                                    <ArrowRight className="mx-auto mt-4 hidden md:block" size={24} />
-                                )}
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             </section>
 
-            {/* Testimonial */}
+            {/* Testimonial - Dark glass */}
             <section className="py-20 px-6">
                 <div className="max-w-4xl mx-auto">
-                    <div className="bg-white rounded-3xl p-8 md:p-12 shadow-2xl relative">
-                        <div className="absolute -top-6 left-8">
-                            <div className="w-12 h-12 bg-emerald-600 rounded-full flex items-center justify-center">
-                                <Star size={24} className="text-white" fill="white" />
+                    <div className="relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 md:p-12">
+                        {/* Quote icon */}
+                        <div className="absolute -top-5 left-8">
+                            <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-green-500 rounded-xl flex items-center justify-center shadow-lg">
+                                <span className="text-2xl leading-none text-white">"</span>
                             </div>
                         </div>
 
-                        <div className="mb-6">
-                            <div className="flex gap-1 mb-4">
+                        <div className="mb-6 pt-4">
+                            <div className="flex gap-1 mb-6">
                                 {[1, 2, 3, 4, 5].map((star) => (
-                                    <Star key={star} size={20} className="text-yellow-400" fill="#facc15" />
+                                    <Star key={star} size={22} className="text-yellow-400" fill="#facc15" />
                                 ))}
                             </div>
-                            <p className="text-xl md:text-2xl text-gray-700 italic font-medium">
+                            <p className="text-xl md:text-2xl text-gray-300 italic font-medium leading-relaxed">
                                 "{t.testimonial.quote}"
                             </p>
                         </div>
 
                         <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-emerald-600 rounded-full flex items-center justify-center text-white font-bold text-xl">
+                            <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-green-500 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg">
                                 {t.testimonial.author[0]}
                             </div>
                             <div>
-                                <div className="font-bold text-gray-900">{t.testimonial.author}</div>
-                                <div className="text-gray-600 text-sm">{t.testimonial.role}</div>
+                                <div className="font-bold text-white text-lg">{t.testimonial.author}</div>
+                                <div className="text-emerald-400 text-sm">{t.testimonial.role}</div>
                             </div>
                         </div>
                     </div>
@@ -345,12 +446,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </section>
 
             {/* Final CTA */}
-            <section className="py-20 px-6 bg-gradient-to-br from-emerald-50 to-green-100">
-                <div className="max-w-4xl mx-auto text-center">
-                    <h3 className="text-4xl md:text-5xl font-black text-gray-900 mb-6">
+            <section className="py-24 px-6 relative">
+                {/* Glow effect */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-[500px] h-[500px] bg-emerald-500/20 rounded-full blur-[120px]" />
+                </div>
+
+                <div className="max-w-4xl mx-auto text-center relative">
+                    <h3 className="text-4xl md:text-5xl lg:text-6xl font-black text-white mb-6">
                         {language === 'en' ? 'Ready to Get Started?' : 'शुरू करने के लिए तैयार?'}
                     </h3>
-                    <p className="text-xl text-gray-700 mb-8">
+                    <p className="text-xl text-gray-400 mb-10 max-w-xl mx-auto">
                         {language === 'en'
                             ? 'Join thousands of workers and employers on CHOWKAR today.'
                             : 'आज ही CHOWKAR पर हजारों कामगारों और मालिकों से जुड़ें।'}
@@ -358,17 +464,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <button
                         onClick={onGetStarted}
                         disabled={isSigningIn}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-12 py-5 rounded-2xl text-xl font-bold shadow-2xl hover:shadow-3xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-3"
+                        className="group relative bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-400 hover:to-green-400 text-white px-14 py-6 rounded-2xl text-xl font-bold shadow-[0_0_60px_rgba(16,185,129,0.4)] hover:shadow-[0_0_80px_rgba(16,185,129,0.6)] transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-3 overflow-hidden"
                     >
+                        <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
                         {isSigningIn ? (
                             <>
-                                <Loader2 className="animate-spin" size={24} />
+                                <Loader2 className="animate-spin" size={26} />
                                 <span>{language === 'en' ? 'Loading...' : 'लोड हो रहा...'}</span>
                             </>
                         ) : (
                             <>
                                 <span>{t.hero.cta}</span>
-                                <ArrowRight size={24} />
+                                <ArrowRight size={26} className="group-hover:translate-x-1 transition-transform" />
                             </>
                         )}
                     </button>
@@ -376,13 +483,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </section>
 
             {/* Footer */}
-            <footer className="bg-gray-900 text-white py-8 px-6">
+            <footer className="border-t border-white/10 py-10 px-6">
                 <div className="max-w-6xl mx-auto text-center">
                     <div className="flex items-center justify-center gap-2 mb-4">
-                        <MapPin size={20} className="text-emerald-400" />
-                        <span className="text-lg font-bold font-serif-logo">CHOWKAR</span>
+                        <MapPin size={22} className="text-emerald-400" />
+                        <span className="text-xl font-bold font-serif-logo bg-gradient-to-r from-emerald-300 to-green-400 bg-clip-text text-transparent">CHOWKAR</span>
                     </div>
-                    <p className="text-gray-400 text-sm">
+                    <p className="text-gray-500 text-sm">
                         {language === 'en'
                             ? '© 2024 CHOWKAR. Connecting local communities.'
                             : '© 2024 CHOWKAR. स्थानीय समुदायों को जोड़ना।'}

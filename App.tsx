@@ -472,20 +472,75 @@ const AppContent: React.FC = () => {
           jobId
         );
 
+        // 3b. Send PUSH notification to poster
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.access_token) {
+            await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push-notification`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+              body: JSON.stringify({
+                userId: job.posterId,
+                title: 'Job Accepted! 🎉',
+                body: `${bid.workerName} accepted your offer of ₹${bid.amount}`,
+                data: { jobId, type: 'bid_accepted' }
+              })
+            });
+          }
+        } catch (pushErr) { console.warn('[Push] Failed:', pushErr); }
+
         // 4. Show worker their payment modal to unlock chat
         setWorkerPaymentModal({ isOpen: true, job, bidId });
         showAlert(language === 'en' ? 'Counter accepted! Pay to unlock chat.' : 'काउंटर स्वीकार! चैट अनलॉक करने के लिए भुगतान करें।', 'success');
 
       } else if (action === 'REJECT') {
+        // Confirmation dialog
+        if (!confirm(language === 'en' ? 'Decline this counter offer? Your bid will be removed.' : 'क्या आप इस प्रस्ताव को अस्वीकार करना चाहते हैं?')) return;
+
         const updatedJob = { ...job, bids: job.bids.filter(b => b.id !== bidId) };
         await updateJob(updatedJob);
         await addNotification(job.posterId, "Counter Declined", `"${job.title}": ${bid.workerName} declined your offer.`, "WARNING", jobId);
-        showAlert(t.alertJobDeleted, 'info');
+
+        // Send PUSH notification to poster
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.access_token) {
+            await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push-notification`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+              body: JSON.stringify({
+                userId: job.posterId,
+                title: 'Counter Declined',
+                body: `${bid.workerName} declined your offer for "${job.title}"`,
+                data: { jobId, type: 'counter_declined' }
+              })
+            });
+          }
+        } catch (pushErr) { console.warn('[Push] Failed:', pushErr); }
+
+        showAlert(language === 'en' ? 'Counter declined. Your bid has been withdrawn.' : 'प्रस्ताव अस्वीकार। आपकी बोली वापस ले ली गई।', 'info');
 
       } else if (action === 'COUNTER' && amount) {
         const updatedBid = { ...bid, amount, negotiationHistory: [...(bid.negotiationHistory || []), { amount, by: UserRole.WORKER, timestamp: Date.now() }] };
         await updateBid(updatedBid);
         await addNotification(job.posterId, "Counter Offer", `"${job.title}": ${bid.workerName} countered ₹${amount}`, "INFO", jobId);
+
+        // Send PUSH notification to poster
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.access_token) {
+            await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push-notification`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+              body: JSON.stringify({
+                userId: job.posterId,
+                title: 'New Counter Offer',
+                body: `${bid.workerName} countered ₹${amount} for "${job.title}"`,
+                data: { jobId, type: 'counter_offer' }
+              })
+            });
+          }
+        } catch (pushErr) { console.warn('[Push] Failed:', pushErr); }
       }
     } catch (err: any) {
       console.error('[WorkerReply] Error:', err);
@@ -497,9 +552,39 @@ const AppContent: React.FC = () => {
     if (!confirm(language === 'en' ? 'Are you sure you want to withdraw your bid?' : 'क्या आप अपनी बोली वापस लेना चाहते हैं?')) return;
     try {
       const job = jobs.find(j => j.id === jobId); if (!job) return;
+      const bid = job.bids.find(b => b.id === bidId);
       const updatedJob = { ...job, bids: job.bids.filter(b => b.id !== bidId) };
       await updateJob(updatedJob);
-      showAlert(language === 'en' ? 'Bid withdrawn' : 'बोली वापस ली गई', 'info');
+
+      // Notify poster that worker withdrew their bid
+      if (bid) {
+        await addNotification(
+          job.posterId,
+          "Bid Withdrawn",
+          `${bid.workerName} withdrew their bid from "${job.title}"`,
+          "INFO",
+          jobId
+        );
+
+        // Send push notification to poster
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.access_token) {
+            await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push-notification`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+              body: JSON.stringify({
+                userId: job.posterId,
+                title: 'Bid Withdrawn',
+                body: `A worker withdrew their bid from "${job.title}"`,
+                data: { jobId, type: 'bid_withdrawn' }
+              })
+            });
+          }
+        } catch (pushErr) { console.warn('[Push] Failed:', pushErr); }
+      }
+
+      showAlert(language === 'en' ? 'Bid withdrawn successfully' : 'बोली सफलतापूर्वक वापस ली गई', 'info');
     } catch { showAlert('Error withdrawing bid', 'error'); }
   };
 

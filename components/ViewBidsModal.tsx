@@ -201,6 +201,51 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
         }
     };
 
+    // Handle poster rejecting a bid explicitly
+    const handleRejectBid = async (jobId: string, bidId: string, workerName: string, workerId: string) => {
+        if (!confirm(language === 'en' ? `Reject ${workerName}'s bid? This cannot be undone.` : `${workerName} की बोली अस्वीकार करें?`)) return;
+
+        try {
+            // Remove the bid from the job
+            setLocalJob(prev => prev ? { ...prev, bids: prev.bids.filter(b => b.id !== bidId) } : prev);
+
+            // Delete bid from database
+            const { error } = await supabase.from('bids').delete().eq('id', bidId);
+            if (error) throw error;
+
+            // Notify the worker
+            await addNotification(
+                workerId,
+                "Bid Rejected",
+                `Your bid for "${localJob?.title}" was not selected. Keep trying on other jobs!`,
+                "WARNING",
+                jobId
+            );
+
+            // Send push notification to worker
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.access_token) {
+                    await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push-notification`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+                        body: JSON.stringify({
+                            userId: workerId,
+                            title: 'Bid Rejected',
+                            body: `Your bid was not selected for "${localJob?.title}"`,
+                            data: { jobId, type: 'bid_rejected' }
+                        })
+                    });
+                }
+            } catch (pushErr) { console.warn('[Push] Failed:', pushErr); }
+
+            showAlert(language === 'en' ? 'Bid rejected' : 'बोली अस्वीकार', 'info');
+        } catch (error: any) {
+            console.error("Bid reject error:", error);
+            showAlert(`Failed to reject bid: ${error.message || 'Unknown error'}`, 'error');
+        }
+    };
+
     // Helper function for relative time display
     const getRelativeTime = (timestamp: number): string => {
         const now = Date.now();
@@ -247,8 +292,8 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                                 <div
                                     key={bid.id}
                                     className={`bg-white border rounded-xl p-4 shadow-sm relative transition-all duration-300 ${isNew
-                                            ? 'border-emerald-400 ring-2 ring-emerald-100 animate-pulse-once'
-                                            : 'border-gray-200'
+                                        ? 'border-emerald-400 ring-2 ring-emerald-100 animate-pulse-once'
+                                        : 'border-gray-200'
                                         }`}
                                 >
                                     {/* NEW Badge */}
@@ -275,6 +320,32 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                                     </div>
                                     <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg mb-3 italic">"{bid.message}"</p>
 
+                                    {/* Awaiting Response Indicator */}
+                                    {bid.negotiationHistory && bid.negotiationHistory.length > 0 && bid.status === 'PENDING' && (() => {
+                                        const lastCounter = bid.negotiationHistory[bid.negotiationHistory.length - 1];
+                                        const isPosterViewing = user.id === localJob?.posterId;
+                                        const lastCounterByWorker = lastCounter.by === UserRole.WORKER;
+                                        const lastCounterByPoster = lastCounter.by === UserRole.POSTER;
+                                        const recentCounter = lastCounter.timestamp && (Date.now() - lastCounter.timestamp < 86400000); // Within 24 hours
+
+                                        if (isPosterViewing && lastCounterByWorker && recentCounter) {
+                                            return (
+                                                <div className="mb-3 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 flex items-center gap-2">
+                                                    <span className="text-blue-600">📩</span>
+                                                    <span className="text-xs text-blue-700 font-medium">Worker countered - awaiting your response</span>
+                                                </div>
+                                            );
+                                        } else if (!isPosterViewing && lastCounterByPoster && recentCounter) {
+                                            return (
+                                                <div className="mb-3 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex items-center gap-2">
+                                                    <span className="text-emerald-600">📩</span>
+                                                    <span className="text-xs text-emerald-700 font-medium">New counter offer - awaiting your response</span>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
+
                                     {/* Visibility hint */}
                                     {localJob.status === 'OPEN' && (
                                         <p className="text-[10px] text-gray-400 mb-3 flex items-center gap-1">
@@ -286,17 +357,26 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                                     {bid.negotiationHistory && bid.negotiationHistory.length > 1 && (
                                         <div className="mb-3 pl-3 border-l-2 border-gray-200 space-y-2">
                                             <div className="text-[10px] text-gray-500 font-semibold uppercase mb-1">Negotiation History</div>
-                                            {bid.negotiationHistory.map((h, i) => (
-                                                <div key={i} className="text-xs flex items-center gap-2">
-                                                    <span className={`px-1.5 py-0.5 rounded text-[10px] ${h.by === UserRole.WORKER ? "bg-blue-100 text-blue-600 font-bold" : "bg-emerald-100 text-emerald-600 font-bold"}`}>
-                                                        {h.by === UserRole.WORKER ? 'Worker' : 'You'}
-                                                    </span>
-                                                    <span className="text-gray-700 font-semibold">₹{h.amount}</span>
-                                                    {i === bid.negotiationHistory!.length - 1 && (
-                                                        <span className="text-[10px] text-gray-400">(Latest)</span>
-                                                    )}
-                                                </div>
-                                            ))}
+                                            {bid.negotiationHistory.map((h, i) => {
+                                                const isPosterViewing = user.id === localJob?.posterId;
+                                                const isFromWorker = h.by === UserRole.WORKER;
+                                                return (
+                                                    <div key={i} className="text-xs flex items-center gap-2 flex-wrap">
+                                                        <span className={`px-1.5 py-0.5 rounded text-[10px] ${isFromWorker ? "bg-blue-100 text-blue-600 font-bold" : "bg-emerald-100 text-emerald-600 font-bold"}`}>
+                                                            {isFromWorker ? (isPosterViewing ? 'Worker' : 'You') : (isPosterViewing ? 'You' : 'Poster')}
+                                                        </span>
+                                                        <span className="text-gray-700 font-semibold">₹{h.amount}</span>
+                                                        {h.timestamp && (
+                                                            <span className="text-[10px] text-gray-400">
+                                                                {getRelativeTime(h.timestamp)}
+                                                            </span>
+                                                        )}
+                                                        {i === bid.negotiationHistory!.length - 1 && (
+                                                            <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1 rounded">(Latest)</span>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     )}
 
@@ -307,10 +387,17 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                                                 disabled={isAcceptingBid}
                                                 className="flex-1 bg-emerald-600 text-white py-2 rounded-lg font-bold text-sm shadow-md hover:bg-emerald-700"
                                             >
-                                                {isAcceptingBid ? 'Accepting...' : 'Accept Bid'}
+                                                {isAcceptingBid ? 'Accepting...' : 'Accept'}
                                             </button>
                                             <button onClick={() => onCounter(bid.id, bid.amount)} className="flex-1 bg-white border border-emerald-600 text-emerald-600 py-2 rounded-lg font-bold text-sm hover:bg-emerald-50">
                                                 Counter
+                                            </button>
+                                            <button
+                                                onClick={() => handleRejectBid(localJob!.id, bid.id, bid.workerName, bid.workerId)}
+                                                className="px-3 bg-white border border-red-400 text-red-500 py-2 rounded-lg font-bold text-sm hover:bg-red-50"
+                                                title="Reject this bid"
+                                            >
+                                                ✕
                                             </button>
                                         </div>
                                     )}
