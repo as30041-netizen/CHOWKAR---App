@@ -4,6 +4,7 @@ import { MOCK_USER, TRANSLATIONS, FREE_AI_USAGE_LIMIT } from '../constants';
 import { supabase } from '../lib/supabase';
 import { updateWalletBalance, incrementAIUsage as incrementAIUsageDB, updateUserProfile, getCurrentUser, getUserProfile, signOut } from '../services/authService';
 import { registerPushNotifications, setupPushListeners, removePushListeners, isPushSupported } from '../services/pushService';
+import { initializeAppStateTracking, setAppLoginState, cleanupAppStateTracking, shouldSendPushNotification } from '../services/appStateService';
 
 interface UserContextType {
   user: User;
@@ -114,6 +115,22 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => localStorage.setItem('chowkar_language', JSON.stringify(language)), [language]);
   // Persist User Object
   useEffect(() => localStorage.setItem('chowkar_user', JSON.stringify(user)), [user]);
+
+  // Initialize app state tracking (for push notification logic)
+  useEffect(() => {
+    initializeAppStateTracking();
+    console.log('[AppState] Initialized app state tracking');
+
+    return () => {
+      cleanupAppStateTracking();
+      console.log('[AppState] Cleaned up app state tracking');
+    };
+  }, []);
+
+  // Update login state when auth status changes
+  useEffect(() => {
+    setAppLoginState(isLoggedIn);
+  }, [isLoggedIn]);
 
   useEffect(() => {
     console.log('[Auth] Initializing authentication...');
@@ -673,12 +690,21 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           supabase.removeChannel(channel);
         }
 
-        // Send push notification via edge function (for when app is closed)
+        // Send push notification via edge function (ONLY if app is in background)
+        // Check: 1) User is logged in AND 2) App is not in foreground
+        if (!shouldSendPushNotification()) {
+          console.log('[Push] Skipping push - app in foreground or user not logged in');
+          // Broadcast was already sent above for in-app notification
+          return;
+        }
+
         try {
           const { data: { session } } = await supabase.auth.getSession();
 
           if (session?.access_token) {
             const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            console.log('[Push] Sending push notification (app in background)');
+
             const response = await fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
               method: 'POST',
               headers: {
@@ -698,7 +724,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             });
 
             if (response.ok) {
-              console.log('[Push] Notification sent successfully to user:', userId);
+              console.log('[Push] ✅ Notification sent successfully to user:', userId);
             } else {
               const error = await response.text();
               console.warn('[Push] Failed to send notification:', error);

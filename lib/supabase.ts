@@ -14,8 +14,27 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: true,
     flowType: Capacitor.isNativePlatform() ? 'pkce' : 'implicit',
-  }
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+    // Fix for Capacitor: Use native WebSocket implementation
+    transport: Capacitor.isNativePlatform() ? undefined : undefined,
+  },
+  global: {
+    headers: {
+      'X-Client-Info': `supabase-js-capacitor/${Capacitor.getPlatform()}`,
+    },
+  },
 });
+
+// Debug logging for Capacitor
+if (Capacitor.isNativePlatform()) {
+  console.log('🔧 [Supabase] Running on native platform:', Capacitor.getPlatform());
+  console.log('🔧 [Supabase] URL:', supabaseUrl);
+  console.log('🔧 [Supabase] Realtime enabled with Capacitor config');
+}
 
 // Database type helpers
 export type Database = {

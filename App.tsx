@@ -1,5 +1,5 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route, useNavigate, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { UserProvider, useUser } from './contexts/UserContextDB';
 import { JobProvider, useJobs } from './contexts/JobContextDB';
 import { ChatMessage, Coordinates, Job, JobStatus, UserRole } from './types';
@@ -38,6 +38,9 @@ import { signInWithGoogle, completeProfile } from './services/authService';
 import { useDeepLinkHandler } from './hooks/useDeepLinkHandler';
 import { cancelJob } from './services/jobService';
 import { checkWalletBalance, deductFromWallet, getAppConfig } from './services/paymentService';
+import { setupPushListeners, removePushListeners, isPushSupported } from './services/pushService';
+import { handleNotificationNavigation, parseNotificationData } from './services/notificationNavigationService';
+import { Capacitor } from '@capacitor/core';
 
 const AppContent: React.FC = () => {
   const {
@@ -101,6 +104,7 @@ const AppContent: React.FC = () => {
   // So I will just keep the legacy state for now in case I missed where it renders.
   // Update: I will just use `useNavigate` to go to ` / post` with state.
   const navigate = useNavigate();
+  const location = useLocation();
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   // Check onboarding status
@@ -112,6 +116,54 @@ const AppContent: React.FC = () => {
       }
     }
   }, [isLoggedIn, isAuthLoading, user]);
+
+  // Push notification tap handler (deep linking)
+  useEffect(() => {
+    if (!isLoggedIn || !isPushSupported()) return;
+
+    console.log('[PushTap] Setting up notification tap handler');
+
+    // Helper to open modals
+    const openModal = (type: string, id: string) => {
+      const job = jobs.find(j => j.id === id);
+      if (!job) {
+        console.warn('[PushTap] Job not found:', id);
+        return;
+      }
+
+      switch (type) {
+        case 'viewBids':
+          setViewBidsModal({ isOpen: true, job });
+          break;
+        case 'chat':
+          setChatOpen({ isOpen: true, job });
+          setActiveChatId(id);
+          break;
+        case 'jobDetails':
+          setSelectedJob(job);
+          break;
+      }
+    };
+
+    setupPushListeners(
+      // onNotificationReceived (app is open)
+      (notification) => {
+        console.log('[PushTap] Notification received while app open:', notification);
+        // Don't show system notification - in-app notification already handled by context
+      },
+      // onNotificationClicked (user tapped notification)
+      (action) => {
+        console.log('[PushTap] User tapped notification:', action);
+        const data = parseNotificationData(action.notification);
+        handleNotificationNavigation(data, navigate, openModal);
+      }
+    );
+
+    return () => {
+      console.log('[PushTap] Removing notification listeners');
+      removePushListeners();
+    };
+  }, [isLoggedIn, jobs, navigate]);
 
   // --- Realtime Sync ---
   // When 'jobs' update in background, update the open Modal view
