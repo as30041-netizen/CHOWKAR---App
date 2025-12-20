@@ -259,7 +259,7 @@ export const createBid = async (bid: Bid): Promise<{ success: boolean; error?: s
       .insert({
         // Let DB generate UUID for id
         job_id: bid.jobId,
-        poster_id: bid.posterId, // Added for Realtime RLS
+        // REMOVED poster_id - this column doesn't exist in bids table!
         worker_id: bid.workerId,
         worker_name: bid.workerName,
         worker_phone: bid.workerPhone,
@@ -274,12 +274,16 @@ export const createBid = async (bid: Bid): Promise<{ success: boolean; error?: s
         negotiation_history: bid.negotiationHistory
       });
 
-    if (error) throw error;
+    if (error) {
+      console.error('[JobService] Error creating bid:', error);
+      throw error;
+    }
 
+    console.log('[JobService] Bid created successfully');
     return { success: true };
-  } catch (error) {
-    console.error('Error creating bid:', error);
-    return { success: false, error: 'Failed to create bid' };
+  } catch (error: any) {
+    console.error('[JobService] Error creating bid:', error);
+    return { success: false, error: error.message || 'Failed to create bid' };
   }
 };
 
