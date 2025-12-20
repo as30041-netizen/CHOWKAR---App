@@ -109,9 +109,13 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const newBid = dbBidToAppBid(payload.new);
       setJobs(prev => prev.map(j => {
         if (j.id === newBid.jobId) {
-          // Only add if not already present (avoid duplicates from optimistic UI)
-          const exists = j.bids.some(b => b.id === newBid.id);
-          return exists ? j : { ...j, bids: [...j.bids, newBid] };
+          // Remove optimistic bids from this worker (ids starting with 'b') to avoid duplicates
+          // And ensure the new bid isn't already there
+          const cleanBids = j.bids.filter(b =>
+            !(b.workerId === newBid.workerId && b.id.toString().startsWith('b')) &&
+            b.id !== newBid.id
+          );
+          return { ...j, bids: [newBid, ...cleanBids] }; // Newest first
         }
         return j;
       }));
@@ -125,7 +129,9 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }));
     } else if (eventType === 'DELETE' && payload.old) {
       setJobs(prev => prev.map(j => {
-        if (j.id === payload.old.job_id) {
+        // Iterate through all jobs since we might not have job_id in DELETE payload
+        const hasBid = j.bids.some(b => b.id === payload.old.id);
+        if (hasBid) {
           return { ...j, bids: j.bids.filter(b => b.id !== payload.old.id) };
         }
         return j;
