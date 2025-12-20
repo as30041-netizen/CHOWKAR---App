@@ -10,7 +10,14 @@ import { Footer } from './Footer';
 import { SafetyTipsModal, CommunityGuidelinesModal, TermsModal } from './InfoModals';
 import { useUser } from '../contexts/UserContextDB';
 
-export const LandingPage: React.FC = () => {
+interface LandingPageProps {
+    onGetStarted: () => void;
+    language: 'en' | 'hi';
+    onLanguageToggle: () => void;
+    isSigningIn: boolean;
+}
+
+export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSigningIn }) => {
     const navigate = useNavigate();
     const { language, setLanguage, user } = useUser();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -84,9 +91,9 @@ export const LandingPage: React.FC = () => {
                                 <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{language === 'en' ? 'हिंदी' : 'English'}</span>
                             </button>
 
-                            <Link to="/login" className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-lg shadow-emerald-600/20 transition-all hover:-translate-y-0.5 active:translate-y-0">
-                                {language === 'en' ? 'Login / Join' : 'लॉगिन / शामिल हों'}
-                            </Link>
+                            <button onClick={onGetStarted} disabled={isSigningIn} className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-lg shadow-emerald-600/20 transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed">
+                                {isSigningIn ? (language === 'en' ? 'Loading...' : '...loading') : (language === 'en' ? 'Get Started Free' : 'मुफ़्त में शुरू करें')}
+                            </button>
                         </div>
 
                         {/* Mobile Menu Button */}
@@ -102,9 +109,9 @@ export const LandingPage: React.FC = () => {
                 {/* Mobile Menu */}
                 {isMenuOpen && (
                     <div className="md:hidden absolute top-16 left-0 right-0 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-dark-800 p-4 space-y-4 shadow-xl animate-slide-down z-30">
-                        <Link to="/login" className="block w-full text-center py-3 bg-emerald-600 text-white rounded-xl font-bold">
-                            {language === 'en' ? 'Login / Join' : 'लॉगिन / शामिल हों'}
-                        </Link>
+                        <button onClick={onGetStarted} disabled={isSigningIn} className="block w-full text-center py-3 bg-emerald-600 text-white rounded-xl font-bold disabled:opacity-70">
+                            {isSigningIn ? 'Loading...' : (language === 'en' ? 'Get Started Free' : 'मुफ़्त में शुरू करें')}
+                        </button>
                         <button onClick={() => setLanguage(language === 'en' ? 'hi' : 'en')} className="w-full py-3 flex items-center justify-center gap-2 border border-gray-200 dark:border-gray-700 rounded-xl font-bold text-gray-700 dark:text-gray-300">
                             <Globe size={18} /> {language === 'en' ? 'Switch to Hindi' : 'अंग्रेजी में बदलें'}
                         </button>
@@ -143,14 +150,14 @@ export const LandingPage: React.FC = () => {
                         </p>
 
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in-up delay-300">
-                            <Link to="/login" className="w-full sm:w-auto px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-lg shadow-xl shadow-emerald-600/20 transition-all hover:-translate-y-1 hover:shadow-2xl flex items-center justify-center gap-2">
+                            <button onClick={onGetStarted} disabled={isSigningIn} className="w-full sm:w-auto px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-lg shadow-xl shadow-emerald-600/20 transition-all hover:-translate-y-1 hover:shadow-2xl flex items-center justify-center gap-2">
                                 <Briefcase size={24} />
-                                {language === 'en' ? 'Post a Job' : 'काम पोस्ट करें'}
-                            </Link>
-                            <Link to="/login" className="w-full sm:w-auto px-8 py-4 bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-2 border-gray-200 dark:border-gray-700 hover:border-emerald-500 dark:hover:border-emerald-500 rounded-2xl font-bold text-lg transition-all hover:-translate-y-1 flex items-center justify-center gap-2">
+                                {isSigningIn ? 'Loading...' : (language === 'en' ? 'Get Started Free' : 'मुफ़्त में शुरू करें')}
+                            </button>
+                            <button onClick={onGetStarted} disabled={isSigningIn} className="w-full sm:w-auto px-8 py-4 bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-2 border-gray-200 dark:border-gray-700 hover:border-emerald-500 dark:hover:border-emerald-500 rounded-2xl font-bold text-lg transition-all hover:-translate-y-1 flex items-center justify-center gap-2">
                                 <Users size={24} className="text-emerald-600" />
-                                {language === 'en' ? 'Find Work' : 'काम खोजें'}
-                            </Link>
+                                {isSigningIn ? 'Loading...' : (language === 'en' ? 'Find Work' : 'काम खोजें')}
+                            </button>
                         </div>
                     </div>
                 </section>
@@ -182,9 +189,9 @@ export const LandingPage: React.FC = () => {
                                             </li>
                                         ))}
                                     </ul>
-                                    <Link to="/login" className="inline-flex items-center gap-2 font-bold text-blue-600 dark:text-blue-400 hover:gap-3 transition-all">
+                                    <button onClick={onGetStarted} className="inline-flex items-center gap-2 font-bold text-blue-600 dark:text-blue-400 hover:gap-3 transition-all">
                                         {language === 'en' ? 'Post a Job Now' : 'अभी जॉब पोस्ट करें'} <ArrowRight size={20} />
-                                    </Link>
+                                    </button>
                                 </div>
                             </div>
 
@@ -211,9 +218,9 @@ export const LandingPage: React.FC = () => {
                                             </li>
                                         ))}
                                     </ul>
-                                    <Link to="/login" className="inline-flex items-center gap-2 font-bold text-emerald-600 dark:text-emerald-400 hover:gap-3 transition-all">
+                                    <button onClick={onGetStarted} className="inline-flex items-center gap-2 font-bold text-emerald-600 dark:text-emerald-400 hover:gap-3 transition-all">
                                         {language === 'en' ? 'Create Worker Profile' : 'प्रोफाइल बनाएं'} <ArrowRight size={20} />
-                                    </Link>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -272,12 +279,12 @@ export const LandingPage: React.FC = () => {
                                 { title: 'Painter', icon: '🎨', color: 'bg-pink-100 text-pink-600' },
                                 { title: 'Other', icon: '🔨', color: 'bg-gray-100 text-gray-600' },
                             ].map((cat, i) => (
-                                <Link to="/login" key={i} className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm hover:shadow-xl transition-all hover:-translate-y-1 border border-gray-100 dark:border-gray-700 group">
+                                <button onClick={onGetStarted} key={i} className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm hover:shadow-xl transition-all hover:-translate-y-1 border border-gray-100 dark:border-gray-700 group text-left block w-full">
                                     <div className={`w-12 h-12 ${cat.color} dark:bg-opacity-20 rounded-xl flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform`}>
                                         {cat.icon}
                                     </div>
                                     <h3 className="font-bold text-gray-900 dark:text-white text-lg">{cat.title}</h3>
-                                </Link>
+                                </button>
                             ))}
                         </div>
                     </div>
