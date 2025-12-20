@@ -163,7 +163,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     const features = t.features;
 
     return (
-        <div className="min-h-screen bg-gray-950 text-white overflow-x-hidden">
+        <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 text-gray-900 dark:text-white overflow-x-hidden transition-colors duration-300">
             {/* Animated Background */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none">
                 {/* Gradient orbs */}
@@ -211,9 +211,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="fixed top-6 right-6 z-50">
                 <button
                     onClick={onLanguageToggle}
-                    className="bg-white/10 backdrop-blur-xl border border-white/20 px-4 py-2.5 rounded-full text-sm font-bold text-white shadow-2xl hover:bg-white/20 transition-all duration-300 hover:scale-105 flex items-center gap-2"
+                    className="bg-white/90 dark:bg-white/10 backdrop-blur-xl border border-gray-200 dark:border-white/20 px-4 py-2.5 rounded-full text-sm font-bold text-gray-800 dark:text-white shadow-lg dark:shadow-2xl hover:bg-white dark:hover:bg-white/20 transition-all duration-300 hover:scale-105 flex items-center gap-2"
                 >
-                    <Languages size={16} className="text-emerald-400" />
+                    <Languages size={16} className="text-emerald-600 dark:text-emerald-400" />
                     {language === 'en' ? 'हिन्दी' : 'English'}
                 </button>
             </div>
