@@ -67,9 +67,20 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch jobs on mount
+  // Fetch jobs only when user is logged in
   useEffect(() => {
-    refreshJobs();
+    // Check if user is authenticated before fetching jobs
+    const checkAuthAndFetch = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        console.log('[JobContext] User logged in, fetching jobs...');
+        refreshJobs();
+      } else {
+        console.log('[JobContext] User not logged in, skipping job fetch');
+        setLoading(false);
+      }
+    };
+    checkAuthAndFetch();
   }, []);
 
   // --- Surgical Sync Handlers ---
@@ -123,47 +134,62 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   // Real-time subscription for jobs and bids (HYBRID: Broadcast + postgres_changes)
+  // Only subscribe when user is logged in
   useEffect(() => {
-    console.log('[Realtime] Subscribing to jobs and bids with HYBRID Sync...');
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
-    const channel = supabase.channel('job_system_hybrid_sync')
-      // Broadcast listeners for instant updates (bypasses RLS)
-      .on('broadcast', { event: 'job_updated' }, (payload) => {
-        console.log('[Realtime] Broadcast job_updated received:', payload);
-        if (payload.payload) {
-          handleJobChange('UPDATE', { new: payload.payload, eventType: 'UPDATE' });
-        }
-      })
-      .on('broadcast', { event: 'bid_updated' }, (payload) => {
-        console.log('[Realtime] Broadcast bid_updated received:', payload);
-        if (payload.payload) {
-          handleBidChange('UPDATE', { new: payload.payload, eventType: 'UPDATE' });
-        }
-      })
-      .on('broadcast', { event: 'bid_inserted' }, (payload) => {
-        console.log('[Realtime] Broadcast bid_inserted received:', payload);
-        if (payload.payload) {
-          handleBidChange('INSERT', { new: payload.payload, eventType: 'INSERT' });
-        }
-      })
-      // postgres_changes as backup (RLS-dependent)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'jobs' },
-        (payload) => handleJobChange(payload.eventType, payload)
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'bids' },
-        (payload) => handleBidChange(payload.eventType, payload)
-      )
-      .subscribe((status) => {
-        console.log(`[Realtime] Hybrid Sync subscription status: ${status}`);
-      });
+    const setupRealtime = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        console.log('[Realtime] User not logged in, skipping subscription');
+        return;
+      }
+
+      console.log('[Realtime] Subscribing to jobs and bids with HYBRID Sync...');
+
+      channel = supabase.channel('job_system_hybrid_sync')
+        // Broadcast listeners for instant updates (bypasses RLS)
+        .on('broadcast', { event: 'job_updated' }, (payload) => {
+          console.log('[Realtime] Broadcast job_updated received:', payload);
+          if (payload.payload) {
+            handleJobChange('UPDATE', { new: payload.payload, eventType: 'UPDATE' });
+          }
+        })
+        .on('broadcast', { event: 'bid_updated' }, (payload) => {
+          console.log('[Realtime] Broadcast bid_updated received:', payload);
+          if (payload.payload) {
+            handleBidChange('UPDATE', { new: payload.payload, eventType: 'UPDATE' });
+          }
+        })
+        .on('broadcast', { event: 'bid_inserted' }, (payload) => {
+          console.log('[Realtime] Broadcast bid_inserted received:', payload);
+          if (payload.payload) {
+            handleBidChange('INSERT', { new: payload.payload, eventType: 'INSERT' });
+          }
+        })
+        // postgres_changes as backup (RLS-dependent)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'jobs' },
+          (payload) => handleJobChange(payload.eventType, payload)
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'bids' },
+          (payload) => handleBidChange(payload.eventType, payload)
+        )
+        .subscribe((status) => {
+          console.log(`[Realtime] Hybrid Sync subscription status: ${status}`);
+        });
+    };
+
+    setupRealtime();
 
     return () => {
-      console.log('[Realtime] Cleaning up Hybrid Sync subscription');
-      supabase.removeChannel(channel);
+      if (channel) {
+        console.log('[Realtime] Cleaning up Hybrid Sync subscription');
+        supabase.removeChannel(channel);
+      }
     };
   }, [handleJobChange, handleBidChange]);
 
