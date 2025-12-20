@@ -664,12 +664,51 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             event: 'new_notification',
             payload: broadcastPayload
           });
+
+          console.log('[Notification] Broadcast sent successfully');
         } catch (broadcastError) {
           console.warn('[Notification] Broadcast failed:', broadcastError);
         } finally {
           // Always cleanup channel
           supabase.removeChannel(channel);
         }
+
+        // Send push notification via edge function (for when app is closed)
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+
+          if (session?.access_token) {
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            const response = await fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`
+              },
+              body: JSON.stringify({
+                userId,
+                title,
+                body: message,
+                data: {
+                  notificationId: broadcastPayload.id,
+                  jobId: relatedJobId || '',
+                  type
+                }
+              })
+            });
+
+            if (response.ok) {
+              console.log('[Push] Notification sent successfully to user:', userId);
+            } else {
+              const error = await response.text();
+              console.warn('[Push] Failed to send notification:', error);
+            }
+          }
+        } catch (pushError) {
+          console.warn('[Push] Edge function call failed:', pushError);
+          // Don't throw - notification was created successfully
+        }
+
       }
     } catch (error) {
       console.error('Error adding notification:', error);

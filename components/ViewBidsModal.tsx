@@ -18,13 +18,123 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
     const { user, t, addNotification, language } = useUser();
     const [isAcceptingBid, setIsAcceptingBid] = useState(false);
     const [connectionFee, setConnectionFee] = useState(20);
+    const [localJob, setLocalJob] = useState<Job | null>(job);
+
+    // Update local job when prop changes
+    useEffect(() => {
+        if (job) {
+            setLocalJob(job);
+        }
+    }, [job]);
+
+    // Real-time subscription for this specific job's bids
+    useEffect(() => {
+        if (!isOpen || !job?.id) return;
+
+        console.log('[ViewBidsModal] Setting up realtime subscription for job:', job.id);
+
+        const channel = supabase
+            .channel(`bids_modal_${job.id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+                    schema: 'public',
+                    table: 'bids',
+                    filter: `job_id=eq.${job.id}`
+                },
+                async (payload) => {
+                    console.log('[ViewBidsModal] Bid change detected:', payload.eventType, payload);
+
+                    if (payload.eventType === 'INSERT' && payload.new) {
+                        // Fetch full bid details with worker info
+                        const { data: fullBid } = await supabase
+                            .from('bids')
+                            .select(`
+                                *,
+                                worker:profiles!bids_worker_id_fkey(name, phone, rating, profile_photo, location, latitude, longitude)
+                            `)
+                            .eq('id', payload.new.id)
+                            .single();
+
+                        if (fullBid && localJob) {
+                            const newBid = {
+                                id: fullBid.id,
+                                jobId: fullBid.job_id,
+                                workerId: fullBid.worker_id,
+                                workerName: fullBid.worker?.name || 'Worker',
+                                workerPhone: fullBid.worker?.phone || '',
+                                workerRating: fullBid.worker?.rating || 5.0,
+                                workerLocation: fullBid.worker?.location || '',
+                                workerPhoto: fullBid.worker?.profile_photo,
+                                amount: fullBid.amount,
+                                message: fullBid.message,
+                                status: fullBid.status,
+                                negotiationHistory: fullBid.negotiation_history || [],
+                                createdAt: new Date(fullBid.created_at).getTime()
+                            };
+
+                            // Add new bid to local state
+                            setLocalJob(prev => {
+                                if (!prev) return prev;
+                                // Check if bid already exists to avoid duplicates
+                                const exists = prev.bids.some(b => b.id === newBid.id);
+                                if (exists) return prev;
+
+                                return {
+                                    ...prev,
+                                    bids: [...prev.bids, newBid]
+                                };
+                            });
+
+                            console.log('[ViewBidsModal] New bid added:', newBid.id);
+                        }
+                    } else if (payload.eventType === 'UPDATE' && payload.new) {
+                        setLocalJob(prev => {
+                            if (!prev) return prev;
+                            return {
+                                ...prev,
+                                bids: prev.bids.map(bid =>
+                                    bid.id === payload.new.id
+                                        ? {
+                                            ...bid,
+                                            amount: payload.new.amount,
+                                            status: payload.new.status,
+                                            negotiationHistory: payload.new.negotiation_history || bid.negotiationHistory
+                                        }
+                                        : bid
+                                )
+                            };
+                        });
+                        console.log('[ViewBidsModal] Bid updated:', payload.new.id);
+                    } else if (payload.eventType === 'DELETE' && payload.old) {
+                        setLocalJob(prev => {
+                            if (!prev) return prev;
+                            return {
+                                ...prev,
+                                bids: prev.bids.filter(bid => bid.id !== payload.old.id)
+                            };
+                        });
+                        console.log('[ViewBidsModal] Bid deleted:', payload.old.id);
+                    }
+                }
+            )
+            .subscribe((status) => {
+                console.log('[ViewBidsModal] Subscription status:', status);
+            });
+
+        return () => {
+            console.log('[ViewBidsModal] Cleaning up subscription for job:', job.id);
+            supabase.removeChannel(channel);
+        };
+    }, [isOpen, job?.id]);
 
     // Load connection fee from admin config
     useEffect(() => {
         getAppConfig().then(config => setConnectionFee(config.connection_fee));
     }, []);
 
-    if (!isOpen || !job) return null;
+    if (!isOpen || !localJob) return null;
 
     const handleAcceptBid = async (jobId: string, bidId: string, bidAmount: number, workerId: string) => {
         // NO WALLET CHECK NEEDED - Poster already paid when posting
@@ -98,12 +208,15 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose}></div>
             <div className="bg-white w-full max-w-lg rounded-3xl p-0 relative z-10 max-h-[90vh] overflow-hidden flex flex-col animate-slide-up">
                 <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                    <h3 className="font-bold text-lg">Bids for {job.title}</h3>
+                    <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-lg">Bids for {localJob.title}</h3>
+                        <span className="text-sm text-gray-500">({localJob.bids?.length || 0})</span>
+                    </div>
                     <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors"><XCircle size={24} className="text-gray-500" /></button>
                 </div>
                 <div className="p-4 overflow-y-auto flex-1 space-y-4">
-                    {job.bids && job.bids.length > 0 ? (
-                        job.bids.map(bid => (
+                    {localJob.bids && localJob.bids.length > 0 ? (
+                        localJob.bids.map(bid => (
                             <div key={bid.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm relative">
                                 <div className="flex items-start gap-3 mb-3">
                                     <div className="w-10 h-10 bg-gray-100 rounded-full overflow-hidden">
@@ -121,7 +234,7 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                                 <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg mb-3 italic">"{bid.message}"</p>
 
                                 {/* Visibility hint */}
-                                {job.status === 'OPEN' && (
+                                {localJob.status === 'OPEN' && (
                                     <p className="text-[10px] text-gray-400 mb-3 flex items-center gap-1">
                                         🔒 Contact details visible after accepting this bid
                                     </p>
@@ -139,10 +252,10 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                                     </div>
                                 )}
 
-                                {user.id === job?.posterId && bid.status === 'PENDING' && (
+                                {user.id === localJob?.posterId && bid.status === 'PENDING' && (
                                     <div className="flex gap-2 mt-2">
                                         <button
-                                            onClick={() => handleAcceptBid(job!.id, bid.id, bid.amount, bid.workerId)}
+                                            onClick={() => handleAcceptBid(localJob!.id, bid.id, bid.amount, bid.workerId)}
                                             disabled={isAcceptingBid}
                                             className="flex-1 bg-emerald-600 text-white py-2 rounded-lg font-bold text-sm shadow-md hover:bg-emerald-700"
                                         >
