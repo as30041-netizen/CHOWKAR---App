@@ -159,6 +159,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                                 {isSigningIn ? 'Loading...' : (language === 'en' ? 'Find Work' : 'काम खोजें')}
                             </button>
                         </div>
+
+                        <div className="mt-8 animate-fade-in-up delay-500">
+                            <a
+                                href="https://eeinickxxgiegwxabzhv.supabase.co/storage/v1/object/public/downloads/chowkar-v1.0.0.apk"
+                                download
+                                className="inline-flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold hover:underline bg-emerald-50 dark:bg-emerald-900/30 px-6 py-3 rounded-xl border border-emerald-100 dark:border-emerald-800/50"
+                            >
+                                <Smartphone size={20} />
+                                {language === 'en' ? 'Download Android App (APK)' : 'एंड्रॉइड ऐप डाउनलोड करें (APK)'}
+                            </a>
+                            <p className="text-xs text-gray-500 mt-2">v1.0.0 • 100% Free</p>
+                        </div>
                     </div>
                 </section>
 
