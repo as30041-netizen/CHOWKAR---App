@@ -203,9 +203,17 @@ const AppContent: React.FC = () => {
     const result = await signInWithGoogle();
     if (!result.success) {
       showAlert(result.error || 'Failed to sign in', 'error');
+    }
+    // Always reset after attempt (success leads to auth state change)
+    setIsSigningIn(false);
+  };
+
+  // Reset signing in state when user is not logged in
+  useEffect(() => {
+    if (!isLoggedIn) {
       setIsSigningIn(false);
     }
-  };
+  }, [isLoggedIn]);
 
   // Close chat on navigation to prevent stuck active state
   useEffect(() => {
@@ -668,9 +676,9 @@ const AppContent: React.FC = () => {
 
   if (isAuthLoading) {
     return (
-      <div className="min-h-screen bg-green-50 flex flex-col items-center justify-center p-6 text-gray-900">
-        <Loader2 size={32} className="text-emerald-600 animate-spin mb-4" />
-        <p className="text-emerald-700 font-medium">{loadingMessage}</p>
+      <div className="min-h-screen bg-green-50 dark:bg-gray-950 flex flex-col items-center justify-center p-6 text-gray-900 dark:text-white">
+        <Loader2 size={32} className="text-emerald-600 dark:text-emerald-500 animate-spin mb-4" />
+        <p className="text-emerald-700 dark:text-emerald-400 font-medium">{loadingMessage}</p>
         {loadingMessage.includes('timeout') && <button onClick={retryAuth} className="mt-4 px-4 py-2 bg-emerald-600 text-white rounded">Retry</button>}
       </div>
     );
@@ -689,37 +697,37 @@ const AppContent: React.FC = () => {
 
   // --- Main Layout ---
   return (
-    <div className="h-[100dvh] w-full bg-green-50 font-sans text-gray-900 flex flex-col overflow-hidden">
+    <div className="h-[100dvh] w-full bg-green-50 dark:bg-gray-950 font-sans text-gray-900 dark:text-white flex flex-col overflow-hidden transition-colors duration-300">
       {/* Header */}
-      <header className="bg-white border-b border-gray-100 z-30 shadow-sm flex-none">
+      <header className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 z-30 shadow-sm flex-none transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-4 py-3 pt-safe flex justify-between items-center">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
-            <MapPin size={24} className="text-emerald-600" fill="#10b981" />
-            <div><h1 className="text-xl font-bold text-emerald-900 leading-none">CHOWKAR</h1></div>
+            <MapPin size={24} className="text-emerald-600 dark:text-emerald-500" fill="#10b981" />
+            <div><h1 className="text-xl font-bold text-emerald-900 dark:text-white leading-none">CHOWKAR</h1></div>
           </div>
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-6">
-            <button onClick={() => navigate('/')} className={`text-sm font-bold ${location.pathname === '/' ? 'text-emerald-600' : 'text-gray-500 hover:text-emerald-600'}`}>{t.navHome}</button>
+            <button onClick={() => navigate('/')} className={`text-sm font-bold ${location.pathname === '/' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400'}`}>{t.navHome}</button>
             {role === UserRole.POSTER && (
-              <button onClick={() => navigate('/post')} className={`text-sm font-bold ${location.pathname === '/post' ? 'text-emerald-600' : 'text-gray-500 hover:text-emerald-600'}`}>{t.navPost}</button>
+              <button onClick={() => navigate('/post')} className={`text-sm font-bold ${location.pathname === '/post' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400'}`}>{t.navPost}</button>
             )}
-            <button onClick={() => navigate('/wallet')} className={`text-sm font-bold ${location.pathname === '/wallet' ? 'text-emerald-600' : 'text-gray-500 hover:text-emerald-600'}`}>{t.navWallet}</button>
-            <button onClick={() => navigate('/profile')} className={`text-sm font-bold ${location.pathname === '/profile' ? 'text-emerald-600' : 'text-gray-500 hover:text-emerald-600'}`}>{t.navProfile}</button>
+            <button onClick={() => navigate('/wallet')} className={`text-sm font-bold ${location.pathname === '/wallet' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400'}`}>{t.navWallet}</button>
+            <button onClick={() => navigate('/profile')} className={`text-sm font-bold ${location.pathname === '/profile' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400'}`}>{t.navProfile}</button>
           </nav>
 
           <div className="flex items-center gap-3">
-            <button onClick={() => setLanguage(l => l === 'en' ? 'hi' : 'en')} className="p-2 text-emerald-800 text-xs font-bold border border-emerald-100 rounded-lg bg-emerald-50 hover:bg-emerald-100"><Languages size={18} /> {language === 'en' ? 'हि' : 'En'}</button>
-            <button onClick={() => setShowChatList(true)} className="relative p-2 hover:bg-gray-100 rounded-full">
-              <MessageCircle size={20} className="text-gray-600" />
+            <button onClick={() => setLanguage(l => l === 'en' ? 'hi' : 'en')} className="p-2 text-emerald-800 dark:text-emerald-400 text-xs font-bold border border-emerald-100 dark:border-emerald-900 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"><Languages size={18} /> {language === 'en' ? 'हि' : 'En'}</button>
+            <button onClick={() => setShowChatList(true)} className="relative p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+              <MessageCircle size={20} className="text-gray-600 dark:text-gray-400" />
               {unreadChatCount > 0 && (
                 <span className="absolute top-1.5 right-2 min-w-[18px] h-[18px] bg-emerald-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
                   {unreadChatCount}
                 </span>
               )}
             </button>
-            <button onClick={() => setShowNotifications(true)} className="relative p-2 hover:bg-gray-100 rounded-full">
-              <Bell size={20} className="text-gray-600" />
+            <button onClick={() => setShowNotifications(true)} className="relative p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+              <Bell size={20} className="text-gray-600 dark:text-gray-400" />
               {unreadCount > 0 && (
                 <span className="absolute top-1.5 right-2 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
                   {unreadCount > 9 ? '9+' : unreadCount}
@@ -740,11 +748,11 @@ const AppContent: React.FC = () => {
       )}
 
       {/* Router View */}
-      <main className="flex-1 overflow-y-auto bg-green-50 w-full relative">
+      <main className="flex-1 overflow-y-auto bg-green-50 dark:bg-gray-950 w-full relative transition-colors duration-300">
         <div className="max-w-7xl mx-auto w-full h-full">
           <Suspense fallback={
-            <div className="h-full w-full flex items-center justify-center bg-green-50/50">
-              <Loader2 size={32} className="text-emerald-600 animate-spin" />
+            <div className="h-full w-full flex items-center justify-center bg-green-50/50 dark:bg-gray-950/50">
+              <Loader2 size={32} className="text-emerald-600 dark:text-emerald-500 animate-spin" />
             </div>
           }>
             <Routes>

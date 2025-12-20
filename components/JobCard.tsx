@@ -138,7 +138,7 @@ export const JobCard: React.FC<JobCardProps> = ({
     }
     if (job.status !== JobStatus.OPEN && myBid.status === 'PENDING') {
       return (
-        <div className="bg-gray-100 text-gray-500 text-xs font-bold px-3 py-2 rounded-lg flex items-center border border-gray-200">
+        <div className="bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-xs font-bold px-3 py-2 rounded-lg flex items-center border border-gray-200 dark:border-gray-700">
           <Ban size={14} className="mr-1.5" /> {t.closed}
         </div>
       );
@@ -152,26 +152,26 @@ export const JobCard: React.FC<JobCardProps> = ({
     if (isWorkerTurn) {
       return (
         <div className="flex flex-col gap-2 w-full max-w-[240px]">
-          <div className="bg-amber-100 text-amber-800 text-xs font-bold px-3 py-2 rounded-lg flex items-center border border-amber-200 shadow-sm animate-pulse-slow">
+          <div className="bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 text-xs font-bold px-3 py-2 rounded-lg flex items-center border border-amber-200 dark:border-amber-800 shadow-sm animate-pulse-slow">
             <Handshake size={14} className="mr-1.5" /> {t.posterCountered}: ₹{myBid.amount}
           </div>
           {showCounterInput ? (
-            <div className="flex gap-1 items-center bg-white border rounded-lg p-1 shadow-md" onClick={e => e.stopPropagation()}>
+            <div className="flex gap-1 items-center bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg p-1 shadow-md" onClick={e => e.stopPropagation()}>
               <input
                 type="number"
-                className="w-16 text-xs p-1 border rounded"
+                className="w-16 text-xs p-1 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 placeholder="₹"
                 value={counterAmount}
                 onChange={e => setCounterAmount(e.target.value)}
                 autoFocus
               />
               <button onClick={submitCounter} className="bg-emerald-600 text-white text-xs px-2 py-1 rounded font-bold">✓</button>
-              <button onClick={(e) => { e.stopPropagation(); setShowCounterInput(false) }} className="text-gray-400 text-xs px-1">✕</button>
+              <button onClick={(e) => { e.stopPropagation(); setShowCounterInput(false) }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xs px-1">✕</button>
             </div>
           ) : (
             <div className="flex gap-1" onClick={e => e.stopPropagation()}>
               <button onClick={() => onReplyToCounter?.(job.id, myBid.id, 'ACCEPT')} className="flex-1 bg-emerald-600 text-white text-xs py-1.5 rounded-lg font-bold shadow-sm">{t.acceptCounter}</button>
-              <button onClick={() => setShowCounterInput(true)} className="flex-1 bg-white border border-gray-300 text-gray-700 text-xs py-1.5 rounded-lg font-bold hover:bg-gray-50">{t.counterOffer}</button>
+              <button onClick={() => setShowCounterInput(true)} className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-xs py-1.5 rounded-lg font-bold hover:bg-gray-50 dark:hover:bg-gray-700">{t.counterOffer}</button>
               <button onClick={() => onReplyToCounter?.(job.id, myBid.id, 'REJECT')} className="bg-red-50 text-red-600 border border-red-100 px-2 rounded-lg"><XCircle size={14} /></button>
             </div>
           )}
@@ -181,7 +181,7 @@ export const JobCard: React.FC<JobCardProps> = ({
 
     if (isPosterTurn) {
       return (
-        <div className="bg-blue-50 text-blue-700 text-xs font-bold px-3 py-2 rounded-lg flex items-center border border-blue-100">
+        <div className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-bold px-3 py-2 rounded-lg flex items-center border border-blue-100 dark:border-blue-900/50">
           <Clock size={14} className="mr-1.5" /> {t.waitingForResponse}: ₹{myBid.amount}
         </div>
       );
@@ -189,12 +189,12 @@ export const JobCard: React.FC<JobCardProps> = ({
 
     // Default Pending (should cover standard flow)
     return (
-      <div className="bg-blue-50 text-blue-700 text-xs font-bold px-3 py-2 rounded-lg flex justify-between items-center border border-blue-100">
+      <div className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-bold px-3 py-2 rounded-lg flex justify-between items-center border border-blue-100 dark:border-blue-900/50">
         <span className="flex items-center"><Clock size={14} className="mr-1.5" /> {t.pending}: ₹{myBid.amount}</span>
         {onWithdrawBid && (
           <button
             onClick={(e) => { e.stopPropagation(); onWithdrawBid(job.id, myBid.id); }}
-            className="bg-white/50 hover:bg-white text-red-500 hover:text-red-700 px-2 py-0.5 rounded border border-transparent hover:border-red-100 transition-all text-[10px]"
+            className="bg-white/50 dark:bg-black/20 hover:bg-white dark:hover:bg-black/40 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 px-2 py-0.5 rounded border border-transparent hover:border-red-100 transition-all text-[10px]"
           >
             {language === 'en' ? 'Withdraw' : 'वापस लें'}
           </button>
@@ -206,14 +206,14 @@ export const JobCard: React.FC<JobCardProps> = ({
   return (
     <div
       onClick={onClick}
-      className="bg-white rounded-2xl p-4 sm:p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-gray-100 transition-all hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:border-emerald-100 hover:scale-[1.01] relative overflow-hidden group cursor-pointer"
+      className="bg-white dark:bg-gray-900 rounded-2xl p-4 sm:p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-gray-100 dark:border-gray-800 transition-all hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:border-emerald-100 dark:hover:border-emerald-900 relative overflow-hidden group cursor-pointer"
     >
 
       {/* Top Header Row */}
       <div className="flex justify-between items-start mb-3">
         <div className="flex items-center gap-3">
           {/* Poster Avatar */}
-          <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 font-bold text-lg border border-gray-100 shadow-sm overflow-hidden">
+          <div className="w-10 h-10 rounded-full bg-gray-50 dark:bg-gray-800 flex items-center justify-center text-gray-500 dark:text-gray-400 font-bold text-lg border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
             {job.posterPhoto ? (
               <img src={job.posterPhoto} alt={job.posterName} className="w-full h-full object-cover" />
             ) : (
@@ -221,23 +221,23 @@ export const JobCard: React.FC<JobCardProps> = ({
             )}
           </div>
           <div>
-            <h3 className="font-bold text-gray-900 leading-tight text-lg group-hover:text-emerald-800 transition-colors">{job.title}</h3>
-            <p className="text-xs text-gray-400 font-medium mt-0.5 flex items-center gap-1">
+            <h3 className="font-bold text-gray-900 dark:text-white leading-tight text-lg group-hover:text-emerald-800 dark:group-hover:text-emerald-400 transition-colors">{job.title}</h3>
+            <p className="text-xs text-gray-400 dark:text-gray-500 font-medium mt-0.5 flex items-center gap-1">
               {job.posterName}
-              {isPoster && <span className="ml-1 bg-emerald-100 text-emerald-800 text-[9px] px-1.5 py-0.5 rounded font-bold">YOU</span>}
-              <span className="mx-1 w-0.5 h-0.5 bg-gray-300 rounded-full"></span>
+              {isPoster && <span className="ml-1 bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 text-[9px] px-1.5 py-0.5 rounded font-bold">YOU</span>}
+              <span className="mx-1 w-0.5 h-0.5 bg-gray-300 dark:bg-gray-600 rounded-full"></span>
               {getTimeAgo(job.createdAt)}
             </p>
           </div>
         </div>
         <div className="flex flex-col items-end gap-2">
-          <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2.5 py-1 rounded-full border border-emerald-100 uppercase tracking-wide">
+          <span className="bg-emerald-5 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold px-2.5 py-1 rounded-full border border-emerald-100 dark:border-emerald-900 uppercase tracking-wide">
             {catT}
           </span>
           {/* Read Aloud Button */}
           <button
             onClick={handleSpeak}
-            className={`p-1.5 rounded-full transition-all border ${isSpeaking ? 'bg-red-50 text-red-500 border-red-100 animate-pulse' : 'bg-gray-50 text-gray-400 border-gray-100 hover:text-emerald-600 hover:bg-emerald-50'}`}
+            className={`p-1.5 rounded-full transition-all border ${isSpeaking ? 'bg-red-50 text-red-500 border-red-100 animate-pulse' : 'bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border-gray-100 dark:border-gray-700 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-gray-700'}`}
             title="Read Aloud"
           >
             {isSpeaking ? <Square size={14} fill="currentColor" /> : <Volume2 size={14} />}
@@ -248,21 +248,21 @@ export const JobCard: React.FC<JobCardProps> = ({
       {/* Info Chips Row */}
       <div className="flex flex-wrap gap-2 mb-4">
         {/* Location / Distance */}
-        <div className={`inline-flex items-center bg-gray-50 px-2 py-1.5 rounded-lg border border-gray-100 text-xs font-medium text-gray-600 ${job.coordinates ? 'pr-1' : 'px-2.5'}`}>
-          <MapPin size={12} className="mr-1.5 text-emerald-600" />
+        <div className={`inline-flex items-center bg-gray-50 dark:bg-gray-800 px-2 py-1.5 rounded-lg border border-gray-100 dark:border-gray-700 text-xs font-medium text-gray-600 dark:text-gray-300 ${job.coordinates ? 'pr-1' : 'px-2.5'}`}>
+          <MapPin size={12} className="mr-1.5 text-emerald-600 dark:text-emerald-500" />
           {distance !== undefined && distance < 100
-            ? <span className="mr-1 font-bold text-gray-800">{distance < 1 ? '< 1 km' : `${distance.toFixed(1)} km`}</span>
+            ? <span className="mr-1 font-bold text-gray-800 dark:text-gray-200">{distance < 1 ? '< 1 km' : `${distance.toFixed(1)} km`}</span>
             : null
           }
-          <span className={`${distance !== undefined && distance < 100 ? 'text-gray-400 pl-1 border-l border-gray-300' : ''} ml-1 mr-1`}>
+          <span className={`${distance !== undefined && distance < 100 ? 'text-gray-400 pl-1 border-l border-gray-300 dark:border-gray-600' : ''} ml-1 mr-1`}>
             {job.location}
           </span>
           {job.coordinates && (
-            <div className="flex items-center gap-1 border-l border-gray-200 pl-1 ml-1">
-              <button onClick={(e) => openMaps(e, 'search')} className="p-1 hover:bg-emerald-100 rounded-md text-gray-500 hover:text-emerald-600 transition-colors" title="View Map">
+            <div className="flex items-center gap-1 border-l border-gray-200 dark:border-gray-600 pl-1 ml-1">
+              <button onClick={(e) => openMaps(e, 'search')} className="p-1 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 rounded-md text-gray-500 dark:text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors" title="View Map">
                 <ExternalLink size={12} />
               </button>
-              <button onClick={(e) => openMaps(e, 'dir')} className="p-1 hover:bg-emerald-100 rounded-md text-emerald-600 hover:text-emerald-700 transition-colors" title="Get Directions">
+              <button onClick={(e) => openMaps(e, 'dir')} className="p-1 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 rounded-md text-emerald-600 dark:text-emerald-500 hover:text-emerald-700 transition-colors" title="Get Directions">
                 <Navigation size={12} fill="currentColor" />
               </button>
             </div>
@@ -270,20 +270,20 @@ export const JobCard: React.FC<JobCardProps> = ({
         </div>
 
         {/* Date */}
-        <div className="inline-flex items-center bg-gray-50 px-2.5 py-1.5 rounded-lg border border-gray-100 text-xs font-medium text-gray-600">
-          <Calendar size={12} className="mr-1.5 text-emerald-600" />
+        <div className="inline-flex items-center bg-gray-50 dark:bg-gray-800 px-2.5 py-1.5 rounded-lg border border-gray-100 dark:border-gray-700 text-xs font-medium text-gray-600 dark:text-gray-300">
+          <Calendar size={12} className="mr-1.5 text-emerald-600 dark:text-emerald-500" />
           {dateDisplay}
         </div>
 
         {/* Duration */}
-        <div className="inline-flex items-center bg-gray-50 px-2.5 py-1.5 rounded-lg border border-gray-100 text-xs font-medium text-gray-600">
-          <Hourglass size={12} className="mr-1.5 text-emerald-600" />
+        <div className="inline-flex items-center bg-gray-50 dark:bg-gray-800 px-2.5 py-1.5 rounded-lg border border-gray-100 dark:border-gray-700 text-xs font-medium text-gray-600 dark:text-gray-300">
+          <Hourglass size={12} className="mr-1.5 text-emerald-600 dark:text-emerald-500" />
           {job.duration}
         </div>
       </div>
 
       {/* Description */}
-      <p className="text-sm text-gray-600 mb-5 leading-relaxed line-clamp-2">
+      <p className="text-sm text-gray-600 dark:text-gray-400 mb-5 leading-relaxed line-clamp-2">
         {job.description}
       </p>
 
@@ -296,12 +296,12 @@ export const JobCard: React.FC<JobCardProps> = ({
       )}
 
       {/* Footer Area */}
-      <div className="flex items-end justify-between pt-4 border-t border-dashed border-gray-200">
+      <div className="flex items-end justify-between pt-4 border-t border-dashed border-gray-200 dark:border-gray-800">
 
         {/* Budget Section */}
         <div>
-          <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">{t.budget}</p>
-          <p className="text-2xl font-extrabold text-emerald-700 flex items-center leading-none">
+          <p className="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 tracking-wider mb-0.5">{t.budget}</p>
+          <p className="text-2xl font-extrabold text-emerald-700 dark:text-emerald-400 flex items-center leading-none">
             <span className="text-lg mr-0.5">₹</span>{job.budget}
           </p>
         </div>
@@ -328,7 +328,7 @@ export const JobCard: React.FC<JobCardProps> = ({
             job.bids.length === 0 ? (
               <button
                 onClick={() => onEdit(job)}
-                className="bg-white border-2 border-emerald-100 text-emerald-800 px-4 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50 hover:border-emerald-200 transition-colors flex items-center gap-1.5"
+                className="bg-white dark:bg-gray-800 border-2 border-emerald-100 dark:border-emerald-900/50 text-emerald-800 dark:text-emerald-400 px-4 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:border-emerald-200 dark:hover:border-emerald-800 transition-colors flex items-center gap-1.5"
               >
                 <Pencil size={14} />
                 {t.editJob}
@@ -336,13 +336,13 @@ export const JobCard: React.FC<JobCardProps> = ({
             ) : (
               <button
                 onClick={() => onViewBids(job)}
-                className="relative bg-white border-2 border-emerald-100 text-emerald-800 px-4 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50 hover:border-emerald-200 transition-colors"
+                className="relative bg-white dark:bg-gray-800 border-2 border-emerald-100 dark:border-emerald-900/50 text-emerald-800 dark:text-emerald-400 px-4 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:border-emerald-200 dark:hover:border-emerald-800 transition-colors"
               >
                 {t.viewBids}
                 {job.bids.length > 0 && (
-                  <span className={`absolute -top-2 -right-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm min-w-[20px] text-center border-2 border-white ${hasUnreadBids
-                      ? 'bg-red-500 text-white animate-pulse'
-                      : 'bg-gray-200 text-gray-600'
+                  <span className={`absolute -top-2 -right-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm min-w-[20px] text-center border-2 border-white dark:border-gray-800 ${hasUnreadBids
+                    ? 'bg-red-500 text-white animate-pulse'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
                     }`}>
                     {job.bids.length}
                   </span>

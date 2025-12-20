@@ -372,9 +372,9 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
     if (isEditing && !showEditForm) {
         return (
             <div className="p-4 animate-fade-in pb-10">
-                <h2 className="text-2xl font-bold text-emerald-900 mb-6">{language === 'en' ? 'Edit Job' : 'नौकरी संपादित करें'}</h2>
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-emerald-100 text-center">
-                    <p className="text-gray-600 mb-6">Update the details for <strong>{initialJob?.title}</strong></p>
+                <h2 className="text-2xl font-bold text-emerald-900 dark:text-emerald-500 mb-6">{language === 'en' ? 'Edit Job' : 'नौकरी संपादित करें'}</h2>
+                <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-emerald-100 dark:border-emerald-900/30 text-center transition-colors">
+                    <p className="text-gray-600 dark:text-gray-300 mb-6">Update the details for <strong>{initialJob?.title}</strong></p>
                     <button
                         onClick={() => setShowEditForm(true)}
                         className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 active:scale-95 transition-all"
@@ -394,21 +394,21 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
 
     return (
         <div className="p-4 animate-fade-in pb-10">
-            <h2 className="text-2xl font-bold text-emerald-900 mb-6">
+            <h2 className="text-2xl font-bold text-emerald-900 dark:text-emerald-500 mb-6">
                 {isEditing ? (language === 'en' ? 'Edit Job Details' : 'नौकरी विवरण संपादित करें') : t.postJobHeader}
             </h2>
-            <div className="space-y-5 bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                <div><label className="block text-sm font-bold text-gray-700 mb-2">{t.jobTitleLabel}</label><input style={{ colorScheme: 'light', backgroundColor: '#ffffff', color: '#000000', caretColor: '#000000' }} type="text" enterKeyHint="next" className="w-full appearance-none bg-white text-black border border-gray-200 rounded-xl p-3.5 outline-none placeholder-gray-400" value={newJobTitle} onChange={(e) => setNewJobTitle(e.target.value)} /></div>
+            <div className="space-y-5 bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 transition-colors">
+                <div><label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">{t.jobTitleLabel}</label><input type="text" enterKeyHint="next" className="w-full appearance-none bg-white dark:bg-gray-800 text-black dark:text-white border border-gray-200 dark:border-gray-700 rounded-xl p-3.5 outline-none placeholder-gray-400 dark:placeholder-gray-500 transition-colors" value={newJobTitle} onChange={(e) => setNewJobTitle(e.target.value)} /></div>
                 <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">{t.categoryLabel}</label>
+                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">{t.categoryLabel}</label>
                     <div className="relative">
-                        <select style={{ colorScheme: 'light', backgroundColor: '#ffffff', color: '#000000', caretColor: '#000000' }} className="w-full appearance-none bg-white text-black border border-gray-200 rounded-xl p-3.5 outline-none appearance-none font-medium" value={newJobCategory} onChange={(e) => setNewJobCategory(e.target.value)}>{CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_TRANSLATIONS[c]?.[language] || c}</option>)}</select>
+                        <select className="w-full appearance-none bg-white dark:bg-gray-800 text-black dark:text-white border border-gray-200 dark:border-gray-700 rounded-xl p-3.5 outline-none font-medium transition-colors" value={newJobCategory} onChange={(e) => setNewJobCategory(e.target.value)}>{CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_TRANSLATIONS[c]?.[language] || c}</option>)}</select>
                         <ArrowDownWideNarrow size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
                     </div>
                 </div>
                 <div>
                     <div className="flex justify-between items-center mb-2">
-                        <label className="block text-sm font-bold text-gray-700">{t.descLabel}</label>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">{t.descLabel}</label>
                         <div className="flex gap-2">
                             <input
                                 type="file"
@@ -420,8 +420,8 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                             <button
                                 onClick={triggerImageUpload}
                                 className={`text-xs flex items-center gap-1 font-bold px-2 py-1 rounded-lg transition-colors border ${!showLockIcon
-                                    ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
-                                    : 'bg-gray-50 text-gray-500 border-gray-200'
+                                    ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/50'
+                                    : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700'
                                     }`}
                             >
                                 {isAnalyzingImage ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
@@ -430,15 +430,15 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                                     <span className="bg-purple-600 text-white text-[9px] px-1.5 py-0.5 rounded-full ml-1 shadow-sm font-extrabold">AI</span>
                                 )}
                             </button>
-                            <button onClick={toggleVoiceInput} className={`text-xs flex items-center gap-1 font-bold px-2 py-1 rounded-lg transition-colors ${isListening ? 'bg-red-50 text-red-600 animate-pulse' : 'bg-gray-100 text-gray-600'}`}>
+                            <button onClick={toggleVoiceInput} className={`text-xs flex items-center gap-1 font-bold px-2 py-1 rounded-lg transition-colors ${isListening ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 animate-pulse' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'}`}>
                                 {isListening ? <MicOff size={12} /> : <Mic size={12} />} {isListening ? 'Stop' : 'Voice'}
                             </button>
                             <button
                                 onClick={handleEnhanceDescription}
                                 disabled={isEnhancing}
                                 className={`text-xs flex items-center gap-1 font-bold px-2 py-1 rounded-lg transition-all border ${!showLockIcon
-                                    ? 'bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-700 border-emerald-200 hover:shadow-sm'
-                                    : 'bg-gray-50 text-gray-500 border-gray-200'
+                                    ? 'bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/30 dark:to-teal-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 hover:shadow-sm'
+                                    : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700'
                                     } ${remainingFreeTries > 0 && !user.isPremium ? 'animate-pulse-slow' : ''}`}
                             >
                                 {isEnhancing ? (
@@ -457,7 +457,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                     </div>
                     <div className="relative">
                         {newJobImage && (
-                            <div className="mb-2 relative rounded-xl overflow-hidden h-40 bg-gray-100 border border-gray-200">
+                            <div className="mb-2 relative rounded-xl overflow-hidden h-40 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
                                 <img src={newJobImage} alt="Job Preview" className="w-full h-full object-cover" />
                                 {isAnalyzingImage && (
                                     <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center text-white backdrop-blur-sm">
@@ -471,8 +471,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                             </div>
                         )}
                         <textarea
-                            style={{ colorScheme: 'light', backgroundColor: '#ffffff', color: '#000000', caretColor: '#000000' }}
-                            className={`w-full appearance-none bg-white text-black border border-gray-200 rounded-xl p-3.5 h-32 outline-none resize-none placeholder-gray-400 transition-all ${isEnhancing ? 'border-emerald-300 ring-2 ring-emerald-100' : ''}`}
+                            className={`w-full appearance-none bg-white dark:bg-gray-800 text-black dark:text-white border border-gray-200 dark:border-gray-700 rounded-xl p-3.5 h-32 outline-none resize-none placeholder-gray-400 dark:placeholder-gray-500 transition-all ${isEnhancing ? 'border-emerald-300 ring-2 ring-emerald-100 dark:ring-emerald-900/30' : ''}`}
                             value={newJobDesc}
                             onChange={(e) => setNewJobDesc(e.target.value)}
                         />
@@ -487,27 +486,26 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                 </div>
                 <div className="flex gap-4">
                     <div className="flex-1">
-                        <label className="block text-sm font-bold text-gray-700 mb-2">{t.startDate}</label>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">{t.startDate}</label>
                         <input
-                            style={{ colorScheme: 'light', backgroundColor: '#ffffff', color: '#000000', caretColor: '#000000' }}
                             type="date"
                             min={new Date().toISOString().split('T')[0]}
-                            className="w-full appearance-none bg-white text-black border border-gray-200 rounded-xl p-3.5 outline-none font-medium placeholder-gray-400"
+                            className="w-full appearance-none bg-white dark:bg-gray-800 text-black dark:text-white border border-gray-200 dark:border-gray-700 rounded-xl p-3.5 outline-none font-medium placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
                             value={newJobDate}
                             onChange={(e) => setNewJobDate(e.target.value)}
                         />
                     </div>
-                    <div className="flex-1"><label className="block text-sm font-bold text-gray-700 mb-2">{t.duration}</label><input style={{ colorScheme: 'light', backgroundColor: '#ffffff', color: '#000000', caretColor: '#000000' }} type="text" className="w-full appearance-none bg-white text-black border border-gray-200 rounded-xl p-3.5 outline-none font-medium placeholder-gray-400" value={newJobDuration} onChange={(e) => setNewJobDuration(e.target.value)} placeholder="e.g. 2 Days" /></div>
+                    <div className="flex-1"><label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">{t.duration}</label><input type="text" className="w-full appearance-none bg-white dark:bg-gray-800 text-black dark:text-white border border-gray-200 dark:border-gray-700 rounded-xl p-3.5 outline-none font-medium placeholder-gray-400 dark:placeholder-gray-500 transition-colors" value={newJobDuration} onChange={(e) => setNewJobDuration(e.target.value)} placeholder="e.g. 2 Days" /></div>
                 </div>
                 <div>
                     <div className="flex justify-between items-center mb-2">
-                        <label className="block text-sm font-bold text-gray-700">{t.budget} (₹)</label>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">{t.budget} (₹)</label>
                         <button
                             onClick={handleEstimateWage}
                             disabled={isEstimating}
                             className={`text-[10px] flex items-center gap-1 font-bold px-2 py-1 rounded-lg transition-all border ${!showLockIcon
-                                ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
-                                : 'bg-gray-50 text-gray-500 border-gray-200'
+                                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/50'
+                                : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700'
                                 }`}
                         >
                             {isEstimating ? (
@@ -524,15 +522,15 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                         </button>
                     </div>
                     <div className="relative">
-                        <input style={{ colorScheme: 'light', backgroundColor: '#ffffff', color: '#000000', caretColor: '#000000' }} type="number" inputMode="numeric" pattern="[0-9]*" className="w-full appearance-none bg-white text-black border border-gray-200 rounded-xl p-3.5 outline-none font-bold placeholder-gray-400" value={newJobBudget} onChange={(e) => setNewJobBudget(e.target.value)} />
+                        <input type="number" inputMode="numeric" pattern="[0-9]*" className="w-full appearance-none bg-white dark:bg-gray-800 text-black dark:text-white border border-gray-200 dark:border-gray-700 rounded-xl p-3.5 outline-none font-bold placeholder-gray-400 dark:placeholder-gray-500 transition-colors" value={newJobBudget} onChange={(e) => setNewJobBudget(e.target.value)} />
                         {isEstimating && (
-                            <div className="absolute inset-0 bg-white rounded-xl flex items-center px-3 border border-blue-200">
-                                <div className="h-6 w-32 bg-gray-200 rounded animate-pulse"></div>
+                            <div className="absolute inset-0 bg-white dark:bg-gray-800 rounded-xl flex items-center px-3 border border-blue-200 dark:border-blue-800">
+                                <div className="h-6 w-32 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
                             </div>
                         )}
                     </div>
                 </div>
-                <button type="button" onClick={() => getDeviceLocation(setNewJobCoords, () => showAlert(t.alertGeoPermission, 'error'))} className={`w-full py-3 rounded-xl border flex items-center justify-center gap-2 text-sm font-bold ${newJobCoords ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-600'}`}><MapPin size={18} /> {newJobCoords ? t.locationCaptured : t.attachLocation}</button>
+                <button type="button" onClick={() => getDeviceLocation(setNewJobCoords, () => showAlert(t.alertGeoPermission, 'error'))} className={`w-full py-3 rounded-xl border flex items-center justify-center gap-2 text-sm font-bold transition-colors ${newJobCoords ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800' : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700'}`}><MapPin size={18} /> {newJobCoords ? t.locationCaptured : t.attachLocation}</button>
             </div>
 
             <button

@@ -29,9 +29,9 @@ export const Profile: React.FC<ProfileProps> = ({ onEditProfile, setShowSubscrip
 
     return (
         <div className="pb-24 md:pb-6 animate-fade-in">
-            <div className="bg-white rounded-b-3xl shadow-sm border-b border-gray-100 overflow-hidden mb-4">
+            <div className="bg-white dark:bg-gray-900 rounded-b-3xl shadow-sm border-b border-gray-100 dark:border-gray-800 overflow-hidden mb-4 transition-colors">
                 <div className="h-32 bg-gradient-to-r from-emerald-600 to-teal-500 relative">
-                    <button onClick={onEditProfile} className="absolute top-4 right-4 bg-white/20 p-2 rounded-full text-white">
+                    <button onClick={onEditProfile} className="absolute top-4 right-4 bg-white/20 hover:bg-white/30 p-2 rounded-full text-white transition-colors">
                         <Pencil size={18} />
                     </button>
                     {user.isPremium && (
@@ -41,89 +41,89 @@ export const Profile: React.FC<ProfileProps> = ({ onEditProfile, setShowSubscrip
                     )}
                 </div>
                 <div className="px-5 pb-6 -mt-12 flex flex-col items-center">
-                    <div className="w-24 h-24 bg-white p-1.5 rounded-full shadow-lg mb-3 relative overflow-hidden animate-pop">
+                    <div className="w-24 h-24 bg-white dark:bg-gray-900 p-1.5 rounded-full shadow-lg mb-3 relative overflow-hidden animate-pop transition-colors">
                         {user.profilePhoto ? (
                             <img src={user.profilePhoto} className="w-full h-full object-cover rounded-full" />
                         ) : (
-                            <div className="w-full h-full bg-emerald-100 rounded-full flex items-center justify-center text-3xl font-bold text-emerald-700">
+                            <div className="w-full h-full bg-emerald-100 dark:bg-emerald-900/50 rounded-full flex items-center justify-center text-3xl font-bold text-emerald-700 dark:text-emerald-400">
                                 {user.name.charAt(0)}
                             </div>
                         )}
                     </div>
-                    <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                        {user.name} <CheckCircle2 size={20} className="text-blue-500 fill-blue-50" />
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        {user.name} <CheckCircle2 size={20} className="text-blue-500 fill-blue-50 dark:fill-blue-900" />
                     </h2>
-                    <p className="text-gray-500 font-medium text-sm flex items-center gap-1">
+                    <p className="text-gray-500 dark:text-gray-400 font-medium text-sm flex items-center gap-1">
                         <MapPin size={14} /> {user.location}
                     </p>
                 </div>
             </div>
             <div className="px-4 space-y-4">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="bg-white p-3 rounded-2xl border border-gray-100 shadow-sm text-center">
-                        <div className="text-emerald-600 mb-1 flex justify-center"><Star size={20} fill="currentColor" /></div>
-                        <div className="font-bold text-gray-900 text-lg">{user.rating}</div>
-                        <div className="text-[10px] text-gray-400 font-bold uppercase">{t.rating}</div>
+                    <div className="bg-white dark:bg-gray-900 p-3 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm text-center transition-colors">
+                        <div className="text-emerald-600 dark:text-emerald-500 mb-1 flex justify-center"><Star size={20} fill="currentColor" /></div>
+                        <div className="font-bold text-gray-900 dark:text-white text-lg">{user.rating}</div>
+                        <div className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">{t.rating}</div>
                     </div>
-                    <div className="bg-white p-3 rounded-2xl border border-gray-100 shadow-sm text-center">
-                        <div className="text-purple-600 mb-1 flex justify-center"><Award size={20} /></div>
-                        <div className="font-bold text-gray-900 text-lg">{user.experience || 'N/A'}</div>
-                        <div className="text-[10px] text-gray-400 font-bold uppercase">{t.experience}</div>
+                    <div className="bg-white dark:bg-gray-900 p-3 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm text-center transition-colors">
+                        <div className="text-purple-600 dark:text-purple-500 mb-1 flex justify-center"><Award size={20} /></div>
+                        <div className="font-bold text-gray-900 dark:text-white text-lg">{user.experience || 'N/A'}</div>
+                        <div className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">{t.experience}</div>
                     </div>
-                    <div className="bg-white p-3 rounded-2xl border border-gray-100 shadow-sm text-center">
-                        <div className="text-blue-600 mb-1 flex justify-center"><CheckCircle2 size={20} /></div>
-                        <div className="font-bold text-gray-900 text-lg">{user.jobsCompleted || 0}</div>
-                        <div className="text-[10px] text-gray-400 font-bold uppercase">{t.jobsDone}</div>
+                    <div className="bg-white dark:bg-gray-900 p-3 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm text-center transition-colors">
+                        <div className="text-blue-600 dark:text-blue-500 mb-1 flex justify-center"><CheckCircle2 size={20} /></div>
+                        <div className="font-bold text-gray-900 dark:text-white text-lg">{user.jobsCompleted || 0}</div>
+                        <div className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">{t.jobsDone}</div>
                     </div>
-                    <div className="bg-white p-3 rounded-2xl border border-gray-100 shadow-sm text-center">
-                        <div className="text-orange-600 mb-1 flex justify-center"><Briefcase size={20} /></div>
-                        <div className="font-bold text-gray-900 text-lg">{postedJobsCount}</div>
-                        <div className="text-[10px] text-gray-400 font-bold uppercase">{t.jobsPosted}</div>
+                    <div className="bg-white dark:bg-gray-900 p-3 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm text-center transition-colors">
+                        <div className="text-orange-600 dark:text-orange-500 mb-1 flex justify-center"><Briefcase size={20} /></div>
+                        <div className="font-bold text-gray-900 dark:text-white text-lg">{postedJobsCount}</div>
+                        <div className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">{t.jobsPosted}</div>
                     </div>
                 </div>
-                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                    <h3 className="font-bold text-gray-900 mb-3">{t.aboutMe}</h3>
-                    <p className="text-gray-600 text-sm">{user.bio || "No bio added yet."}</p>
+                <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
+                    <h3 className="font-bold text-gray-900 dark:text-white mb-3">{t.aboutMe}</h3>
+                    <p className="text-gray-600 dark:text-gray-300 text-sm">{user.bio || "No bio added yet."}</p>
                 </div>
-                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                    <h3 className="font-bold text-gray-900 mb-3">{t.skills}</h3>
+                <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
+                    <h3 className="font-bold text-gray-900 dark:text-white mb-3">{t.skills}</h3>
                     <div className="flex flex-wrap gap-2">
                         {user.skills?.map((s, i) => (
-                            <span key={i} className="bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg text-sm font-semibold border border-emerald-100">{s}</span>
+                            <span key={i} className="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-3 py-1.5 rounded-lg text-sm font-semibold border border-emerald-100 dark:border-emerald-800">{s}</span>
                         ))}
-                        {(!user.skills || user.skills.length === 0) && <span className="text-gray-400 text-sm italic">No skills added.</span>}
+                        {(!user.skills || user.skills.length === 0) && <span className="text-gray-400 dark:text-gray-500 text-sm italic">No skills added.</span>}
                     </div>
                 </div>
 
                 {/* Reviews Section */}
-                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-                    <h3 className="font-bold text-gray-900">{t.reviews || "Reviews"} ({user.reviews?.length || 0})</h3>
+                <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-4 transition-colors">
+                    <h3 className="font-bold text-gray-900 dark:text-white">{t.reviews || "Reviews"} ({user.reviews?.length || 0})</h3>
                     {user.reviews && user.reviews.length > 0 ? (
                         user.reviews.map(review => (
-                            <div key={review.id} className="border-b border-gray-50 last:border-0 pb-4 last:pb-0">
+                            <div key={review.id} className="border-b border-gray-50 dark:border-gray-800 last:border-0 pb-4 last:pb-0">
                                 <div className="flex justify-between items-start mb-1">
-                                    <span className="font-bold text-sm text-gray-800">{review.reviewerName}</span>
-                                    <span className="text-[10px] text-gray-400">{new Date(review.date).toLocaleDateString()}</span>
+                                    <span className="font-bold text-sm text-gray-800 dark:text-gray-200">{review.reviewerName}</span>
+                                    <span className="text-[10px] text-gray-400 dark:text-gray-500">{new Date(review.date).toLocaleDateString()}</span>
                                 </div>
                                 <div className="flex items-center gap-1 mb-2">
                                     {[1, 2, 3, 4, 5].map(star => (
-                                        <Star key={star} size={12} fill={star <= review.rating ? "orange" : "transparent"} className={star <= review.rating ? "text-orange-400" : "text-gray-300"} />
+                                        <Star key={star} size={12} fill={star <= review.rating ? "orange" : "transparent"} className={star <= review.rating ? "text-orange-400" : "text-gray-300 dark:text-gray-700"} />
                                     ))}
                                 </div>
                                 {review.tags && review.tags.length > 0 && (
                                     <div className="flex flex-wrap gap-1 mb-2">
                                         {review.tags.map((tag, i) => (
-                                            <span key={i} className="bg-gray-100 text-gray-600 text-[9px] px-1.5 py-0.5 rounded border border-gray-200">
+                                            <span key={i} className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-[9px] px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700">
                                                 {REVIEW_TAGS_TRANSLATIONS[tag]?.[language === 'hi' ? 'hi' : 'en'] || tag}
                                             </span>
                                         ))}
                                     </div>
                                 )}
-                                <p className="text-xs text-gray-600 italic">"{review.comment}"</p>
+                                <p className="text-xs text-gray-600 dark:text-gray-400 italic">"{review.comment}"</p>
                             </div>
                         ))
                     ) : (
-                        <p className="text-sm text-gray-400 italic">No reviews yet.</p>
+                        <p className="text-sm text-gray-400 dark:text-gray-500 italic">No reviews yet.</p>
                     )}
                 </div>
 
@@ -132,7 +132,7 @@ export const Profile: React.FC<ProfileProps> = ({ onEditProfile, setShowSubscrip
                         <Crown size={18} fill="currentColor" /> {t.upgradePremium}
                     </button>
                 )}
-                <button onClick={onLogout} className="w-full bg-red-50 text-red-600 py-3 rounded-xl font-bold flex items-center justify-center gap-2 border border-red-100">
+                <button onClick={onLogout} className="w-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 py-3 rounded-xl font-bold flex items-center justify-center gap-2 border border-red-100 dark:border-red-900/30 transition-colors">
                     <LogOut size={18} /> {t.signOut}
                 </button>
             </div>

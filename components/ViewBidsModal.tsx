@@ -276,13 +276,13 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose}></div>
-            <div className="bg-white w-full max-w-lg rounded-3xl p-0 relative z-10 max-h-[90vh] overflow-hidden flex flex-col animate-slide-up">
-                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+            <div className="bg-white dark:bg-gray-900 w-full max-w-lg rounded-3xl p-0 relative z-10 max-h-[90vh] overflow-hidden flex flex-col animate-slide-up">
+                <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
                     <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-lg">Bids for {localJob.title}</h3>
-                        <span className="text-sm text-gray-500">({localJob.bids?.length || 0})</span>
+                        <h3 className="font-bold text-lg text-gray-900 dark:text-white">Bids for {localJob.title}</h3>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">({localJob.bids?.length || 0})</span>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors"><XCircle size={24} className="text-gray-500" /></button>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors"><XCircle size={24} className="text-gray-500 dark:text-gray-400" /></button>
                 </div>
                 <div className="p-4 overflow-y-auto flex-1 space-y-4">
                     {sortedBids.length > 0 ? (
@@ -291,9 +291,9 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                             return (
                                 <div
                                     key={bid.id}
-                                    className={`bg-white border rounded-xl p-4 shadow-sm relative transition-all duration-300 ${isNew
-                                        ? 'border-emerald-400 ring-2 ring-emerald-100 animate-pulse-once'
-                                        : 'border-gray-200'
+                                    className={`bg-white dark:bg-gray-800 border rounded-xl p-4 shadow-sm relative transition-all duration-300 ${isNew
+                                        ? 'border-emerald-400 dark:border-emerald-500 ring-2 ring-emerald-100 dark:ring-emerald-900/30 animate-pulse-once'
+                                        : 'border-gray-200 dark:border-gray-700'
                                         }`}
                                 >
                                     {/* NEW Badge */}
@@ -304,21 +304,21 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                                     )}
 
                                     <div className="flex items-start gap-3 mb-3">
-                                        <div className="w-10 h-10 bg-gray-100 rounded-full overflow-hidden">
-                                            {bid.workerPhoto ? <img src={bid.workerPhoto} className="w-full h-full object-cover" /> : <UserCircle size={40} className="text-gray-400" />}
+                                        <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700/50 rounded-full overflow-hidden">
+                                            {bid.workerPhoto ? <img src={bid.workerPhoto} className="w-full h-full object-cover" /> : <UserCircle size={40} className="text-gray-400 dark:text-gray-500" />}
                                         </div>
                                         <div>
-                                            <h4 className="font-bold text-gray-900">{bid.workerName}</h4>
+                                            <h4 className="font-bold text-gray-900 dark:text-white">{bid.workerName}</h4>
                                             <div className="flex items-center gap-1 text-xs text-yellow-600 font-bold"><Star size={12} fill="currentColor" /> {bid.workerRating}</div>
                                         </div>
                                         <div className="ml-auto text-right">
-                                            <div className="text-xl font-black text-emerald-600">₹{bid.amount}</div>
-                                            <div className={`text-[10px] ${isNew ? 'text-emerald-600 font-bold' : 'text-gray-400'}`}>
+                                            <div className="text-xl font-black text-emerald-600 dark:text-emerald-400">₹{bid.amount}</div>
+                                            <div className={`text-[10px] ${isNew ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-gray-400 dark:text-gray-500'}`}>
                                                 {getRelativeTime(bid.createdAt || Date.now())}
                                             </div>
                                         </div>
                                     </div>
-                                    <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg mb-3 italic">"{bid.message}"</p>
+                                    <p className="text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg mb-3 italic">"{bid.message}"</p>
 
                                     {/* Awaiting Response Indicator */}
                                     {bid.negotiationHistory && bid.negotiationHistory.length > 0 && bid.status === 'PENDING' && (() => {
@@ -330,16 +330,16 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
 
                                         if (isPosterViewing && lastCounterByWorker && recentCounter) {
                                             return (
-                                                <div className="mb-3 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 flex items-center gap-2">
-                                                    <span className="text-blue-600">📩</span>
-                                                    <span className="text-xs text-blue-700 font-medium">Worker countered - awaiting your response</span>
+                                                <div className="mb-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2 flex items-center gap-2">
+                                                    <span className="text-blue-600 dark:text-blue-400">📩</span>
+                                                    <span className="text-xs text-blue-700 dark:text-blue-300 font-medium">Worker countered - awaiting your response</span>
                                                 </div>
                                             );
                                         } else if (!isPosterViewing && lastCounterByPoster && recentCounter) {
                                             return (
-                                                <div className="mb-3 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex items-center gap-2">
-                                                    <span className="text-emerald-600">📩</span>
-                                                    <span className="text-xs text-emerald-700 font-medium">New counter offer - awaiting your response</span>
+                                                <div className="mb-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg px-3 py-2 flex items-center gap-2">
+                                                    <span className="text-emerald-600 dark:text-emerald-400">📩</span>
+                                                    <span className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">New counter offer - awaiting your response</span>
                                                 </div>
                                             );
                                         }
@@ -362,10 +362,10 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                                                 const isFromWorker = h.by === UserRole.WORKER;
                                                 return (
                                                     <div key={i} className="text-xs flex items-center gap-2 flex-wrap">
-                                                        <span className={`px-1.5 py-0.5 rounded text-[10px] ${isFromWorker ? "bg-blue-100 text-blue-600 font-bold" : "bg-emerald-100 text-emerald-600 font-bold"}`}>
+                                                        <span className={`px-1.5 py-0.5 rounded text-[10px] ${isFromWorker ? "bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300 font-bold" : "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-300 font-bold"}`}>
                                                             {isFromWorker ? (isPosterViewing ? 'Worker' : 'You') : (isPosterViewing ? 'You' : 'Poster')}
                                                         </span>
-                                                        <span className="text-gray-700 font-semibold">₹{h.amount}</span>
+                                                        <span className="text-gray-700 dark:text-gray-300 font-semibold">₹{h.amount}</span>
                                                         {h.timestamp && (
                                                             <span className="text-[10px] text-gray-400">
                                                                 {getRelativeTime(h.timestamp)}
@@ -385,16 +385,16 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                                             <button
                                                 onClick={() => handleAcceptBid(localJob!.id, bid.id, bid.amount, bid.workerId)}
                                                 disabled={isAcceptingBid}
-                                                className="flex-1 bg-emerald-600 text-white py-2 rounded-lg font-bold text-sm shadow-md hover:bg-emerald-700"
+                                                className="flex-1 bg-emerald-600 text-white py-2 rounded-lg font-bold text-sm shadow-md hover:bg-emerald-700 active:scale-95 transition-all"
                                             >
                                                 {isAcceptingBid ? 'Accepting...' : 'Accept'}
                                             </button>
-                                            <button onClick={() => onCounter(bid.id, bid.amount)} className="flex-1 bg-white border border-emerald-600 text-emerald-600 py-2 rounded-lg font-bold text-sm hover:bg-emerald-50">
+                                            <button onClick={() => onCounter(bid.id, bid.amount)} className="flex-1 bg-white dark:bg-gray-700 border border-emerald-600 dark:border-emerald-500 text-emerald-600 dark:text-emerald-400 py-2 rounded-lg font-bold text-sm hover:bg-emerald-50 dark:hover:bg-gray-600 transition-colors">
                                                 Counter
                                             </button>
                                             <button
                                                 onClick={() => handleRejectBid(localJob!.id, bid.id, bid.workerName, bid.workerId)}
-                                                className="px-3 bg-white border border-red-400 text-red-500 py-2 rounded-lg font-bold text-sm hover:bg-red-50"
+                                                className="px-3 bg-white dark:bg-gray-700 border border-red-400 dark:border-red-500 text-red-500 dark:text-red-400 py-2 rounded-lg font-bold text-sm hover:bg-red-50 dark:hover:bg-gray-600 transition-colors"
                                                 title="Reject this bid"
                                             >
                                                 ✕

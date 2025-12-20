@@ -74,10 +74,10 @@ export const BidHistoryModal: React.FC<BidHistoryModalProps> = ({ isOpen, onClos
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4">
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-auto" onClick={onClose}></div>
-            <div className="w-full max-w-lg bg-white rounded-3xl p-6 pointer-events-auto animate-slide-up relative max-h-[90vh] flex flex-col">
+            <div className="w-full max-w-lg bg-white dark:bg-gray-900 rounded-3xl p-6 pointer-events-auto animate-slide-up relative max-h-[90vh] flex flex-col transition-colors">
                 <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-bold text-gray-900">{t.bidHistory}</h3>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><XCircle size={24} /></button>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">{t.bidHistory}</h3>
+                    <button onClick={onClose} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"><XCircle size={24} /></button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto space-y-4 pr-1">
@@ -86,22 +86,22 @@ export const BidHistoryModal: React.FC<BidHistoryModalProps> = ({ isOpen, onClos
                             <Loader2 size={32} className="text-emerald-600 animate-spin" />
                         </div>
                     ) : bids.length === 0 ? (
-                        <div className="text-center py-10 text-gray-400">
+                        <div className="text-center py-10 text-gray-400 dark:text-gray-500">
                             <p>{t.noBidsFound}</p>
                         </div>
                     ) : (
                         bids.map(bid => (
-                            <div key={bid.id} className="bg-gray-50 border border-gray-100 rounded-2xl p-4 flex flex-col gap-3">
+                            <div key={bid.id} className="bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl p-4 flex flex-col gap-3 transition-colors">
                                 <div className="flex justify-between items-start">
                                     <div>
-                                        <h4 className="font-bold text-gray-900">{bid.jobTitle}</h4>
-                                        <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                                        <h4 className="font-bold text-gray-900 dark:text-white">{bid.jobTitle}</h4>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-1">
                                             {bid.jobLocation}
                                         </p>
                                     </div>
-                                    <div className={`px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 ${bid.status === 'ACCEPTED' ? 'bg-green-100 text-green-700' :
-                                        bid.status === 'REJECTED' ? 'bg-red-100 text-red-700' :
-                                            'bg-yellow-100 text-yellow-700'
+                                    <div className={`px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 ${bid.status === 'ACCEPTED' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' :
+                                        bid.status === 'REJECTED' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' :
+                                            'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
                                         }`}>
                                         {bid.status === 'ACCEPTED' && <CheckCircle size={12} />}
                                         {bid.status === 'REJECTED' && <XOctagon size={12} />}
@@ -109,11 +109,11 @@ export const BidHistoryModal: React.FC<BidHistoryModalProps> = ({ isOpen, onClos
                                         {bid.status}
                                     </div>
                                 </div>
-                                <div className="flex justify-between items-center border-t border-gray-200 pt-3">
-                                    <span className="text-sm font-bold text-gray-500">{t.yourOfferLabel}</span>
-                                    <span className="text-lg font-bold text-emerald-700">₹{bid.amount}</span>
+                                <div className="flex justify-between items-center border-t border-gray-200 dark:border-gray-700 pt-3">
+                                    <span className="text-sm font-bold text-gray-500 dark:text-gray-400">{t.yourOfferLabel}</span>
+                                    <span className="text-lg font-bold text-emerald-700 dark:text-emerald-400">₹{bid.amount}</span>
                                 </div>
-                                <div className="text-xs text-gray-400 text-right">
+                                <div className="text-xs text-gray-400 dark:text-gray-500 text-right">
                                     {new Date(bid.createdAt).toLocaleDateString()}
                                 </div>
                             </div>

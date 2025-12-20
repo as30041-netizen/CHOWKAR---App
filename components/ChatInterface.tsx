@@ -385,21 +385,21 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       />
 
       {/* Chat Interface - Mobile: Full Screen, Desktop: Right Drawer */}
-      <div className="fixed z-[100] flex flex-col h-full bg-gray-50 
+      <div className="fixed z-[100] flex flex-col h-full bg-gray-50 dark:bg-gray-950
         inset-0 
         md:inset-y-0 md:right-0 md:left-auto md:w-[450px] 
-        md:shadow-2xl md:border-l border-gray-100 
-        animate-in slide-in-from-bottom md:slide-in-from-right duration-300">
+        md:shadow-2xl md:border-l border-gray-100 dark:border-gray-800
+        animate-in slide-in-from-bottom md:slide-in-from-right duration-300 transition-colors">
 
         {/* Header */}
-        <div className="bg-white px-4 py-3 shadow-sm border-b border-gray-100 flex items-center justify-between z-10 pt-safe">
+        <div className="bg-white dark:bg-gray-900 px-4 py-3 shadow-sm border-b border-gray-100 dark:border-gray-800 flex items-center justify-between z-10 pt-safe transition-colors">
           <div className="flex items-center gap-3">
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full text-gray-600 transition-colors">
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full text-gray-600 dark:text-gray-400 transition-colors">
               <ArrowLeft size={22} />
             </button>
 
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-700 font-bold overflow-hidden">
+              <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-700 dark:text-emerald-400 font-bold overflow-hidden">
                 {otherPersonPhoto ? (
                   <img src={otherPersonPhoto} alt={otherPersonName} className="w-full h-full object-cover" />
                 ) : (
@@ -407,10 +407,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 )}
               </div>
               <div>
-                <h2 className="font-bold text-gray-900 leading-none">{otherPersonName}</h2>
+                <h2 className="font-bold text-gray-900 dark:text-white leading-none">{otherPersonName}</h2>
                 <div className="flex items-center gap-1.5 mt-1">
-                  <span className={`w-2 h-2 rounded-full ${isOtherUserOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}></span>
-                  <span className="text-xs text-gray-500 font-medium">{isOtherUserOnline ? 'Online' : 'Offline'}</span>
+                  <span className={`w-2 h-2 rounded-full ${isOtherUserOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-300 dark:bg-gray-600'}`}></span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">{isOtherUserOnline ? 'Online' : 'Offline'}</span>
                 </div>
               </div>
             </div>
@@ -418,26 +418,26 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
           <div className="flex items-center gap-1">
             {otherPersonPhone ? (
-              <a href={`tel:${otherPersonPhone}`} className="p-2.5 rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors">
+              <a href={`tel:${otherPersonPhone}`} className="p-2.5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors">
                 <Phone size={20} />
               </a>
             ) : (
-              <div className="p-2 text-gray-300">
+              <div className="p-2 text-gray-300 dark:text-gray-600">
                 <LockKeyhole size={20} />
               </div>
             )}
             <div className="relative">
-              <button onClick={() => setShowMenu(!showMenu)} className="p-2 rounded-full text-gray-400 hover:bg-gray-100 transition-colors">
+              <button onClick={() => setShowMenu(!showMenu)} className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                 <MoreVertical size={20} />
               </button>
               {showMenu && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
-                  <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-xl border border-gray-100 z-20 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                    <button onClick={() => { setShowMenu(false); setShowSafetyTips(true); }} className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm font-medium text-gray-700 flex items-center gap-2">
-                      <ShieldAlert size={16} className="text-emerald-600" /> Safety Tips
+                  <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-20 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                    <button onClick={() => { setShowMenu(false); setShowSafetyTips(true); }} className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                      <ShieldAlert size={16} className="text-emerald-600 dark:text-emerald-500" /> Safety Tips
                     </button>
-                    <button onClick={() => { setShowMenu(false); setShowReportModal(true); }} className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm font-medium text-red-600 flex items-center gap-2">
+                    <button onClick={() => { setShowMenu(false); setShowReportModal(true); }} className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-medium text-red-600 dark:text-red-400 flex items-center gap-2">
                       <Flag size={16} /> Report User
                     </button>
                   </div>
@@ -454,7 +454,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         </div>
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-[#e5ddd5] bg-opacity-10" style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
+        <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-[#e5ddd5] dark:bg-gray-950 bg-opacity-10 transition-colors" style={{ backgroundImage: 'radial-gradient(var(--bg-pattern-color, #cbd5e1) 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
           {!isLoadingHistory && allMessages.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 opacity-50 space-y-2">
               <Sparkles size={40} className="text-emerald-300" />
@@ -502,12 +502,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                         <div
                           className={`relative px-4 py-2 rounded-2xl text-sm shadow-sm ${isMe
                             ? 'bg-emerald-600 text-white rounded-br-none'
-                            : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none'
+                            : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 border border-gray-100 dark:border-gray-700 rounded-bl-none'
                             }`}
                         >
                           <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
                           {msg.translatedText && (
-                            <div className={`mt-2 pt-2 border-t ${isMe ? 'border-emerald-500/50' : 'border-gray-100'}`}>
+                            <div className={`mt-2 pt-2 border-t ${isMe ? 'border-emerald-500/50' : 'border-gray-100 dark:border-gray-700'}`}>
                               <div className="flex items-center gap-1 mb-1 opacity-70">
                                 <Sparkles size={10} />
                                 <span className="text-[10px] font-bold uppercase">Translated</span>
@@ -515,7 +515,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                               <p className="leading-relaxed italic opacity-90">{msg.translatedText}</p>
                             </div>
                           )}
-                          <div className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${isMe ? 'text-emerald-100' : 'text-gray-400'}`}>
+                          <div className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${isMe ? 'text-emerald-100' : 'text-gray-400 dark:text-gray-500'}`}>
                             <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                             {isMe && (
                               msg.read ? (
@@ -573,16 +573,16 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         </div>
 
         {/* Footer / Input */}
-        <div className="bg-white border-t border-gray-100 flex-none z-20 pb-safe">
+        <div className="bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 flex-none z-20 pb-safe transition-colors">
 
           {/* Quick Replies */}
           {showQuickReplies && (
-            <div className="px-4 py-3 flex gap-2 overflow-x-auto no-scrollbar bg-gray-50 border-b border-gray-100">
+            <div className="px-4 py-3 flex gap-2 overflow-x-auto no-scrollbar bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-800">
               {quickReplies.map((reply, i) => (
                 <button
                   key={i}
                   onClick={() => handleSend(reply)}
-                  className="whitespace-nowrap px-3 py-1.5 bg-white border border-emerald-100 rounded-full text-xs text-emerald-700 font-medium hover:bg-emerald-50 active:scale-95 transition-all shadow-sm"
+                  className="whitespace-nowrap px-3 py-1.5 bg-white dark:bg-gray-800 border border-emerald-100 dark:border-emerald-900/30 rounded-full text-xs text-emerald-700 dark:text-emerald-400 font-medium hover:bg-emerald-50 dark:hover:bg-emerald-900/30 active:scale-95 transition-all shadow-sm"
                 >
                   {reply}
                 </button>
@@ -593,11 +593,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           <div className="p-3">
             {/* Archive Banner for COMPLETED jobs */}
             {isArchived && (
-              <div className="mb-3 bg-gray-100 border border-gray-200 px-4 py-3 rounded-xl flex items-center gap-3">
+              <div className="mb-3 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-4 py-3 rounded-xl flex items-center gap-3">
                 <LockKeyhole size={18} className="text-gray-400" />
                 <div>
-                  <p className="text-sm font-medium text-gray-700">This job has been completed</p>
-                  <p className="text-xs text-gray-500">Chat is read-only. Contact info is no longer visible.</p>
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">This job has been completed</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Chat is read-only. Contact info is no longer visible.</p>
                 </div>
               </div>
             )}
@@ -607,9 +607,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               <div className="mb-3 px-1">
                 <button
                   onClick={onCompleteJob}
-                  className="w-full bg-emerald-50 border border-emerald-200 text-emerald-800 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center hover:bg-emerald-100 transition-colors"
+                  className="w-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-400 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
                 >
-                  <CheckCircle size={18} className="mr-2 text-emerald-600" /> Mark Job as Completed
+                  <CheckCircle size={18} className="mr-2 text-emerald-600 dark:text-emerald-500" /> Mark Job as Completed
                 </button>
               </div>
             )}
@@ -620,12 +620,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 <div className="flex items-end gap-2">
                   <button
                     onClick={handleVoiceInput}
-                    className={`p-3 rounded-full transition-colors ${isListening ? 'bg-red-50 text-red-600 animate-pulse' : 'text-gray-400 hover:bg-gray-100'}`}
+                    className={`p-3 rounded-full transition-colors ${isListening ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 animate-pulse' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
                   >
                     {isListening ? <MicOff size={20} /> : <Mic size={20} />}
                   </button>
 
-                  <div className="flex-1 bg-gray-100 rounded-2xl flex items-center min-h-[44px] px-4 py-2">
+                  <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center min-h-[44px] px-4 py-2 transition-colors">
                     <textarea
                       value={inputText}
                       onChange={handleInputChange}
@@ -636,7 +636,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                         }
                       }}
                       placeholder="Type a message..."
-                      className="flex-1 bg-transparent outline-none text-sm text-gray-800 max-h-24 resize-none"
+                      className="flex-1 bg-transparent outline-none text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 max-h-24 resize-none"
                       rows={1}
                       style={{ lineHeight: '1.5' }}
                     />
@@ -647,7 +647,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                     disabled={!inputText.trim()}
                     className={`p-3 rounded-full shadow-md transition-all transform hover:scale-105 active:scale-95 ${inputText.trim()
                       ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                      : 'bg-gray-200 text-gray-400 cursor-default'
+                      : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-default'
                       }`}
                   >
                     <Send size={20} className={inputText.trim() ? "ml-0.5" : ""} />
