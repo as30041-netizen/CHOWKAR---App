@@ -60,17 +60,17 @@ export const TRANSLATIONS = {
     cityVillage: "City/Village Name",
     useGps: "Use My GPS Location",
     locationCaptured: "Location Captured!",
-    
+
     // Navigation
     navHome: "Home",
     navPost: "Post",
     navWallet: "Wallet",
     navProfile: "Profile",
-    
+
     // Header & Roles
     switchHiring: "Switch to Hiring",
     switchWorking: "Switch to Working",
-    
+
     // Home
     jobsNearMe: "Jobs Near Me",
     myJobPosts: "My Job Posts",
@@ -82,7 +82,7 @@ export const TRANSLATIONS = {
     filter: "Filter",
     noJobsFound: "No jobs found.",
     clearFilters: "Clear all filters",
-    
+
     // Job Card & Details
     budget: "Budget",
     duration: "Duration",
@@ -98,14 +98,14 @@ export const TRANSLATIONS = {
     jobDescription: "Job Description",
     startDate: "Start Date",
     underBudget: "Under Budget",
-    
+
     // Wallet
     totalBalance: "Total Balance",
     addMoney: "Add Money",
     transactionHistory: "Transaction History",
     bidHistory: "Bid History",
     noTransactions: "No transactions yet.",
-    
+
     // Profile
     rating: "Rating",
     experience: "Experience",
@@ -120,7 +120,7 @@ export const TRANSLATIONS = {
     changePhoto: "Change",
     tapToEdit: "Tap image to edit",
     reviews: "Reviews",
-    
+
     // Post Job
     postJobHeader: "Post a New Job",
     jobTitleLabel: "Job Title",
@@ -151,7 +151,7 @@ export const TRANSLATIONS = {
     alertCantDeleteCompleted: "Cannot delete a completed job.",
     alertConfirmDelete: "Are you sure you want to delete this job?",
     alertBookingFee: "Booking Fee",
-    
+
     notifWelcome: "Welcome to CHOWKAR!",
     notifWelcomeBody: "Start by finding a job or posting one.",
     notifJobPosted: "Job Posted",
@@ -169,14 +169,14 @@ export const TRANSLATIONS = {
     notifPremiumActivated: "Waitlist Joined",
     notifPremiumActivatedBody: "We'll notify you when Premium is ready!",
     notifCounterOffer: "New Counter Offer",
-    
+
     congratulations: "Congratulations!",
     bidStatusUpdate: "Bid Status Update",
     bidNotSelected: "Your bid was not selected.",
     contactUnlocked: "Contact details unlocked.",
     markCompleted: "Mark Job as Completed",
     jobCompletedAlert: "Job marked as completed! Please rate your experience.",
-    
+
     // Modals
     placeBid: "Place Your Bid",
     yourOffer: "Your Offer",
@@ -196,6 +196,7 @@ export const TRANSLATIONS = {
     lowestPrice: "Lowest Price",
     bestRated: "Best Rated",
     nearest: "Nearest",
+    bidMessagePlaceholder: "Describe your proposal...",
 
     // Reviews
     rateExperience: "Rate your experience",
@@ -224,7 +225,15 @@ export const TRANSLATIONS = {
     featLimitedAI: "2 Free AI Uses",
     featBasic: "Basic Profile",
     currentPlan: "Current Plan",
-    bestValue: "Best Value"
+    bestValue: "Best Value",
+
+    // New Wallet/Bid Translatons
+    commissionCredits: "Commission Credits",
+    addCredits: "Add Credits",
+    withdraw: "Withdraw",
+    yourOfferLabel: "Your Offer",
+    noBidsFound: "No bids found.",
+    acceptingBidFeeWarn: "Accepting this bid will deduct a ₹{fee} platform fee from your wallet. Continue?"
   },
   hi: {
     // Auth
@@ -378,6 +387,7 @@ export const TRANSLATIONS = {
     lowestPrice: "सबसे सस्ता",
     bestRated: "सबसे अच्छा",
     nearest: "सबसे पास",
+    bidMessagePlaceholder: "अपना प्रस्ताव बताएं...",
 
     // Reviews
     rateExperience: "अपना अनुभव रेट करें",
@@ -406,7 +416,15 @@ export const TRANSLATIONS = {
     featLimitedAI: "2 बार फ्री AI उपयोग",
     featBasic: "बेसिक प्रोफाइल",
     currentPlan: "वर्तमान प्लान",
-    bestValue: "सबसे अच्छा"
+    bestValue: "सबसे अच्छा",
+
+    // New Wallet/Bid Translatons
+    commissionCredits: "कमीशन क्रेडिट",
+    addCredits: "क्रेडिट जोड़ें",
+    withdraw: "निकालें",
+    yourOfferLabel: "आपका प्रस्ताव",
+    noBidsFound: "कोई बोली नहीं मिली।",
+    acceptingBidFeeWarn: "इस बोली को स्वीकार करने पर आपके वॉलेट से ₹{fee} प्लेटफॉर्म शुल्क काट लिया जाएगा। जारी रखें?"
   }
 };
 
@@ -502,7 +520,7 @@ export const MOCK_JOBS: Job[] = [
         createdAt: Date.now() - 100000,
         status: 'PENDING',
         negotiationHistory: [
-             { amount: 750, by: UserRole.WORKER, timestamp: Date.now() - 100000 }
+          { amount: 750, by: UserRole.WORKER, timestamp: Date.now() - 100000 }
         ]
       }
     ]

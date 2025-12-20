@@ -1,29 +1,54 @@
 import { supabase } from '../lib/supabase';
 import { User, Coordinates } from '../types';
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 
 export const signInWithGoogle = async (): Promise<{ success: boolean; error?: string }> => {
   try {
-    console.log('[Auth] Initiating Google OAuth, redirect URL:', window.location.origin);
-    const { error } = await supabase.auth.signInWithOAuth({
+    // Use Capacitor callback URL for native apps, web URL for browser
+    const redirectTo = Capacitor.isNativePlatform()
+      ? 'in.chowkar.app://callback'
+      : window.location.origin;
+
+    console.log('[Auth] Initiating Google OAuth, redirect URL:', redirectTo);
+    console.log('[Auth] Platform:', Capacitor.getPlatform());
+
+    // Set optimistic flag so we expect a session on return
+    localStorage.setItem('chowkar_isLoggedIn', 'true');
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: window.location.origin,
+        redirectTo,
+        skipBrowserRedirect: Capacitor.isNativePlatform(), // Important for mobile!
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',
+          display: 'touch',  // Request touch-optimized fullscreen view
         }
       }
     });
 
     if (error) {
       console.error('[Auth] OAuth initialization error:', error);
+      localStorage.removeItem('chowkar_isLoggedIn'); // Revert on immediate error
       throw error;
+    }
+
+    // For native platforms, open OAuth in system browser for fullscreen experience
+    if (Capacitor.isNativePlatform() && data?.url) {
+      console.log('[Auth] Opening OAuth URL in system browser:', data.url);
+      await Browser.open({
+        url: data.url,
+        windowName: '_system',
+      });
     }
 
     console.log('[Auth] OAuth redirect initiated successfully');
     return { success: true };
   } catch (error) {
     console.error('[Auth] Error signing in with Google:', error);
+    localStorage.removeItem('chowkar_isLoggedIn'); // Revert on error
     return { success: false, error: 'Failed to sign in with Google' };
   }
 };
@@ -39,28 +64,40 @@ export const signOut = async (): Promise<{ success: boolean; error?: string }> =
   }
 };
 
-export const getCurrentUser = async (): Promise<{ user: User | null; error?: string }> => {
+export const getCurrentUser = async (existingAuthUser?: any): Promise<{ user: User | null; error?: string }> => {
   try {
-    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+    let authUser = existingAuthUser;
 
-    if (authError) throw authError;
+    if (!authUser) {
+      console.log('[AuthService] Fetching auth user from Supabase...');
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
+      authUser = user;
+    } else {
+      console.log('[AuthService] Using provided auth user');
+    }
+
     if (!authUser) return { user: null };
 
+    console.log('[AuthService] Fetching profile from DB for:', authUser.id);
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', authUser.id)
       .maybeSingle();
 
-    if (profileError) throw profileError;
+    if (profileError) {
+      console.error('[AuthService] Profile fetch error:', profileError);
+      throw profileError;
+    }
 
     if (!profile) {
       console.log('[Auth] Profile not found, creating one for auth user:', authUser.id);
 
       const userName = authUser.user_metadata?.full_name ||
-                      authUser.user_metadata?.name ||
-                      authUser.email?.split('@')[0] ||
-                      'User';
+        authUser.user_metadata?.name ||
+        authUser.email?.split('@')[0] ||
+        'User';
 
       const { data: newProfile, error: createError } = await supabase
         .from('profiles')
@@ -111,6 +148,7 @@ export const getCurrentUser = async (): Promise<{ user: User | null; error?: str
       return { user };
     }
 
+    console.log('[AuthService] Profile found, processing...');
     const user: User = {
       id: profile.id,
       name: profile.name,
@@ -213,6 +251,49 @@ export const updateWalletBalance = async (
   } catch (error) {
     console.error('Error updating wallet:', error);
     return { success: false, error: 'Failed to update wallet' };
+  }
+};
+
+// Direct profile fetch by ID (skips auth check)
+export const getUserProfile = async (userId: string): Promise<{ user: User | null; error?: string }> => {
+  try {
+    console.log('[AuthService] Fetching profile directly for:', userId);
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (!profile) return { user: null };
+
+    const user: User = {
+      id: profile.id,
+      name: profile.name,
+      phone: profile.phone || '',
+      email: profile.email || '',
+      location: profile.location,
+      coordinates: profile.latitude && profile.longitude
+        ? { lat: Number(profile.latitude), lng: Number(profile.longitude) }
+        : undefined,
+      walletBalance: profile.wallet_balance,
+      rating: Number(profile.rating),
+      profilePhoto: profile.profile_photo || undefined,
+      isPremium: profile.is_premium,
+      aiUsageCount: profile.ai_usage_count,
+      bio: profile.bio || undefined,
+      skills: profile.skills || [],
+      experience: profile.experience || undefined,
+      jobsCompleted: profile.jobs_completed,
+      joinDate: new Date(profile.join_date).getTime(),
+      reviews: []
+    };
+
+    return { user };
+  } catch (error) {
+    console.error('[AuthService] Error fetching profile direclty:', error);
+    return { user: null, error: 'Failed to fetch profile' };
   }
 };
 

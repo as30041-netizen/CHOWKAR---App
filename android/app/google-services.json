@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "573423395294",
+    "project_id": "chowkar-823a6",
+    "storage_bucket": "chowkar-823a6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:573423395294:android:a1c36b735f59c08f5a3d4f",
+        "android_client_info": {
+          "package_name": "in.chowkar.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC8D-oLUvEM1B6eGVkNFj2LHrbo8PZo7No"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

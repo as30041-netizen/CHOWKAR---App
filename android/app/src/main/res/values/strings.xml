@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">CHOWKAR</string>
+    <string name="title_activity_main">CHOWKAR</string>
+    <string name="package_name">in.chowkar.app</string>
+    <string name="custom_url_scheme">in.chowkar.app</string>
+</resources>

@@ -1,7 +1,8 @@
 
 export enum UserRole {
   WORKER = 'WORKER',
-  POSTER = 'POSTER'
+  POSTER = 'POSTER',
+  ADMIN = 'ADMIN'
 }
 
 export enum JobStatus {
@@ -29,10 +30,10 @@ export interface User {
   id: string;
   name: string;
   email?: string;
-  phone: string;
-  location: string;
-  coordinates?: Coordinates;
-  walletBalance: number;
+  phone?: string; // PRIVATE: Only visible to self or accepted counterparty
+  location?: string; // PRIVATE
+  coordinates?: Coordinates; // PRIVATE
+  walletBalance?: number; // PRIVATE
   rating: number;
   profilePhoto?: string;
   isPremium?: boolean;
@@ -67,6 +68,7 @@ export interface Bid {
   createdAt: number;
   status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
   negotiationHistory: NegotiationEntry[]; // Track the back and forth
+  posterId?: string; // Denormalized for simpler RLS/Realtime
 }
 
 export interface Job {
@@ -94,9 +96,16 @@ export interface ChatMessage {
   id: string;
   jobId: string;
   senderId: string;
+  receiverId?: string;
   text: string;
   timestamp: number;
   translatedText?: string;
+  isDeleted?: boolean;
+  read?: boolean;
+  readAt?: number;
+  mediaType?: 'voice' | 'image' | 'video';
+  mediaUrl?: string;
+  mediaDuration?: number; // Duration in seconds for voice/video
 }
 
 export interface Transaction {

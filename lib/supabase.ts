@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
+import { Capacitor } from '@capacitor/core';
+import { logger } from './logger';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -11,9 +13,28 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true
-  }
+    detectSessionInUrl: true,
+    flowType: Capacitor.isNativePlatform() ? 'pkce' : 'implicit',
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+    // Fix for Capacitor: Use native WebSocket implementation
+    transport: Capacitor.isNativePlatform() ? undefined : undefined,
+  },
+  global: {
+    headers: {
+      'X-Client-Info': `supabase-js-capacitor/${Capacitor.getPlatform()}`,
+    },
+  },
 });
+
+// Debug logging for Capacitor (only in development)
+if (Capacitor.isNativePlatform()) {
+  logger.log('🔧 [Supabase] Running on native platform:', Capacitor.getPlatform());
+  logger.log('🔧 [Supabase] Realtime enabled with Capacitor config');
+}
 
 // Database type helpers
 export type Database = {
