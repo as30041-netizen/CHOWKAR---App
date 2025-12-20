@@ -298,7 +298,7 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                                 >
                                     {/* NEW Badge */}
                                     {isNew && (
-                                        <div className="absolute -top-2 -right-2 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md animate-bounce">
+                                        <div className="absolute -top-2 -right-2 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md animate-bounce z-10">
                                             NEW
                                         </div>
                                     )}
@@ -348,15 +348,15 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
 
                                     {/* Visibility hint */}
                                     {localJob.status === 'OPEN' && (
-                                        <p className="text-[10px] text-gray-400 mb-3 flex items-center gap-1">
+                                        <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-3 flex items-center gap-1">
                                             🔒 Contact details visible after accepting this bid
                                         </p>
                                     )}
 
                                     {/* Negotiation History */}
                                     {bid.negotiationHistory && bid.negotiationHistory.length > 1 && (
-                                        <div className="mb-3 pl-3 border-l-2 border-gray-200 space-y-2">
-                                            <div className="text-[10px] text-gray-500 font-semibold uppercase mb-1">Negotiation History</div>
+                                        <div className="mb-3 pl-3 border-l-2 border-gray-200 dark:border-gray-700 space-y-2">
+                                            <div className="text-[10px] text-gray-500 dark:text-gray-400 font-semibold uppercase mb-1">Negotiation History</div>
                                             {bid.negotiationHistory.map((h, i) => {
                                                 const isPosterViewing = user.id === localJob?.posterId;
                                                 const isFromWorker = h.by === UserRole.WORKER;
@@ -367,12 +367,12 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                                                         </span>
                                                         <span className="text-gray-700 dark:text-gray-300 font-semibold">₹{h.amount}</span>
                                                         {h.timestamp && (
-                                                            <span className="text-[10px] text-gray-400">
+                                                            <span className="text-[10px] text-gray-400 dark:text-gray-500">
                                                                 {getRelativeTime(h.timestamp)}
                                                             </span>
                                                         )}
                                                         {i === bid.negotiationHistory!.length - 1 && (
-                                                            <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1 rounded">(Latest)</span>
+                                                            <span className="text-[10px] bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-1 rounded">(Latest)</span>
                                                         )}
                                                     </div>
                                                 );
@@ -404,7 +404,7 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                                 </div>
                             );
                         })
-                    ) : <p className="text-center text-gray-400 py-8">No bids yet.</p>}
+                    ) : <p className="text-center text-gray-400 dark:text-gray-500 py-8">No bids yet.</p>}
                 </div>
             </div>
         </div>
