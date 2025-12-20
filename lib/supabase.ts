@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { Capacitor } from '@capacitor/core';
+import { logger } from './logger';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -29,11 +30,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-// Debug logging for Capacitor
+// Debug logging for Capacitor (only in development)
 if (Capacitor.isNativePlatform()) {
-  console.log('🔧 [Supabase] Running on native platform:', Capacitor.getPlatform());
-  console.log('🔧 [Supabase] URL:', supabaseUrl);
-  console.log('🔧 [Supabase] Realtime enabled with Capacitor config');
+  logger.log('🔧 [Supabase] Running on native platform:', Capacitor.getPlatform());
+  logger.log('🔧 [Supabase] Realtime enabled with Capacitor config');
 }
 
 // Database type helpers

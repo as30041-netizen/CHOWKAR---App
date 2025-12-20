@@ -480,6 +480,7 @@ DECLARE
   v_job RECORD;
   v_refund_amount INTEGER := 0;
   v_result JSON;
+  v_accepted_worker_id UUID;
 BEGIN
   -- Get job
   SELECT * INTO v_job FROM jobs WHERE id = p_job_id AND poster_id = auth.uid();
@@ -493,11 +494,49 @@ BEGIN
     RAISE EXCEPTION 'Cannot cancel completed job';
   END IF;
   
-  -- Update job status
+  -- Get accepted worker if job was IN_PROGRESS
+  IF v_job.status = 'IN_PROGRESS' AND v_job.accepted_bid_id IS NOT NULL THEN
+    SELECT worker_id INTO v_accepted_worker_id 
+    FROM bids WHERE id = v_job.accepted_bid_id;
+  END IF;
+  
+  -- Update job status to CANCELLED (using COMPLETED for now if no CANCELLED status)
   UPDATE jobs
-  SET status = 'COMPLETED', -- Or create CANCELLED status
+  SET status = 'COMPLETED',
       updated_at = NOW()
   WHERE id = p_job_id;
+  
+  -- NOTIFY ALL PENDING BIDDERS (except accepted worker - they get special notification)
+  INSERT INTO notifications (user_id, type, title, message, related_job_id, read, created_at)
+  SELECT 
+    worker_id,
+    'INFO',
+    'Job No Longer Available',
+    'The job "' || v_job.title || '" has been cancelled. Keep bidding on other opportunities!',
+    p_job_id,
+    false,
+    NOW()
+  FROM bids
+  WHERE job_id = p_job_id
+    AND status = 'PENDING'
+    AND (v_accepted_worker_id IS NULL OR worker_id != v_accepted_worker_id);
+  
+  -- NOTIFY ACCEPTED WORKER SEPARATELY (if job was in progress)
+  IF v_accepted_worker_id IS NOT NULL THEN
+    INSERT INTO notifications (user_id, type, title, message, related_job_id, read, created_at)
+    VALUES (
+      v_accepted_worker_id,
+      'WARNING',
+      'Job Cancelled 😔',
+      'Unfortunately, "' || v_job.title || '" has been cancelled by the employer. Any applicable refunds will be processed.',
+      p_job_id,
+      false,
+      NOW()
+    );
+    RAISE NOTICE '✅ Cancellation notification sent to accepted worker %', v_accepted_worker_id;
+  END IF;
+  
+  RAISE NOTICE '✅ Cancellation notifications sent to all bidders for job %', p_job_id;
   
   -- TODO: Calculate refund based on status and implement refund logic
   

@@ -907,8 +907,12 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       console.log('[Auth] Sign out successful');
 
-      // STREAMLINED AUTH: Clear persistent flag
+      // PRIVACY FIX: Clear ALL persistent user data from localStorage
       localStorage.removeItem('chowkar_isLoggedIn');
+      localStorage.removeItem('chowkar_user');
+      localStorage.removeItem('chowkar_role');
+      localStorage.removeItem('chowkar_language');
+      localStorage.removeItem('chowkar_onboarding_complete');
 
       setIsLoggedIn(false);
       setUser(MOCK_USER);
