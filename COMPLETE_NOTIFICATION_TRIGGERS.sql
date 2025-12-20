@@ -31,13 +31,13 @@ BEGIN
     -- Get poster name
     SELECT name INTO v_poster_name FROM profiles WHERE id = v_job.poster_id;
     
-    -- Notify ACCEPTED worker
+    -- Notify ACCEPTED worker (do NOT mention payment - handled separately)
     INSERT INTO notifications (user_id, type, title, message, related_job_id, read, created_at)
     VALUES (
       NEW.worker_id,
       'SUCCESS',
-      'Bid Accepted! 🎉',
-      'Your bid of ₹' || NEW.amount || ' for "' || v_job.title || '" was accepted! Pay connection fee to start chatting.',
+      'You Got the Job! 🎉',
+      COALESCE(v_poster_name, 'Employer') || ' selected you for "' || v_job.title || '" at ₹' || NEW.amount || '. Tap to proceed!',
       NEW.job_id,
       false,
       NOW()
@@ -50,8 +50,8 @@ BEGIN
     SELECT 
       worker_id,
       'INFO',
-      'Job Filled',
-      '"' || v_job.title || '" was filled by another worker',
+      'Job Update',
+      'Another worker was selected for "' || v_job.title || '". Keep bidding on other jobs!',
       NEW.job_id,
       false,
       NOW()
@@ -151,13 +151,13 @@ BEGIN
       -- Get worker name
       SELECT name INTO v_worker_name FROM profiles WHERE id = v_worker_id;
       
-      -- Notify worker that job is complete and payment processed
+      -- Notify worker that job is complete with job context
       INSERT INTO notifications (user_id, type, title, message, related_job_id, read, created_at)
       VALUES (
         v_worker_id,
         'SUCCESS',
         'Job Completed! 💰',
-        '₹' || v_bid_amount || ' has been credited to your wallet',
+        'Great work on "' || NEW.title || '"! ₹' || v_bid_amount || ' has been credited to your wallet.',
         NEW.id,
         false,
         NOW()
@@ -199,14 +199,14 @@ BEGIN
     SELECT title INTO v_job_title FROM jobs WHERE id = NEW.job_id;
   END IF;
   
-  -- Notify person being reviewed
+  -- Notify person being reviewed with clear context
   INSERT INTO notifications (user_id, type, title, message, related_job_id, read, created_at)
   VALUES (
     NEW.reviewee_id,
-    'INFO',
+    'SUCCESS',
     'New Review ⭐',
-    COALESCE(v_reviewer_name, 'Someone') || ' rated you ' || NEW.rating || ' stars' || 
-    CASE WHEN v_job_title IS NOT NULL THEN ' for "' || v_job_title || '"' ELSE '' END,
+    COALESCE(v_reviewer_name, 'Someone') || ' gave you ' || NEW.rating || ' stars' || 
+    CASE WHEN v_job_title IS NOT NULL THEN ' for "' || v_job_title || '"' ELSE '' END || '. Tap to view!',
     NEW.job_id,
     false,
     NOW()
@@ -262,13 +262,13 @@ BEGIN
       v_message_preview := v_message_preview || '...';
     END IF;
     
-    -- Notify recipient
+    -- Notify recipient with sender name and job context
     INSERT INTO notifications (user_id, type, title, message, related_job_id, read, created_at)
     VALUES (
       v_recipient_id,
       'INFO',
-      'New Message from ' || COALESCE(v_sender_name, 'User'),
-      v_message_preview,
+      COALESCE(v_sender_name, 'Someone') || ' 💬',
+      '\"' || v_job.title || '\": ' || v_message_preview,
       NEW.job_id,
       false,
       NOW()

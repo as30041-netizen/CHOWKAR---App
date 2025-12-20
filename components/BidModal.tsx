@@ -72,8 +72,8 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
 
         try {
             await addBid(newBid);
-            // We need to notify the poster. `addNotification` is from useUser context.
-            await contextAddNotification(job.posterId, "New Bid", `"${job.title}": ${contextUser.name} offered ₹${bidAmount}`, "INFO", job.id);
+            // Note: DB trigger 'on_bid_created' automatically notifies the poster
+            // So we don't call addNotification here - prevents duplicate notifications!
             showAlert(contextT.alertBidPlaced, 'success');
             onSuccess();
             onClose();

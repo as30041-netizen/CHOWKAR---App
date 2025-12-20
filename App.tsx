@@ -471,31 +471,15 @@ const AppContent: React.FC = () => {
           console.warn('[Accept] Job broadcast failed:', broadcastErr);
         }
 
-        // 3. Notify Poster - waiting for worker to pay
+        // 3. Notify Poster with clear context - no mention of payment!
         await addNotification(
           job.posterId,
-          "Job Accepted",
-          `"${job.title}": ${bid.workerName} accepted ₹${bid.amount}. Waiting for worker to unlock chat.`,
+          "Worker Confirmed! 🎉",
+          `${bid.workerName} confirmed for "${job.title}" at ₹${bid.amount}. Chat will be ready shortly!`,
           "SUCCESS",
           jobId
         );
-
-        // 3b. Send PUSH notification to poster
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.access_token) {
-            await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push-notification`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-              body: JSON.stringify({
-                userId: job.posterId,
-                title: 'Job Accepted! 🎉',
-                body: `${bid.workerName} accepted your offer of ₹${bid.amount}`,
-                data: { jobId, type: 'bid_accepted' }
-              })
-            });
-          }
-        } catch (pushErr) { console.warn('[Push] Failed:', pushErr); }
+        // Note: addNotification now handles push automatically
 
         // 4. Show worker their payment modal to unlock chat
         setWorkerPaymentModal({ isOpen: true, job, bidId });
@@ -507,48 +491,16 @@ const AppContent: React.FC = () => {
 
         const updatedJob = { ...job, bids: job.bids.filter(b => b.id !== bidId) };
         await updateJob(updatedJob);
-        await addNotification(job.posterId, "Counter Declined", `"${job.title}": ${bid.workerName} declined your offer.`, "WARNING", jobId);
-
-        // Send PUSH notification to poster
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.access_token) {
-            await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push-notification`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-              body: JSON.stringify({
-                userId: job.posterId,
-                title: 'Counter Declined',
-                body: `${bid.workerName} declined your offer for "${job.title}"`,
-                data: { jobId, type: 'counter_declined' }
-              })
-            });
-          }
-        } catch (pushErr) { console.warn('[Push] Failed:', pushErr); }
+        await addNotification(job.posterId, "Offer Declined", `${bid.workerName} declined your offer for "${job.title}". You can try other workers!`, "WARNING", jobId);
+        // Note: addNotification now handles push automatically
 
         showAlert(language === 'en' ? 'Counter declined. Your bid has been withdrawn.' : 'प्रस्ताव अस्वीकार। आपकी बोली वापस ले ली गई।', 'info');
 
       } else if (action === 'COUNTER' && amount) {
         const updatedBid = { ...bid, amount, negotiationHistory: [...(bid.negotiationHistory || []), { amount, by: UserRole.WORKER, timestamp: Date.now() }] };
         await updateBid(updatedBid);
-        await addNotification(job.posterId, "Counter Offer", `"${job.title}": ${bid.workerName} countered ₹${amount}`, "INFO", jobId);
-
-        // Send PUSH notification to poster
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.access_token) {
-            await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push-notification`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-              body: JSON.stringify({
-                userId: job.posterId,
-                title: 'New Counter Offer',
-                body: `${bid.workerName} countered ₹${amount} for "${job.title}"`,
-                data: { jobId, type: 'counter_offer' }
-              })
-            });
-          }
-        } catch (pushErr) { console.warn('[Push] Failed:', pushErr); }
+        await addNotification(job.posterId, "New Counter Offer 💰", `${bid.workerName} proposed ₹${amount} for "${job.title}". Tap to respond!`, "INFO", jobId);
+        // Note: addNotification now handles push automatically
       }
     } catch (err: any) {
       console.error('[WorkerReply] Error:', err);
@@ -568,28 +520,12 @@ const AppContent: React.FC = () => {
       if (bid) {
         await addNotification(
           job.posterId,
-          "Bid Withdrawn",
-          `${bid.workerName} withdrew their bid from "${job.title}"`,
+          "Bid Update",
+          `${bid.workerName} is no longer available for "${job.title}". Check other bids!`,
           "INFO",
           jobId
         );
-
-        // Send push notification to poster
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.access_token) {
-            await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push-notification`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-              body: JSON.stringify({
-                userId: job.posterId,
-                title: 'Bid Withdrawn',
-                body: `A worker withdrew their bid from "${job.title}"`,
-                data: { jobId, type: 'bid_withdrawn' }
-              })
-            });
-          }
-        } catch (pushErr) { console.warn('[Push] Failed:', pushErr); }
+        // Note: addNotification now handles push automatically
       }
 
       showAlert(language === 'en' ? 'Bid withdrawn successfully' : 'बोली सफलतापूर्वक वापस ली गई', 'info');
@@ -649,11 +585,13 @@ const AppContent: React.FC = () => {
 
       if (error) throw error;
 
-      // Notify poster that chat is now unlocked
+      // Notify poster that chat is now unlocked - DO NOT mention payment
+      const acceptedBid = workerPaymentModal.job.bids.find(b => b.id === workerPaymentModal.bidId);
+      const workerName = acceptedBid?.workerName || 'Worker';
       await addNotification(
         workerPaymentModal.job.posterId,
-        "Chat Unlocked",
-        `Worker has paid and chat is now active for "${workerPaymentModal.job.title}"!`,
+        "Chat Ready 💬",
+        `${workerName} is ready to start on "${workerPaymentModal.job.title}". Tap to chat!`,
         "SUCCESS",
         workerPaymentModal.job.id
       );

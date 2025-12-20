@@ -50,8 +50,8 @@ BEGIN
         VALUES (
           v_recipient_id,
           'INFO',
-          'Counter Offer',
-          'Customer offered ₹' || NEW.amount || ' for "' || v_job.title || '"',
+          'New Offer 💰',
+          COALESCE(v_poster_name, 'Employer') || ' offered ₹' || NEW.amount || ' for "' || v_job.title || '". Tap to respond!',
           NEW.job_id,
           false,
           NOW()
@@ -65,8 +65,8 @@ BEGIN
         VALUES (
           v_recipient_id,
           'INFO',
-          'Counter Offer',
-          COALESCE(v_worker_name, 'Worker') || ' countered ₹' || NEW.amount || ' for "' || v_job.title || '"',
+          'New Counter Offer 💰',
+          COALESCE(v_worker_name, 'Worker') || ' proposed ₹' || NEW.amount || ' for "' || v_job.title || '". Tap to respond!',
           NEW.job_id,
           false,
           NOW()

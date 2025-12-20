@@ -823,171 +823,167 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('[UserContext] Error deleting notification:', err);
       }
     }
-  };        .delete ()
-    .eq('id', notifId)
-    .eq('user_id', user.id);
-}
   };
 
-// Clear all notifications for a specific job (used when opening job context)
-const clearNotificationsForJob = async (jobId: string) => {
-  // Optimistic update
-  setNotifications(prev => prev.filter(n => n.relatedJobId !== jobId));
+  // Clear all notifications for a specific job (used when opening job context)
+  const clearNotificationsForJob = async (jobId: string) => {
+    // Optimistic update
+    setNotifications(prev => prev.filter(n => n.relatedJobId !== jobId));
 
-  // DB delete
-  if (user.id) {
-    await supabase
-      .from('notifications')
-      .delete()
-      .eq('user_id', user.id)
-      .eq('related_job_id', jobId);
-  }
-};
-
-const checkFreeLimit = () => {
-  const isFreeLimitReached = !user.isPremium && (user.aiUsageCount || 0) >= FREE_AI_USAGE_LIMIT;
-  if (isFreeLimitReached) {
-    setShowSubscriptionModal(true);
-    return false;
-  }
-  return true;
-};
-
-const incrementAiUsage = async () => {
-  if (!user.isPremium) {
-    const newCount = (user.aiUsageCount || 0) + 1;
-    setUser(prev => ({
-      ...prev,
-      aiUsageCount: newCount
-    }));
-
-    // Update in database
-    await incrementAIUsageDB(user.id, user.aiUsageCount || 0);
-
-    const remaining = FREE_AI_USAGE_LIMIT - newCount;
-    if (remaining > 0) {
-      await addNotification(
-        user.id,
-        "Free AI Try Used",
-        `${remaining} ${remaining === 1 ? 'try' : 'tries'} remaining.`,
-        "INFO"
-      );
-    } else {
-      await addNotification(
-        user.id,
-        "Last Free Try Used",
-        "Premium features coming soon!",
-        "WARNING"
-      );
+    // DB delete
+    if (user.id) {
+      await supabase
+        .from('notifications')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('related_job_id', jobId);
     }
-  }
-};
+  };
 
-const updateUserInDB = async (updates: Partial<User>) => {
-  try {
-    // Update local state
-    setUser(prev => ({ ...prev, ...updates }));
-
-    // Update in database
-    await updateUserProfile(user.id, updates);
-
-    // Update wallet balance separately if needed
-    if (updates.walletBalance !== undefined) {
-      await updateWalletBalance(user.id, updates.walletBalance);
+  const checkFreeLimit = () => {
+    const isFreeLimitReached = !user.isPremium && (user.aiUsageCount || 0) >= FREE_AI_USAGE_LIMIT;
+    if (isFreeLimitReached) {
+      setShowSubscriptionModal(true);
+      return false;
     }
-  } catch (error) {
-    console.error('Error updating user:', error);
-    showAlert('Failed to update profile', 'error');
-  }
-};
+    return true;
+  };
 
-const logout = async () => {
-  try {
-    console.log('[Auth] Logging out...');
-    const result = await signOut();
-    if (result.error) {
-      console.error('[Auth] Sign out error (forcing local logout):', result.error);
-      // We continue to clear local state even if server logout fails
-    }
-    console.log('[Auth] Sign out successful');
+  const incrementAiUsage = async () => {
+    if (!user.isPremium) {
+      const newCount = (user.aiUsageCount || 0) + 1;
+      setUser(prev => ({
+        ...prev,
+        aiUsageCount: newCount
+      }));
 
-    // STREAMLINED AUTH: Clear persistent flag
-    localStorage.removeItem('chowkar_isLoggedIn');
+      // Update in database
+      await incrementAIUsageDB(user.id, user.aiUsageCount || 0);
 
-    setIsLoggedIn(false);
-    setUser(MOCK_USER);
-    setTransactions([]);
-    setNotifications([]);
-    setMessages([]);
-  } catch (error) {
-    console.error('[Auth] Exception during logout:', error);
-    showAlert('An error occurred during sign out', 'error');
-  }
-};
-
-const retryAuth = async () => {
-  console.log('[Auth] Retrying authentication...');
-  setIsAuthLoading(true);
-  setLoadingMessage('Retrying...');
-
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-
-    if (session?.user) {
-      setLoadingMessage('Loading your profile...');
-      const { user: currentUser, error } = await getCurrentUser();
-
-      if (error || !currentUser) {
-        throw new Error('Failed to load profile');
+      const remaining = FREE_AI_USAGE_LIMIT - newCount;
+      if (remaining > 0) {
+        await addNotification(
+          user.id,
+          "Free AI Try Used",
+          `${remaining} ${remaining === 1 ? 'try' : 'tries'} remaining.`,
+          "INFO"
+        );
+      } else {
+        await addNotification(
+          user.id,
+          "Last Free Try Used",
+          "Premium features coming soon!",
+          "WARNING"
+        );
       }
-
-      setUser(currentUser);
-      setIsLoggedIn(true);
-      setLoadingMessage('Success!');
-    } else {
-      setIsLoggedIn(false);
-      setLoadingMessage('No active session found');
     }
-  } catch (error) {
-    console.error('[Auth] Retry failed:', error);
-    setLoadingMessage('Retry failed. Please refresh the page.');
-  } finally {
-    setTimeout(() => setIsAuthLoading(false), 500);
-  }
-};
+  };
 
-return (
-  <UserContext.Provider value={{
-    user, setUser,
-    role, setRole,
-    language, setLanguage,
-    isLoggedIn, setIsLoggedIn,
-    isAuthLoading,
-    loadingMessage,
-    transactions, setTransactions,
-    notifications, setNotifications,
-    messages, setMessages,
-    addNotification,
-    checkFreeLimit,
-    incrementAiUsage,
-    logout,
-    t,
-    showSubscriptionModal, setShowSubscriptionModal,
-    showAlert, currentAlert,
-    updateUserInDB,
-    retryAuth,
-    refreshUser: fetchUserData,
-    activeChatId,
-    setActiveChatId,
-    activeJobId,
-    setActiveJobId,
-    markNotificationsAsReadForJob,
-    deleteNotification,
-    clearNotificationsForJob
-  }}>
-    {children}
-  </UserContext.Provider>
-);
+  const updateUserInDB = async (updates: Partial<User>) => {
+    try {
+      // Update local state
+      setUser(prev => ({ ...prev, ...updates }));
+
+      // Update in database
+      await updateUserProfile(user.id, updates);
+
+      // Update wallet balance separately if needed
+      if (updates.walletBalance !== undefined) {
+        await updateWalletBalance(user.id, updates.walletBalance);
+      }
+    } catch (error) {
+      console.error('Error updating user:', error);
+      showAlert('Failed to update profile', 'error');
+    }
+  };
+
+  const logout = async () => {
+    try {
+      console.log('[Auth] Logging out...');
+      const result = await signOut();
+      if (result.error) {
+        console.error('[Auth] Sign out error (forcing local logout):', result.error);
+        // We continue to clear local state even if server logout fails
+      }
+      console.log('[Auth] Sign out successful');
+
+      // STREAMLINED AUTH: Clear persistent flag
+      localStorage.removeItem('chowkar_isLoggedIn');
+
+      setIsLoggedIn(false);
+      setUser(MOCK_USER);
+      setTransactions([]);
+      setNotifications([]);
+      setMessages([]);
+    } catch (error) {
+      console.error('[Auth] Exception during logout:', error);
+      showAlert('An error occurred during sign out', 'error');
+    }
+  };
+
+  const retryAuth = async () => {
+    console.log('[Auth] Retrying authentication...');
+    setIsAuthLoading(true);
+    setLoadingMessage('Retrying...');
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (session?.user) {
+        setLoadingMessage('Loading your profile...');
+        const { user: currentUser, error } = await getCurrentUser();
+
+        if (error || !currentUser) {
+          throw new Error('Failed to load profile');
+        }
+
+        setUser(currentUser);
+        setIsLoggedIn(true);
+        setLoadingMessage('Success!');
+      } else {
+        setIsLoggedIn(false);
+        setLoadingMessage('No active session found');
+      }
+    } catch (error) {
+      console.error('[Auth] Retry failed:', error);
+      setLoadingMessage('Retry failed. Please refresh the page.');
+    } finally {
+      setTimeout(() => setIsAuthLoading(false), 500);
+    }
+  };
+
+  return (
+    <UserContext.Provider value={{
+      user, setUser,
+      role, setRole,
+      language, setLanguage,
+      isLoggedIn, setIsLoggedIn,
+      isAuthLoading,
+      loadingMessage,
+      transactions, setTransactions,
+      notifications, setNotifications,
+      messages, setMessages,
+      addNotification,
+      checkFreeLimit,
+      incrementAiUsage,
+      logout,
+      t,
+      showSubscriptionModal, setShowSubscriptionModal,
+      showAlert, currentAlert,
+      updateUserInDB,
+      retryAuth,
+      refreshUser: fetchUserData,
+      activeChatId,
+      setActiveChatId,
+      activeJobId,
+      setActiveJobId,
+      markNotificationsAsReadForJob,
+      deleteNotification,
+      clearNotificationsForJob
+    }}>
+      {children}
+    </UserContext.Provider>
+  );
 };
 
 export const useUser = () => {

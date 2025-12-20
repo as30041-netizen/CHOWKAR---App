@@ -41,34 +41,8 @@ export const CounterModal: React.FC<CounterModalProps> = ({ isOpen, onClose, bid
                         negotiationHistory: [...(bid.negotiationHistory || []), { amount: newAmount, by: UserRole.POSTER, timestamp: Date.now() }]
                     };
                     await updateBid(updatedBid);
-
-                    // Send PUSH notification to worker (DB trigger handles in-app notification)
-                    // This ensures worker gets push even when app is closed
-                    const workerId = bid.workerId;
-                    if (workerId) {
-                        try {
-                            const { data: { session } } = await supabase.auth.getSession();
-                            if (session?.access_token) {
-                                const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-                                await fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'Authorization': `Bearer ${session.access_token}`
-                                    },
-                                    body: JSON.stringify({
-                                        userId: workerId,
-                                        title: 'Counter Offer',
-                                        body: `New offer of ₹${newAmount} for "${job.title}"`,
-                                        data: { jobId: job.id, type: 'counter_offer' }
-                                    })
-                                });
-                                console.log('[Push] Counter offer push sent to worker:', workerId);
-                            }
-                        } catch (pushError) {
-                            console.warn('[Push] Failed to send counter push:', pushError);
-                        }
-                    }
+                    // Note: DB trigger 'notify_on_counter_offer' handles the in-app notification
+                    // and sends it to the correct party. No manual push/notification needed here!
                 }
 
                 showAlert("Counter offer sent!", "success");

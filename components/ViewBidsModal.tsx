@@ -146,26 +146,10 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
             });
             if (error) throw error;
 
-            // 2. Notify accepted worker - they need to pay to unlock chat
-            await addNotification(
-                workerId,
-                "Bid Accepted",
-                `Congratulations! Your bid for "${job.title}" was accepted. Unlock chat for ₹${connectionFee} to start working!`,
-                "SUCCESS",
-                jobId
-            );
-
-            // 3. Notify REJECTED workers
-            const otherBids = job.bids.filter(b => b.id !== bidId);
-            for (const rejectedBid of otherBids) {
-                await addNotification(
-                    rejectedBid.workerId,
-                    "Bid Not Selected",
-                    `Another worker was selected for "${job.title}". Keep bidding on other jobs!`,
-                    "INFO",
-                    jobId
-                );
-            }
+            // Note: DB trigger 'notify_on_bid_accept' handles notifications to:
+            // - Accepted worker ("You Got the Job!")
+            // - Other bidders ("Job Update - Another worker selected")
+            // So we don't need frontend notifications here - prevents duplicates!
 
             // 4. Broadcast job update for instant real-time sync
             try {
@@ -213,31 +197,15 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
             const { error } = await supabase.from('bids').delete().eq('id', bidId);
             if (error) throw error;
 
-            // Notify the worker
+            // Notify the worker with friendly message (no mention of "rejected")
             await addNotification(
                 workerId,
-                "Bid Rejected",
-                `Your bid for "${localJob?.title}" was not selected. Keep trying on other jobs!`,
-                "WARNING",
+                "Bid Update",
+                `The employer chose a different worker for "${localJob?.title}". Don't give up - more jobs await!`,
+                "INFO",
                 jobId
             );
-
-            // Send push notification to worker
-            try {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (session?.access_token) {
-                    await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push-notification`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-                        body: JSON.stringify({
-                            userId: workerId,
-                            title: 'Bid Rejected',
-                            body: `Your bid was not selected for "${localJob?.title}"`,
-                            data: { jobId, type: 'bid_rejected' }
-                        })
-                    });
-                }
-            } catch (pushErr) { console.warn('[Push] Failed:', pushErr); }
+            // Note: addNotification handles push automatically
 
             showAlert(language === 'en' ? 'Bid rejected' : 'बोली अस्वीकार', 'info');
         } catch (error: any) {
