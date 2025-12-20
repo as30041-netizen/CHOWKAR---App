@@ -228,21 +228,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                                 <MapPin size={36} className="text-emerald-400" fill="#10b981" />
                                 <div className="absolute inset-0 blur-lg bg-emerald-400 opacity-50" />
                             </div>
-                            <h1 className="text-4xl font-black bg-gradient-to-r from-emerald-300 to-green-400 bg-clip-text text-transparent font-serif-logo">CHOWKAR</h1>
+                            <h1 className="text-4xl font-black bg-gradient-to-r from-emerald-600 to-green-600 dark:from-emerald-300 dark:to-green-400 bg-clip-text text-transparent font-serif-logo">CHOWKAR</h1>
                         </div>
                     </div>
 
                     {/* Hero Text with gradient */}
                     <div className="space-y-6 mb-14">
                         <h2 className="text-5xl md:text-7xl lg:text-8xl font-black leading-tight tracking-tight">
-                            <span className="bg-gradient-to-r from-emerald-400 via-green-400 to-teal-400 bg-clip-text text-transparent">{t.hero.title}</span>
+                            <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-600 dark:from-emerald-400 dark:via-green-400 dark:to-teal-400 bg-clip-text text-transparent">{t.hero.title}</span>
                             <br />
-                            <span className="text-white">{t.hero.subtitle}</span>
+                            <span className="text-gray-900 dark:text-white">{t.hero.subtitle}</span>
                             <br />
-                            <span className="text-3xl md:text-4xl lg:text-5xl text-gray-400 font-semibold">{t.hero.tagline}</span>
+                            <span className="text-3xl md:text-4xl lg:text-5xl text-gray-600 dark:text-gray-400 font-semibold">{t.hero.tagline}</span>
                         </h2>
 
-                        <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto font-medium leading-relaxed">
+                        <p className="text-lg md:text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto font-medium leading-relaxed">
                             {t.hero.description}
                         </p>
                     </div>
@@ -270,7 +270,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
                         <button
                             onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
-                            className="bg-white/5 backdrop-blur-xl border border-white/20 hover:bg-white/10 hover:border-white/30 text-white px-10 py-5 rounded-2xl text-lg font-bold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 flex items-center gap-2"
+                            className="bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/20 hover:bg-gray-50 dark:hover:bg-white/10 hover:border-emerald-300 dark:hover:border-white/30 text-gray-800 dark:text-white px-10 py-5 rounded-2xl text-lg font-bold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 flex items-center gap-2"
                         >
                             {t.hero.secondary}
                         </button>
@@ -283,11 +283,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                             return (
                                 <div
                                     key={idx}
-                                    className="group bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:bg-white/10 hover:border-emerald-500/30 transition-all duration-300 hover:scale-105 hover:shadow-[0_0_30px_rgba(16,185,129,0.2)]"
+                                    className="group bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-2xl p-6 hover:bg-gray-50 dark:hover:bg-white/10 hover:border-emerald-500/30 transition-all duration-300 hover:scale-105 hover:shadow-lg dark:hover:shadow-[0_0_30px_rgba(16,185,129,0.2)]"
                                 >
-                                    <Icon size={20} className="text-emerald-400 mb-2 mx-auto opacity-60 group-hover:opacity-100 transition-opacity" />
-                                    <div className="text-3xl md:text-4xl font-black bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-1">{stat.value}</div>
-                                    <div className="text-sm text-gray-500 font-medium">{stat.label}</div>
+                                    <Icon size={20} className="text-emerald-600 dark:text-emerald-400 mb-2 mx-auto opacity-60 group-hover:opacity-100 transition-opacity" />
+                                    <div className="text-3xl md:text-4xl font-black bg-gradient-to-r from-gray-800 to-gray-600 dark:from-white dark:to-gray-300 bg-clip-text text-transparent mb-1">{stat.value}</div>
+                                    <div className="text-sm text-gray-600 dark:text-gray-500 font-medium">{stat.label}</div>
                                 </div>
                             );
                         })}
@@ -296,7 +296,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
                 {/* Scroll indicator */}
                 <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
-                    <div className="w-6 h-10 border-2 border-white/20 rounded-full flex justify-center pt-2">
+                    <div className="w-6 h-10 border-2 border-gray-300 dark:border-white/20 rounded-full flex justify-center pt-2">
                         <div className="w-1.5 h-3 bg-emerald-400 rounded-full animate-pulse" />
                     </div>
                 </div>
@@ -310,10 +310,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                             <Sparkles size={18} className="text-emerald-400" />
                             <span className="text-emerald-400 font-bold text-sm uppercase tracking-wider">Features</span>
                         </div>
-                        <h3 className="text-4xl md:text-5xl font-black text-white mb-4">
+                        <h3 className="text-4xl md:text-5xl font-black text-gray-900 dark:text-white mb-4">
                             {language === 'en' ? 'Everything You Need' : 'सब कुछ जो चाहिए'}
                         </h3>
-                        <p className="text-gray-500 text-lg max-w-xl mx-auto">
+                        <p className="text-gray-600 dark:text-gray-500 text-lg max-w-xl mx-auto">
                             {language === 'en' ? 'Powerful tools to connect workers and employers' : 'कामगारों और मालिकों को जोड़ने के शक्तिशाली उपकरण'}
                         </p>
                     </div>
@@ -326,7 +326,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                                 <div
                                     key={idx}
                                     onMouseEnter={() => setActiveFeature(idx)}
-                                    className={`relative bg-white/5 backdrop-blur-xl border rounded-2xl p-6 transition-all duration-500 cursor-pointer overflow-hidden ${isActive ? 'border-emerald-500/50 scale-105 shadow-[0_0_40px_rgba(16,185,129,0.2)]' : 'border-white/10 hover:border-white/20'
+                                    className={`relative bg-white dark:bg-white/5 backdrop-blur-xl border rounded-2xl p-6 transition-all duration-500 cursor-pointer overflow-hidden ${isActive ? 'border-emerald-500/50 scale-105 shadow-lg dark:shadow-[0_0_40px_rgba(16,185,129,0.2)]' : 'border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20'
                                         }`}
                                 >
                                     {/* Gradient overlay on active */}
@@ -337,8 +337,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                                     <div className={`relative w-14 h-14 rounded-xl flex items-center justify-center mb-5 bg-gradient-to-br ${feature.color} shadow-lg`}>
                                         <Icon size={26} className="text-white" />
                                     </div>
-                                    <h4 className="text-xl font-bold text-white mb-2 relative">{feature.title}</h4>
-                                    <p className="text-gray-400 text-sm relative">{feature.description}</p>
+                                    <h4 className="text-xl font-bold text-gray-900 dark:text-white mb-2 relative">{feature.title}</h4>
+                                    <p className="text-gray-600 dark:text-gray-400 text-sm relative">{feature.description}</p>
                                 </div>
                             );
                         })}
@@ -350,10 +350,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <section className="py-20 px-6">
                 <div className="max-w-6xl mx-auto">
                     <div className="text-center mb-12">
-                        <h3 className="text-3xl md:text-4xl font-black text-white mb-4">
+                        <h3 className="text-3xl md:text-4xl font-black text-gray-900 dark:text-white mb-4">
                             {language === 'en' ? 'Popular Categories' : 'लोकप्रिय श्रेणियाँ'}
                         </h3>
-                        <p className="text-gray-500 text-lg">
+                        <p className="text-gray-600 dark:text-gray-500 text-lg">
                             {language === 'en' ? 'Find work in various fields' : 'विभिन्न क्षेत्रों में काम खोजें'}
                         </p>
                     </div>
@@ -362,12 +362,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                         {t.categories.map((category, idx) => (
                             <div
                                 key={idx}
-                                className="group bg-white/5 backdrop-blur-xl border border-white/10 rounded-xl p-5 text-center hover:bg-white/10 hover:border-emerald-500/30 transition-all duration-300 hover:scale-105 cursor-pointer"
+                                className="group bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-xl p-5 text-center hover:bg-gray-50 dark:hover:bg-white/10 hover:border-emerald-500/30 transition-all duration-300 hover:scale-105 cursor-pointer"
                             >
                                 <div className="text-4xl mb-3 group-hover:scale-125 transition-transform duration-300">
                                     {['🌾', '🏗️', '🔧', '⚡', '🚗', '🧹'][idx % 6]}
                                 </div>
-                                <div className="text-sm font-bold text-gray-300">{category}</div>
+                                <div className="text-sm font-bold text-gray-700 dark:text-gray-300">{category}</div>
                             </div>
                         ))}
                     </div>
@@ -377,12 +377,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {/* How It Works */}
             <section className="py-24 px-6 relative overflow-hidden">
                 {/* Gradient background */}
-                <div className="absolute inset-0 bg-gradient-to-r from-emerald-900/20 via-green-900/30 to-emerald-900/20" />
+                <div className="absolute inset-0 bg-gradient-to-r from-emerald-100 via-green-100 to-emerald-100 dark:from-emerald-900/20 dark:via-green-900/30 dark:to-emerald-900/20" />
 
                 <div className="max-w-6xl mx-auto relative">
                     <div className="text-center mb-16">
-                        <h3 className="text-4xl md:text-5xl font-black text-white mb-3">{t.howItWorks.title}</h3>
-                        <p className="text-emerald-400/80 text-lg">{t.howItWorks.subtitle}</p>
+                        <h3 className="text-4xl md:text-5xl font-black text-gray-900 dark:text-white mb-3">{t.howItWorks.title}</h3>
+                        <p className="text-emerald-600 dark:text-emerald-400/80 text-lg">{t.howItWorks.subtitle}</p>
                     </div>
 
                     <div className="grid md:grid-cols-4 gap-8 relative">
@@ -397,12 +397,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                                         <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-green-500 rounded-2xl flex items-center justify-center shadow-[0_0_40px_rgba(16,185,129,0.3)] transform rotate-3 hover:rotate-0 transition-transform duration-300">
                                             <Icon size={32} className="text-white" />
                                         </div>
-                                        <div className="absolute -top-2 -right-2 w-8 h-8 bg-gray-900 border-2 border-emerald-500 rounded-full flex items-center justify-center text-sm font-black text-emerald-400">
+                                        <div className="absolute -top-2 -right-2 w-8 h-8 bg-white dark:bg-gray-900 border-2 border-emerald-500 rounded-full flex items-center justify-center text-sm font-black text-emerald-600 dark:text-emerald-400">
                                             {idx + 1}
                                         </div>
                                     </div>
-                                    <h4 className="text-xl font-bold text-white mb-2">{step.title}</h4>
-                                    <p className="text-gray-400 text-sm">{step.desc}</p>
+                                    <h4 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{step.title}</h4>
+                                    <p className="text-gray-600 dark:text-gray-400 text-sm">{step.desc}</p>
                                 </div>
                             );
                         })}
@@ -413,7 +413,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {/* Testimonial - Dark glass */}
             <section className="py-20 px-6">
                 <div className="max-w-4xl mx-auto">
-                    <div className="relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 md:p-12">
+                    <div className="relative bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-3xl p-8 md:p-12 shadow-lg dark:shadow-none">
                         {/* Quote icon */}
                         <div className="absolute -top-5 left-8">
                             <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-green-500 rounded-xl flex items-center justify-center shadow-lg">
@@ -427,7 +427,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                                     <Star key={star} size={22} className="text-yellow-400" fill="#facc15" />
                                 ))}
                             </div>
-                            <p className="text-xl md:text-2xl text-gray-300 italic font-medium leading-relaxed">
+                            <p className="text-xl md:text-2xl text-gray-700 dark:text-gray-300 italic font-medium leading-relaxed">
                                 "{t.testimonial.quote}"
                             </p>
                         </div>
@@ -437,8 +437,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                                 {t.testimonial.author[0]}
                             </div>
                             <div>
-                                <div className="font-bold text-white text-lg">{t.testimonial.author}</div>
-                                <div className="text-emerald-400 text-sm">{t.testimonial.role}</div>
+                                <div className="font-bold text-gray-900 dark:text-white text-lg">{t.testimonial.author}</div>
+                                <div className="text-emerald-600 dark:text-emerald-400 text-sm">{t.testimonial.role}</div>
                             </div>
                         </div>
                     </div>
@@ -453,10 +453,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
 
                 <div className="max-w-4xl mx-auto text-center relative">
-                    <h3 className="text-4xl md:text-5xl lg:text-6xl font-black text-white mb-6">
+                    <h3 className="text-4xl md:text-5xl lg:text-6xl font-black text-gray-900 dark:text-white mb-6">
                         {language === 'en' ? 'Ready to Get Started?' : 'शुरू करने के लिए तैयार?'}
                     </h3>
-                    <p className="text-xl text-gray-400 mb-10 max-w-xl mx-auto">
+                    <p className="text-xl text-gray-600 dark:text-gray-400 mb-10 max-w-xl mx-auto">
                         {language === 'en'
                             ? 'Join thousands of workers and employers on CHOWKAR today.'
                             : 'आज ही CHOWKAR पर हजारों कामगारों और मालिकों से जुड़ें।'}
