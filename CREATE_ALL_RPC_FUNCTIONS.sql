@@ -395,6 +395,8 @@ $$;
 CREATE OR REPLACE FUNCTION archive_chat(p_job_id UUID)
 RETURNS VOID
 LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
 AS $$
 BEGIN
   -- TODO: Implement chat archiving if needed
@@ -405,6 +407,8 @@ $$;
 CREATE OR REPLACE FUNCTION unarchive_chat(p_job_id UUID)
 RETURNS VOID
 LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
 AS $$
 BEGIN
   -- TODO: Implement chat un archiving if needed

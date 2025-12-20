@@ -405,20 +405,36 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       // Check for duplicates BEFORE updating state
       setNotifications(prev => {
-        // Check by ID
+        // Check by ID (exact match)
         if (prev.some(n => n.id === newNotif.id)) {
           console.log('[Realtime] Duplicate notification by ID, skipping');
           return prev;
         }
-        // Check by content + time window (5 seconds) to catch broadcast/postgres_changes duplicates
+
+        // Check by content + time window (30 seconds) to catch broadcast/postgres_changes duplicates
+        // This handles the case where broadcast arrives first with "n123456" ID
+        // and then postgres_changes arrives with actual DB ID "uuid-xxx"
         const isDuplicateContent = prev.some(n =>
           n.title === newNotif.title &&
           n.message === newNotif.message &&
           n.relatedJobId === newNotif.relatedJobId &&
-          Math.abs(n.timestamp - newNotif.timestamp) < 5000
+          Math.abs(n.timestamp - newNotif.timestamp) < 30000 // 30 seconds window
         );
         if (isDuplicateContent) {
-          console.log('[Realtime] Duplicate notification by content, skipping');
+          console.log('[Realtime] Duplicate notification by content (within 30s window), skipping');
+          return prev;
+        }
+
+        // Extra check: Skip if we already have a notification with same title+message+job in the last minute
+        // This catches edge cases where timestamps differ significantly
+        const veryRecentDuplicate = prev.some(n =>
+          n.title === newNotif.title &&
+          n.message === newNotif.message &&
+          n.relatedJobId === newNotif.relatedJobId &&
+          (Date.now() - n.timestamp) < 60000 // Within last minute
+        );
+        if (veryRecentDuplicate) {
+          console.log('[Realtime] Found very recent duplicate (within 1 min), skipping');
           return prev;
         }
 
