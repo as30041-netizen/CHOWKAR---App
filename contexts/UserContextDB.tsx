@@ -358,6 +358,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setMessages([]);
       console.log('[Data] All user data loaded successfully (parallel fetch)');
 
+
       // Register for push notifications on native platforms (don't await this)
       if (isPushSupported()) {
         registerPushNotifications(user.id).then(({ success, token, error }) => {
@@ -368,6 +369,22 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
         });
       }
+
+      // Request LocalNotifications permission (required for Android)
+      if (Capacitor.isNativePlatform()) {
+        LocalNotifications.checkPermissions().then(permStatus => {
+          if (permStatus.display === 'prompt' || permStatus.display === 'prompt-with-rationale') {
+            LocalNotifications.requestPermissions().then(result => {
+              console.log('[LocalNotification] Permission result:', result.display);
+            });
+          } else if (permStatus.display === 'granted') {
+            console.log('[LocalNotification] Permission already granted');
+          } else {
+            console.warn('[LocalNotification] Permission denied');
+          }
+        }).catch(err => console.error('[LocalNotification] Permission check failed:', err));
+      }
+
 
     } catch (error) {
       console.error('[Data] Error fetching user data:', error);
@@ -388,11 +405,9 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       const relatedJobId = notifData.related_job_id || notifData.relatedJobId || undefined;
 
-      // SUPPRESS: If user is actively viewing this job, don't show notification
-      if (relatedJobId && activeJobIdRef.current === relatedJobId) {
-        console.log('[Realtime] Suppressing notification - user is viewing this job:', relatedJobId);
-        return; // Silently ignore - user already sees the content
-      }
+      // Note: No longer suppressing notifications when app is open.
+      // Industry best practice: always show in-app notification for awareness
+      // User can dismiss or tap to navigate
 
       const newNotif: Notification = {
         id: notifData.id || `n${Date.now()}`,
@@ -446,8 +461,9 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setTimeout(() => {
             showAlert(`${newNotif.title}: ${newNotif.message}`, 'info');
 
-            // Trigger System Tray Notification (Native Only)
-            if (Capacitor.isNativePlatform()) {
+            // Trigger System Tray Notification (Native Only, Background Only)
+            // Only schedule push notification if app is in background
+            if (Capacitor.isNativePlatform() && shouldSendPushNotification()) {
               LocalNotifications.schedule({
                 notifications: [{
                   title: newNotif.title,
@@ -458,7 +474,9 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                   attachments: undefined,
                   actionTypeId: "",
                   extra: {
-                    jobId: newNotif.relatedJobId
+                    jobId: newNotif.relatedJobId,
+                    type: newNotif.type,
+                    notificationId: newNotif.id
                   }
                 }]
               }).catch(err => console.error('[LocalNotification] Error:', err));
@@ -505,6 +523,38 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       supabase.removeChannel(channel);
     };
   }, [isLoggedIn, user.id]);
+
+  // Listen for notification taps (LocalNotifications)
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    LocalNotifications.addListener('localNotificationActionPerformed', (notificationAction) => {
+      console.log('[Tap] Notification tapped:', notificationAction);
+
+      const { jobId, type, notificationId } = notificationAction.notification.extra || {};
+
+      if (jobId) {
+        // Store navigation intent for App.tsx to handle
+        localStorage.setItem('chowkar_pending_navigation', JSON.stringify({
+          jobId,
+          type,
+          timestamp: Date.now()
+        }));
+
+        // Mark as read
+        if (notificationId) {
+          deleteNotification(notificationId);
+        }
+
+        console.log('[Tap] Stored pending navigation for jobId:', jobId);
+      }
+    });
+
+    return () => {
+      LocalNotifications.removeAllListeners();
+    };
+  }, []);
+
 
   // Real-time subscription for chat messages AND Notifications
   useEffect(() => {

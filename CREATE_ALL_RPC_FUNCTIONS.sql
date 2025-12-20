@@ -521,24 +521,58 @@ BEGIN
     AND status = 'PENDING'
     AND (v_accepted_worker_id IS NULL OR worker_id != v_accepted_worker_id);
   
-  -- NOTIFY ACCEPTED WORKER SEPARATELY (if job was in progress)
+  -- REFUND WORKER AND NOTIFY (if job was IN_PROGRESS)
   IF v_accepted_worker_id IS NOT NULL THEN
-    INSERT INTO notifications (user_id, type, title, message, related_job_id, read, created_at)
-    VALUES (
-      v_accepted_worker_id,
-      'WARNING',
-      'Job Cancelled 😔',
-      'Unfortunately, "' || v_job.title || '" has been cancelled by the employer. Any applicable refunds will be processed.',
-      p_job_id,
-      false,
-      NOW()
-    );
-    RAISE NOTICE '✅ Cancellation notification sent to accepted worker %', v_accepted_worker_id;
+    DECLARE
+      v_worker_paid BOOLEAN;
+      v_chat_fee INTEGER;
+    BEGIN
+      -- Fetch connection fee from app config
+      SELECT COALESCE(value::INTEGER, 50) INTO v_chat_fee 
+      FROM app_config WHERE key = 'connection_fee';
+      
+      -- Check if worker paid
+      SELECT connection_payment_status = 'PAID' INTO v_worker_paid
+      FROM bids WHERE id = v_job.accepted_bid_id;
+      
+      IF v_worker_paid THEN
+        -- Refund to wallet
+        UPDATE profiles
+        SET wallet_balance = wallet_balance + v_chat_fee
+        WHERE id = v_accepted_worker_id;
+        
+        v_refund_amount := v_chat_fee;
+        
+        -- Send notification with actual refund amount
+        INSERT INTO notifications (user_id, type, title, message, related_job_id, read, created_at)
+        VALUES (
+          v_accepted_worker_id,
+          'WARNING',
+          'Job Cancelled ⚠️',
+          '"' || v_job.title || '" was cancelled. Your ₹' || v_chat_fee || ' chat fee has been refunded to your wallet.',
+          p_job_id,
+          false,
+          NOW()
+        );
+        
+        RAISE NOTICE '✅ Refunded ₹% to worker %', v_chat_fee, v_accepted_worker_id;
+      ELSE
+        -- Worker didn't pay, just notify
+        INSERT INTO notifications (user_id, type, title, message, related_job_id, read, created_at)
+        VALUES (
+          v_accepted_worker_id,
+          'WARNING',
+          'Job Cancelled ⚠️',
+          '"' || v_job.title || '" was cancelled by the employer.',
+          p_job_id,
+          false,
+          NOW()
+        );
+      END IF;
+    END;
   END IF;
   
-  RAISE NOTICE '✅ Cancellation notifications sent to all bidders for job %', p_job_id;
-  
-  -- TODO: Calculate refund based on status and implement refund logic
+  RAISE NOTICE '✅ Cancellation notifications sent to all parties for job %', p_job_id;
   
   v_result := json_build_object(
     'success', true,

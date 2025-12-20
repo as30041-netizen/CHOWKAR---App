@@ -101,17 +101,41 @@ $$;
 DROP TRIGGER IF EXISTS trigger_notify_on_chat_message ON chat_messages;
 CREATE TRIGGER trigger_notify_on_chat_message AFTER INSERT ON chat_messages FOR EACH ROW EXECUTE FUNCTION notify_on_chat_message();
 
--- Trigger: Counter Offer -> Notify Worker
+-- Trigger: Counter Offer -> Notify the OTHER party (not the one who countered)
 CREATE OR REPLACE FUNCTION notify_on_counter_offer()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE 
   v_job RECORD;
+  v_last_entry JSONB;
+  v_last_by TEXT;
+  v_recipient_id UUID;
+  v_counter_name TEXT;
 BEGIN
-  -- Notify if amount changed or history updated
+  -- Only proceed if amount or negotiation history changed
   IF (NEW.amount != OLD.amount OR NEW.negotiation_history != OLD.negotiation_history) AND NEW.status = 'PENDING' THEN
      SELECT * INTO v_job FROM jobs WHERE id = NEW.job_id;
+     
+     -- Get the LAST entry from negotiation_history to see WHO made the counter
+     v_last_entry := NEW.negotiation_history->-1;
+     v_last_by := v_last_entry->>'by';  -- Field is 'by', not 'role'
+     
+     -- Determine who to notify (the opposite party)
+     IF v_last_by = 'POSTER' THEN
+       -- Poster made the counter -> Notify WORKER
+       v_recipient_id := NEW.worker_id;
+       v_counter_name := 'Customer';
+     ELSIF v_last_by = 'WORKER' THEN
+       -- Worker made the counter -> Notify POSTER
+       v_recipient_id := v_job.poster_id;
+       SELECT name INTO v_counter_name FROM profiles WHERE id = NEW.worker_id;
+     ELSE
+       -- Unknown role, skip
+       RETURN NEW;
+     END IF;
+     
+     -- Send notification
      INSERT INTO notifications (user_id, type, title, message, related_job_id, read, created_at)
-     VALUES (NEW.worker_id, 'INFO', 'Counter Offer', 'Customer offered ₹' || NEW.amount || ' for "' || v_job.title || '"', NEW.job_id, false, NOW());
+     VALUES (v_recipient_id, 'INFO', 'Counter Offer 💬', COALESCE(v_counter_name, 'Someone') || ' countered with ₹' || NEW.amount || ' for "' || v_job.title || '"', NEW.job_id, false, NOW());
   END IF;
   RETURN NEW;
 END;

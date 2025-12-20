@@ -117,6 +117,55 @@ const AppContent: React.FC = () => {
     }
   }, [isLoggedIn, isAuthLoading, user]);
 
+  // Handle pending notification navigation (from LocalNotifications tap)
+  useEffect(() => {
+    if (!isLoggedIn || jobs.length === 0) return;
+
+    const pending = localStorage.getItem('chowkar_pending_navigation');
+    if (!pending) return;
+
+    try {
+      const { jobId, type, timestamp } = JSON.parse(pending);
+
+      // Ignore old navigation intents (>5 minutes)
+      if (Date.now() - timestamp > 300000) {
+        localStorage.removeItem('chowkar_pending_navigation');
+        return;
+      }
+
+      console.log('[Navigation] Processing pending navigation:', { jobId, type });
+
+      const job = jobs.find(j => j.id === jobId);
+      if (!job) {
+        console.warn('[Navigation] Job not found:', jobId);
+        localStorage.removeItem('chowkar_pending_navigation');
+        return;
+      }
+
+      // Clear the pending navigation
+      localStorage.removeItem('chowkar_pending_navigation');
+
+      // Mark notifications as read for this job
+      markNotificationsAsReadForJob(jobId);
+      setActiveJobId(jobId);
+
+      // Navigate based on type
+      if (type === 'bid_received' || type === 'counter_offer' || type === 'INFO') {
+        // Poster: Open ViewBidsModal
+        setViewBidsModal({ isOpen: true, job });
+      } else if (type === 'bid_accepted' || type === 'SUCCESS') {
+        // Worker: Open job details or chat
+        setSelectedJob(job);
+      } else if (type === 'chat_message') {
+        // Open chat
+        handleChatOpen(job);
+      }
+    } catch (err) {
+      console.error('[Navigation] Error processing pending navigation:', err);
+      localStorage.removeItem('chowkar_pending_navigation');
+    }
+  }, [isLoggedIn, jobs]);
+
   // Push notification tap handler (deep linking)
   useEffect(() => {
     if (!isLoggedIn || !isPushSupported()) return;

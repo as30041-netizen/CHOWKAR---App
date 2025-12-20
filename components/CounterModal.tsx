@@ -57,9 +57,9 @@ export const CounterModal: React.FC<CounterModalProps> = ({ isOpen, onClose, bid
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose}></div>
-            <div className="bg-white w-full max-w-sm rounded-3xl p-6 relative z-10 animate-pop">
-                <h3 className="font-bold text-lg mb-4">{t.counterOffer}</h3>
-                <input type="number" value={counterInputAmount} onChange={(e) => setCounterInputAmount(e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 font-bold text-2xl mb-4 text-center" />
+            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-3xl p-6 relative z-10 animate-pop">
+                <h3 className="font-bold text-lg mb-4 dark:text-white">{t.counterOffer}</h3>
+                <input type="number" value={counterInputAmount} onChange={(e) => setCounterInputAmount(e.target.value)} className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 font-bold text-2xl mb-4 text-center text-gray-900 dark:text-white" />
                 <button
                     onClick={handleSendCounter}
                     className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg"
