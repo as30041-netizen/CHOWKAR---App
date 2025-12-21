@@ -331,7 +331,8 @@ const AppContent: React.FC = () => {
             await supabase.from('bids').update({ connection_payment_status: 'PAID' }).eq('id', acceptedBid.id);
 
             // Notify poster
-            await addNotification(job.posterId, "Chat is now active", `Chat unlocked for "${job.title}"!`, "SUCCESS", job.id);
+            // DB trigger will handle notification to poster
+            // await addNotification(job.posterId, "Chat is now active", `Chat unlocked for "${job.title}"!`, "SUCCESS", job.id);
             showAlert(language === 'en' ? `Chat unlocked! ₹${connectionFee} deducted from wallet.` : `चैट अनलॉक! वॉलेट से ₹${connectionFee} काटे गए।`, 'success');
 
             // Open chat
@@ -450,7 +451,8 @@ const AppContent: React.FC = () => {
         });
 
         try {
-          await addNotification(acceptedBid.workerId, "Job Completed", `Job "${currentJob.title}" marked as completed!`, 'SUCCESS', currentJob.id);
+          // DB trigger on Job Completion will handle this
+          // await addNotification(acceptedBid.workerId, "Job Completed", `Job "${currentJob.title}" marked as completed!`, 'SUCCESS', currentJob.id);
         } catch (notifErr) {
           console.warn('[App] Failed to send completion notification:', notifErr);
         }
@@ -521,6 +523,8 @@ const AppContent: React.FC = () => {
         }
 
         // 3. Notify Poster with clear context - no mention of payment!
+        // DB triggers on bids table will handle notifications
+        /*
         await addNotification(
           job.posterId,
           "Worker Confirmed! 🎉",
@@ -528,6 +532,7 @@ const AppContent: React.FC = () => {
           "SUCCESS",
           jobId
         );
+        */
         // Note: addNotification now handles push automatically
 
         // 4. Show worker their payment modal to unlock chat
@@ -540,7 +545,8 @@ const AppContent: React.FC = () => {
 
         const updatedJob = { ...job, bids: job.bids.filter(b => b.id !== bidId) };
         await updateJob(updatedJob);
-        await addNotification(job.posterId, "Offer Declined", `${bid.workerName} declined your offer for "${job.title}". You can try other workers!`, "WARNING", jobId);
+        // DB triggers on bids table will handle notifications
+        // await addNotification(job.posterId, "Offer Declined", `${bid.workerName} declined your offer for "${job.title}". You can try other workers!`, "WARNING", jobId);
         // Note: addNotification now handles push automatically
 
         showAlert(language === 'en' ? 'Counter declined. Your bid has been withdrawn.' : 'प्रस्ताव अस्वीकार। आपकी बोली वापस ले ली गई।', 'info');
@@ -548,7 +554,8 @@ const AppContent: React.FC = () => {
       } else if (action === 'COUNTER' && amount) {
         const updatedBid = { ...bid, amount, negotiationHistory: [...(bid.negotiationHistory || []), { amount, by: UserRole.WORKER, timestamp: Date.now() }] };
         await updateBid(updatedBid);
-        await addNotification(job.posterId, "New Counter Offer 💰", `${bid.workerName} proposed ₹${amount} for "${job.title}". Tap to respond!`, "INFO", jobId);
+        // DB triggers on bids table will handle notifications
+        // await addNotification(job.posterId, "New Counter Offer 💰", `${bid.workerName} proposed ₹${amount} for "${job.title}". Tap to respond!`, "INFO", jobId);
         // Note: addNotification now handles push automatically
       }
     } catch (err: any) {
@@ -566,6 +573,8 @@ const AppContent: React.FC = () => {
       await updateJob(updatedJob);
 
       // Notify poster that worker withdrew their bid
+      // DB trigger for bid withdrawal (rejection/deletion) should handle this
+      /*
       if (bid) {
         await addNotification(
           job.posterId,
@@ -574,8 +583,8 @@ const AppContent: React.FC = () => {
           "INFO",
           jobId
         );
-        // Note: addNotification now handles push automatically
       }
+      */  // Note: addNotification now handles push automatically
 
       showAlert(language === 'en' ? 'Bid withdrawn successfully' : 'बोली सफलतापूर्वक वापस ली गई', 'info');
     } catch { showAlert('Error withdrawing bid', 'error'); }
@@ -635,6 +644,8 @@ const AppContent: React.FC = () => {
       if (error) throw error;
 
       // Notify poster that chat is now unlocked - DO NOT mention payment
+      // DB trigger on bids connection_payment_status will handle this
+      /*
       const acceptedBid = workerPaymentModal.job.bids.find(b => b.id === workerPaymentModal.bidId);
       const workerName = acceptedBid?.workerName || 'Worker';
       await addNotification(
@@ -644,6 +655,7 @@ const AppContent: React.FC = () => {
         "SUCCESS",
         workerPaymentModal.job.id
       );
+      */
 
       // Close payment modal and open chat
       const job = workerPaymentModal.job;
