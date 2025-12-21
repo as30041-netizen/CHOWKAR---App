@@ -33,42 +33,44 @@ export const FilterModal: React.FC<FilterModalProps> = ({ isOpen, onClose, onApp
     return (
         <div className="fixed inset-0 bg-black/60 z-[60] flex items-end sm:items-center justify-center pointer-events-none">
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-auto" onClick={onClose}></div>
-            <div className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-6 pointer-events-auto animate-slide-up pb-safe relative">
+            <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-t-3xl sm:rounded-3xl p-6 pointer-events-auto animate-slide-up pb-safe relative transition-colors">
                 <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                        <SlidersHorizontal size={20} className="text-emerald-600" />
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <SlidersHorizontal size={20} className="text-emerald-600 dark:text-emerald-400" />
                         {language === 'en' ? 'Filters' : 'फिल्टर'}
                     </h3>
-                    <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100">
-                        <X size={20} className="text-gray-500" />
+                    <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
+                        <X size={20} className="text-gray-500 dark:text-gray-400" />
                     </button>
                 </div>
 
                 <div className="space-y-6">
                     {/* Location Filter */}
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
                             <MapPin size={16} /> {t.location}
                         </label>
                         <input
                             type="text"
-                            placeholder="e.g. Mumbai, Delhi"
-                            className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 outline-none focus:border-emerald-500 transition-colors"
+                            placeholder={language === 'en' ? "e.g. Mumbai, Delhi" : "जैसे मुंबई, दिल्ली"}
+                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 outline-none focus:border-emerald-500 dark:focus:border-emerald-400 transition-colors text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                             value={location}
                             onChange={(e) => setLocation(e.target.value)}
+                            maxLength={100}
                         />
                     </div>
 
                     {/* Budget Filter */}
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
-                            <IndianRupee size={16} /> {t.budget} (Min)
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                            <IndianRupee size={16} /> {t.budget} ({language === 'en' ? 'Min' : 'न्यूनतम'})
                         </label>
                         <input
                             type="number"
                             inputMode="numeric"
-                            placeholder="e.g. 1000"
-                            className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 outline-none focus:border-emerald-500 transition-colors"
+                            placeholder={language === 'en' ? "e.g. 1000" : "जैसे 1000"}
+                            min="0"
+                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 outline-none focus:border-emerald-500 dark:focus:border-emerald-400 transition-colors text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                             value={minBudget}
                             onChange={(e) => setMinBudget(e.target.value)}
                         />
@@ -76,7 +78,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({ isOpen, onClose, onApp
 
                     {/* Distance Filter */}
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
                             <Navigation size={16} /> {language === 'en' ? 'Distance (km)' : 'दूरी (कि.मी.)'}
                         </label>
                         <div className="flex items-center gap-4">
@@ -84,11 +86,11 @@ export const FilterModal: React.FC<FilterModalProps> = ({ isOpen, onClose, onApp
                                 type="range"
                                 min="1"
                                 max="50"
-                                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-emerald-600"
+                                className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-emerald-600"
                                 value={maxDistance || 50}
                                 onChange={(e) => setMaxDistance(e.target.value)}
                             />
-                            <span className="text-sm font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-lg">
+                            <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1 rounded-lg">
                                 {maxDistance || '50'} km
                             </span>
                         </div>
@@ -97,7 +99,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({ isOpen, onClose, onApp
                     <div className="flex gap-3 pt-4">
                         <button
                             onClick={handleReset}
-                            className="flex-1 bg-gray-100 text-gray-700 py-3.5 rounded-xl font-bold hover:bg-gray-200 transition-colors"
+                            className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-3.5 rounded-xl font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                         >
                             {language === 'en' ? 'Reset' : 'रीसेट'}
                         </button>

@@ -294,6 +294,7 @@ ORDER BY created_at DESC
 | All filters client-side | Medium | Acceptable | Works for current scale, monitor for growth |
 | ~~No saved searches~~ | ~~Low~~ | N/A | Not needed per user |
 | Distance requires GPS | Low | Acceptable | Falls back gracefully (shows no distance) |
+| ~~No min on budget filter input~~ | ~~Low~~ | ✅ FIXED | Added min="0" |
 
 ### Fixes Applied (2025-12-21):
 

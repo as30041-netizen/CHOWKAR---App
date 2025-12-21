@@ -470,7 +470,17 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                 {isEditing ? (language === 'en' ? 'Edit Job Details' : 'नौकरी विवरण संपादित करें') : t.postJobHeader}
             </h2>
             <div className="space-y-5 bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 transition-colors">
-                <div><label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">{t.jobTitleLabel}</label><input type="text" enterKeyHint="next" className="w-full appearance-none bg-white dark:bg-gray-800 text-black dark:text-white border border-gray-200 dark:border-gray-700 rounded-xl p-3.5 outline-none placeholder-gray-400 dark:placeholder-gray-500 transition-colors" value={newJobTitle} onChange={(e) => setNewJobTitle(e.target.value)} /></div>
+                <div>
+                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">{t.jobTitleLabel}</label>
+                    <input
+                        type="text"
+                        enterKeyHint="next"
+                        maxLength={100}
+                        className="w-full appearance-none bg-white dark:bg-gray-800 text-black dark:text-white border border-gray-200 dark:border-gray-700 rounded-xl p-3.5 outline-none placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
+                        value={newJobTitle}
+                        onChange={(e) => setNewJobTitle(e.target.value)}
+                    />
+                </div>
                 <div>
                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">{t.categoryLabel}</label>
                     <div className="relative">
@@ -594,7 +604,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                         </button>
                     </div>
                     <div className="relative">
-                        <input type="number" inputMode="numeric" pattern="[0-9]*" className="w-full appearance-none bg-white dark:bg-gray-800 text-black dark:text-white border border-gray-200 dark:border-gray-700 rounded-xl p-3.5 outline-none font-bold placeholder-gray-400 dark:placeholder-gray-500 transition-colors" value={newJobBudget} onChange={(e) => setNewJobBudget(e.target.value)} />
+                        <input type="number" inputMode="numeric" pattern="[0-9]*" min="1" className="w-full appearance-none bg-white dark:bg-gray-800 text-black dark:text-white border border-gray-200 dark:border-gray-700 rounded-xl p-3.5 outline-none font-bold placeholder-gray-400 dark:placeholder-gray-500 transition-colors" value={newJobBudget} onChange={(e) => setNewJobBudget(e.target.value)} />
                         {isEstimating && (
                             <div className="absolute inset-0 bg-white dark:bg-gray-800 rounded-xl flex items-center px-3 border border-blue-200 dark:border-blue-800">
                                 <div className="h-6 w-32 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>

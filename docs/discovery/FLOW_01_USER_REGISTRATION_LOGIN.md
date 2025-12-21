@@ -353,6 +353,23 @@ if (isPushSupported()) {
 | No profile completion enforcement | Low | Users may have incomplete profiles |
 | No account deletion flow | Medium | GDPR/privacy consideration |
 | No multi-device session management | Low | Can't see/revoke other sessions |
+| ~~Profile photo stored as base64~~ | ~~Medium~~ | ✅ FIXED - Uploads to Supabase Storage |
+| ~~No input validation in EditProfile~~ | ~~Low~~ | ✅ FIXED - Added maxLength and required |
+
+### Fixes Applied (2025-12-21):
+
+1. **Profile Photo Upload to Supabase Storage**
+   - Added `uploadProfileImage()` function to `storageService.ts`
+   - Images compressed to 400px max and JPEG 80% quality
+   - Public URLs stored in database instead of base64
+   - Reduces database size and improves load times
+
+2. **EditProfileModal Improvements**
+   - Added `maxLength` to all text inputs (Name: 50, Phone: 15, Location: 100, Bio: 500)
+   - Added name required validation
+   - Added loading states for photo upload and save
+   - Added dark mode support
+   - Added Hindi translations for all labels/placeholders
 
 ---
 

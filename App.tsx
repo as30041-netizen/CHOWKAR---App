@@ -844,12 +844,27 @@ const AppContent: React.FC = () => {
             setShowNotifications(false);
             deleteNotification(notif.id);
             setActiveJobId(job.id);
-            const isAcceptedNotif = notif.title === "Bid Accepted" || notif.title === "Job Accepted" || notif.title === "Counter Accepted";
-            if (notif.title === t.notifBidReceived || notif.title === "New Bid") {
+
+            const title = (notif.title || "").toLowerCase();
+
+            // Match SQL Trigger Titles: 
+            // 'New Bid Received! 🔔', 'You Got the Job! 🎉', 'Counter Offer', 'Job Completed! 💰', 'Job Cancelled ⚠️'
+
+            if (title.includes("new bid") || title.includes("bid received")) {
               setViewBidsModal({ isOpen: true, job });
-            } else if (isAcceptedNotif && job.status === JobStatus.IN_PROGRESS) {
-              handleChatOpen(job);
-            } else if (notif.title === t.notifJobCompleted || notif.title === "Job Completed") {
+            }
+            else if (title.includes("counter")) {
+              setViewBidsModal({ isOpen: true, job });
+            }
+            else if (title.includes("you got the job") || title.includes("accepted")) {
+              if (job.status === JobStatus.IN_PROGRESS) {
+                handleChatOpen(job);
+              } else {
+                setSelectedJob(job);
+              }
+            }
+            else if (title.includes("job completed") || title.includes("complete")) {
+              // Trigger review if poster
               const acceptedBid = job.bids.find(b => b.id === job.acceptedBidId);
               if (user.id === job.posterId && acceptedBid) {
                 setReviewModalData({
@@ -859,19 +874,19 @@ const AppContent: React.FC = () => {
                   jobId: job.id
                 });
               } else {
-                handleChatOpen(job);
+                handleChatOpen(job); // Or just show details
               }
-            } else if (notif.title === t.notifCounterOffer || notif.title === "Counter Offer") {
-              if (user.id === job.posterId) {
-                setViewBidsModal({ isOpen: true, job });
-              } else {
-                setSelectedJob(job);
-              }
-            } else if (notif.title === "Bid Not Selected") {
+            }
+            else if (title.includes("review")) {
+              navigate('/profile');
+            }
+            else if (title.includes("cancelled") || title.includes("not selected")) {
               setSelectedJob(job);
-            } else if (job.status === JobStatus.IN_PROGRESS) {
+            }
+            else if (job.status === JobStatus.IN_PROGRESS) {
               handleChatOpen(job);
-            } else {
+            }
+            else {
               setSelectedJob(job);
             }
           }}

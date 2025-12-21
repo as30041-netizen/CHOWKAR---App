@@ -12,8 +12,12 @@ interface WalletViewProps {
 export const WalletView: React.FC<WalletViewProps> = ({ onShowBidHistory }) => {
   const { user, setUser, role, transactions, setTransactions, t } = useUser();
 
+  const [isLoading, setIsLoading] = React.useState(false);
+
   // TEST MODE: Add money to DB
   const handleAddMoney = async () => {
+    if (isLoading) return;
+    setIsLoading(true);
     try {
       const amountToAdd = 100;
 
@@ -44,9 +48,11 @@ export const WalletView: React.FC<WalletViewProps> = ({ onShowBidHistory }) => {
 
       setTransactions(prev => [newTx, ...prev]);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding money:', error);
       alert(`Failed to add money: ${error.message || JSON.stringify(error)}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -57,8 +63,8 @@ export const WalletView: React.FC<WalletViewProps> = ({ onShowBidHistory }) => {
         <p className="text-emerald-100 text-sm font-medium mb-1">{t.commissionCredits}</p>
         <h2 className="text-4xl font-bold mb-4">₹{user.walletBalance || 0}</h2>
         <div className="flex gap-2">
-          <button onClick={handleAddMoney} className="bg-white text-emerald-700 dark:bg-gray-900 dark:text-emerald-400 px-4 py-2 rounded-lg text-sm font-bold shadow-sm flex flex-col items-center leading-none py-1 flex-1 transition-colors">
-            <span>+ {t.addCredits}</span>
+          <button onClick={handleAddMoney} disabled={isLoading} className="bg-white text-emerald-700 dark:bg-gray-900 dark:text-emerald-400 px-4 py-2 rounded-lg text-sm font-bold shadow-sm flex flex-col items-center leading-none py-1 flex-1 transition-colors disabled:opacity-70">
+            <span>{isLoading ? '...' : `+ ${t.addCredits}`}</span>
             <span className="text-[8px] opacity-70 mt-0.5">(TEST MODE)</span>
           </button>
           <button disabled className="bg-emerald-700/50 dark:bg-black/20 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm flex flex-col items-center justify-center leading-none py-1 flex-1 opacity-60 cursor-not-allowed">

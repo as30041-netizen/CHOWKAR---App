@@ -93,31 +93,46 @@
 
 ---
 
-## Flow 4: Bidding (Worker) ⬜ PENDING
+## Flow 4: Bidding (Worker) ✅ COMPLETE
 
-### Questions to Answer
+> **Detailed Document**: [FLOW_04_BIDDING.md](./FLOW_04_BIDDING.md)
+
+### Questions & Answers
 
 | # | Question | Answer |
 |---|----------|--------|
-| 4.1 | What is required to place a bid? | |
-| 4.2 | Is there a minimum/maximum bid amount? | |
-| 4.3 | Can worker bid below the poster's budget? | |
-| 4.4 | Is a message required with bid? | |
-| 4.5 | Can worker edit their bid after submission? | |
-| 4.6 | Can worker withdraw their bid? When? | |
-| 4.7 | What happens when bid is submitted (DB, notifications)? | |
-| 4.8 | Can worker bid on multiple jobs simultaneously? | |
-| 4.9 | Is there a limit on bids per worker? | |
-| 4.10 | What status values exist for bids? | |
+| 4.1 | What is required to place a bid? | **Bid amount** (required, >0), **Message** (optional) |
+| 4.2 | Is there a minimum/maximum bid amount? | **Min: ₹1** (validated), **No max** (by design) |
+| 4.3 | Can worker bid below the poster's budget? | **Yes**, budget shown as reference only |
+| 4.4 | Is a message required with bid? | **No**, optional but can be AI-enhanced |
+| 4.5 | Can worker edit their bid after submission? | **No**, counter-offers are used for negotiation |
+| 4.6 | Can worker withdraw their bid? When? | **Yes**, only PENDING bids via withdraw button |
+| 4.7 | What happens when bid is submitted (DB, notifications)? | Insert to bids → Trigger `on_bid_created_notify` → Poster notified + push |
+| 4.8 | Can worker bid on multiple jobs simultaneously? | **Yes**, no limit across different jobs |
+| 4.9 | Is there a limit on bids per worker? | **One bid per job** (duplicate prevention added) |
+| 4.10 | What status values exist for bids? | PENDING, ACCEPTED, REJECTED (also WITHDRAWN, EXPIRED) |
 
 ### Diagram
 ```
-[Job Details] → [Place Bid Button] → [Bid Modal] → [Enter Amount + Message] → [Submit] → [Bid Created] → [Notify Poster]
+[Job Details] → [Place Bid Button] → [Bid Modal]
+                                         ↓
+                        [Shows Budget Reference: ₹X]
+                                         ↓
+                        [Enter Amount + Message]
+                                         ↓
+                        [Validate: No duplicate, Amount > 0]
+                                         ↓
+                        [Submit] → [Bid Created] → [Notify Poster]
+                                         ↓
+                        [JobCard shows: "Pending ₹X" + Withdraw]
 ```
+
 
 ---
 
-## Flow 5: Bid Review & Negotiation (Poster) ⬜ PENDING
+## Flow 5: Bid Review & Negotiation (Poster) ✅ COMPLETE
+
+> **See detailed documentation**: [FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md](./FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md)
 
 ### Questions to Answer
 
@@ -143,7 +158,9 @@
 
 ---
 
-## Flow 6: Counter-Offer Response (Worker) ⬜ PENDING
+## Flow 6: Counter-Offer Response (Worker) ✅ COMPLETE
+
+> **See detailed documentation**: [FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md](./FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md)
 
 ### Questions to Answer
 
@@ -165,7 +182,9 @@
 
 ---
 
-## Flow 7: Bid Acceptance & Job Start ⬜ PENDING
+## Flow 7: Bid Acceptance & Job Start ✅ COMPLETE
+
+> **See detailed documentation**: [FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md](./FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md)
 
 ### Questions to Answer
 
@@ -187,7 +206,9 @@
 
 ---
 
-## Flow 8: Chat Unlock (Worker) ⬜ PENDING
+## Flow 8: Chat Unlock (Worker) ✅ COMPLETE
+
+> **See detailed documentation**: [FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md](./FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md)
 
 ### Questions to Answer
 
@@ -211,7 +232,9 @@
 
 ---
 
-## Flow 9: Chat & Communication ⬜ PENDING
+## Flow 9: Chat & Communication ✅ COMPLETE
+
+> **See detailed documentation**: [FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md](./FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md)
 
 ### Questions to Answer
 
@@ -235,7 +258,9 @@
 
 ---
 
-## Flow 10: Job Completion ⬜ PENDING
+## Flow 10: Job Completion ✅ COMPLETE
+
+> **See detailed documentation**: [FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md](./FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md)
 
 ### Questions to Answer
 
@@ -256,21 +281,21 @@
 
 ---
 
-## Flow 11: Reviews & Ratings ⬜ PENDING
+## Flow 11: Reviews & Ratings ✅ COMPLETE
 
 ### Questions to Answer
 
 | # | Question | Answer |
 |---|----------|--------|
-| 11.1 | Who can review whom? | |
-| 11.2 | When can reviews be submitted? | |
-| 11.3 | What is the rating scale? | |
-| 11.4 | Are comments required with ratings? | |
-| 11.5 | Are there pre-defined tags for reviews? | |
-| 11.6 | How is average rating calculated? | |
-| 11.7 | Can reviews be edited/deleted? | |
-| 11.8 | What triggers update of profile rating? | |
-| 11.9 | What notifications are sent on new review? | |
+| 11.1 | Who can review whom? | Poster -> Worker (implemented). Worker -> Poster (planned). |
+| 11.2 | When can reviews be submitted? | Immediately after Job status becomes COMPLETED. |
+| 11.3 | What is the rating scale? | 1 to 5 Stars. |
+| 11.4 | Are comments required with ratings? | Yes (implied by UI validation usually). |
+| 11.5 | Are there pre-defined tags for reviews? | Yes (Professional, Punctual, etc.). |
+| 11.6 | How is average rating calculated? | DB Trigger updates `profiles.rating` automatically. |
+| 11.7 | Can reviews be edited/deleted? | Not in current UI. |
+| 11.8 | What triggers update of profile rating? | `reviews` table INSERT trigger. |
+| 11.9 | What notifications are sent on new review? | "New Review ⭐" to the reviewee. |
 
 ### Diagram
 ```
@@ -279,19 +304,19 @@
 
 ---
 
-## Flow 12: Job Cancellation & Refunds ⬜ PENDING
+## Flow 12: Job Cancellation & Refunds ✅ COMPLETE
 
 ### Questions to Answer
 
 | # | Question | Answer |
 |---|----------|--------|
-| 12.1 | When can poster cancel a job? | |
-| 12.2 | Can worker cancel their acceptance? | |
-| 12.3 | What refund rules exist? | |
-| 12.4 | Is chat unlock fee refunded on cancellation? | |
-| 12.5 | What RPC function handles cancellation? | |
-| 12.6 | What notifications are sent on cancellation? | |
-| 12.7 | What happens to the job after cancellation? | |
+| 12.1 | When can poster cancel a job? | Accepted: `cancel_job_with_refund`, Open: "Delete" (effectively Cancel) |
+| 12.2 | Can worker cancel their acceptance? | Yes, "Withdraw Bid" if Pending. Only Poster can cancel Accepted job. |
+| 12.3 | What refund rules exist? | Connection fee refunded to worker if they paid. |
+| 12.4 | Is chat unlock fee refunded on cancellation? | Yes, automatically. |
+| 12.5 | What RPC function handles cancellation? | `cancel_job_with_refund` |
+| 12.6 | What notifications are sent on cancellation? | "Job Cancelled ⚠️" to accepted worker; "No Longer Available" to others. |
+| 12.7 | What happens to the job after cancellation? | Status becomes COMPLETED (acting as Cancelled/Closed). |
 
 ### Diagram
 ```
@@ -300,35 +325,35 @@
 
 ---
 
-## Flow 13: Wallet & Transactions ⬜ PENDING
+## Flow 13: Wallet & Transactions ✅ COMPLETE
 
 ### Questions to Answer
 
 | # | Question | Answer |
 |---|----------|--------|
-| 13.1 | What is wallet used for? | |
-| 13.2 | How does user add money to wallet? | |
-| 13.3 | What transaction types exist (CREDIT, DEBIT)? | |
-| 13.4 | Is wallet balance used for payments or is it direct Razorpay? | |
-| 13.5 | Where is transaction history shown? | |
-| 13.6 | Can user withdraw wallet balance? | |
+| 13.1 | What is wallet used for? | Job posting fees (Poster), Chat unlock fees (Worker). |
+| 13.2 | How does user add money to wallet? | Currently "Test Mode" button (+100). |
+| 13.3 | What transaction types exist (CREDIT, DEBIT)? | CREDIT (Add Money), DEBIT (Fees), REFUND (Cancellation). |
+| 13.4 | Is wallet balance used for payments or is it direct Razorpay? | Hybrid. Wallet first, fallback to Razorpay. |
+| 13.5 | Where is transaction history shown? | Wallet Page (List of transactions). |
+| 13.6 | Can user withdraw wallet balance? | UI exists but disabled. Feature TBD. |
 
 ---
 
-## Flow 14: Notifications End-to-End ⬜ PENDING
+## Flow 14: Notifications End-to-End ✅ COMPLETE
 
 ### Questions to Answer
 
 | # | Question | Answer |
 |---|----------|--------|
-| 14.1 | What events trigger notifications? | |
-| 14.2 | Are notifications stored in DB or just pushed? | |
-| 14.3 | How are in-app notifications displayed? | |
-| 14.4 | How are push notifications delivered (FCM)? | |
-| 14.5 | What deep linking exists for notification taps? | |
-| 14.6 | Can notifications be marked as read? | |
-| 14.7 | Can notifications be cleared/deleted? | |
-| 14.8 | What notification types exist? | |
+| 14.1 | What events trigger notifications? | Bid Created, Accepted, Counter Offer, Job Complete, Review, New Message. |
+| 14.2 | Are notifications stored in DB or just pushed? | Stored in `notifications` table + Pushed via Edge Function. |
+| 14.3 | How are in-app notifications displayed? | `NotificationsPanel` (Bell icon) lists recent items. |
+| 14.4 | How are push notifications delivered (FCM)? | Handled via Supabase Edge Function `send-push-notification`. |
+| 14.5 | What deep linking exists for notification taps? | `App.tsx` handles `onJobClick` to open specific modals (Bid, Chat, Review). |
+| 14.6 | Can notifications be marked as read? | Yes, `mark_all_notifications_read` or individual click. |
+| 14.7 | Can notifications be cleared/deleted? | Yes, `soft_delete_notification` hides them from user. |
+| 14.8 | What notification types exist? | INFO, SUCCESS, WARNING, ERROR. |
 
 ---
 
@@ -369,14 +394,14 @@
 | Flow 1: User Registration | ✅ Complete | [FLOW_01_USER_REGISTRATION_LOGIN.md](./FLOW_01_USER_REGISTRATION_LOGIN.md) |
 | Flow 2: Job Posting | ✅ Complete | [FLOW_02_JOB_POSTING.md](./FLOW_02_JOB_POSTING.md) |
 | Flow 3: Job Discovery | ✅ Complete | [FLOW_03_JOB_DISCOVERY.md](./FLOW_03_JOB_DISCOVERY.md) |
-| Flow 4: Bidding | ⬜ Pending | |
-| Flow 5: Bid Review | ⬜ Pending | |
-| Flow 6: Counter-Offer | ⬜ Pending | |
-| Flow 7: Bid Acceptance | ⬜ Pending | |
-| Flow 8: Chat Unlock | ⬜ Pending | |
-| Flow 9: Chat | ⬜ Pending | |
-| Flow 10: Job Completion | ⬜ Pending | |
-| Flow 11: Reviews | ⬜ Pending | |
+| Flow 4: Bidding | ✅ Complete | [FLOW_04_BIDDING.md](./FLOW_04_BIDDING.md) |
+| Flow 5: Bid Review | ✅ Complete | [FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md](./FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md) |
+| Flow 6: Counter-Offer | ✅ Complete | [FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md](./FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md) |
+| Flow 7: Bid Acceptance | ✅ Complete | [FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md](./FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md) |
+| Flow 8: Chat Unlock | ✅ Complete | [FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md](./FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md) |
+| Flow 9: Chat | ✅ Complete | [FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md](./FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md) |
+| Flow 10: Job Completion | ✅ Complete | [FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md](./FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md) |
+| Flow 11: Reviews | ✅ Complete | [FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md](./FLOW_05_10_BID_ACCEPTANCE_TO_COMPLETION.md) |
 | Flow 12: Cancellation | ⬜ Pending | |
 | Flow 13: Wallet | ⬜ Pending | |
 | Flow 14: Notifications | ⬜ Pending | |
@@ -386,9 +411,38 @@
 ## Notes & Findings
 
 ### Fixes Applied
+- **Flow 1**: Profile photo upload migrated to Supabase Storage (was base64)
+- **Flow 1**: Added input validations (maxLength) to EditProfileModal
+- **Flow 1**: Added name required validation in EditProfileModal
+- **Flow 1**: Added dark mode support to EditProfileModal
+- **Flow 1**: Added Hindi translations to EditProfileModal
 - **Flow 2**: Image upload migrated to Supabase Storage (was base64)
 - **Flow 2**: Draft auto-save implemented (localStorage)
+- **Flow 2**: Added min="1" on budget input (HTML validation)
+- **Flow 2**: Added maxLength=100 on job title (prevents overly long titles)
 - **Flow 3**: Sorting options added (Newest, Budget High/Low, Nearest)
+- **Flow 3**: Added min="0" on budget filter input
+- **Flow 4**: Duplicate bid prevention added (one bid per job per worker)
+- **Flow 4**: Bid amount validation (must be > 0)
+- **Flow 4**: Employer's budget reference shown in bid modal
+- **Flow 4**: Counter offer amount validation (all 3 components)
+- **Flow 4**: Fixed duplicate placeholder attribute in JobDetailsModal
+- **Flow 4**: Added min="1" to all amount input fields
+- **Flow 4**: BidModal dark mode support added
+- **Flow 4**: BidModal bid message maxLength=500 added
+- **Flow 4**: BidModal character counter added
+- **Flow 4**: BidModal "Enhance with AI" bilingual text
+- **Flow 5**: CounterModal error message made bilingual
+- **Flow 3**: FilterModal dark mode support added
+- **Flow 3**: FilterModal placeholders made bilingual
+- **Flow 3**: FilterModal location input maxLength=100 added
+- **Flow 8**: PaymentModal dark mode support added
+- **Flow 8**: PaymentModal all text made bilingual (Hindi)
+- **Flow 10**: Added dark mode support to ReviewModal
+- **Flow 10**: Added Hindi translations to ReviewModal
+- **Flow 10**: Added maxLength=500 to review comment field
+- **Flow 10**: Added character counter to review modal
+- **Flow 10**: Reset form state after review submission
 
 ### Issues Identified (Acceptable)
 - **Flow 1**: No backup auth methods (Google-only by design)

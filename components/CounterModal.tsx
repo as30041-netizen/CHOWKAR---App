@@ -14,7 +14,7 @@ interface CounterModalProps {
 }
 
 export const CounterModal: React.FC<CounterModalProps> = ({ isOpen, onClose, bidId, jobId, initialAmount, showAlert }) => {
-    const { t } = useUser();
+    const { t, language } = useUser();
     const { jobs, updateBid } = useJobs();
     const [counterInputAmount, setCounterInputAmount] = useState('');
 
@@ -28,7 +28,17 @@ export const CounterModal: React.FC<CounterModalProps> = ({ isOpen, onClose, bid
 
     const handleSendCounter = async () => {
         if (!jobId || !bidId || !counterInputAmount) return;
+
         const newAmount = parseInt(counterInputAmount);
+
+        // Validate amount
+        if (isNaN(newAmount) || newAmount <= 0) {
+            showAlert(language === 'en'
+                ? 'Please enter a valid amount greater than ₹0'
+                : 'कृपया ₹0 से अधिक वैध राशि दर्ज करें', 'error');
+            return;
+        }
+
         const job = jobs.find(j => j.id === jobId);
 
         if (job) {
@@ -59,7 +69,14 @@ export const CounterModal: React.FC<CounterModalProps> = ({ isOpen, onClose, bid
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose}></div>
             <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-3xl p-6 relative z-10 animate-pop">
                 <h3 className="font-bold text-lg mb-4 dark:text-white">{t.counterOffer}</h3>
-                <input type="number" value={counterInputAmount} onChange={(e) => setCounterInputAmount(e.target.value)} className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 font-bold text-2xl mb-4 text-center text-gray-900 dark:text-white" />
+                <input
+                    type="number"
+                    value={counterInputAmount}
+                    onChange={(e) => setCounterInputAmount(e.target.value)}
+                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 font-bold text-2xl mb-4 text-center text-gray-900 dark:text-white"
+                    placeholder="₹"
+                    min="1"
+                />
                 <button
                     onClick={handleSendCounter}
                     className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg"

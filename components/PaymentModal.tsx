@@ -115,12 +115,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-3xl max-w-sm w-full shadow-2xl overflow-hidden">
+            <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-sm w-full shadow-2xl overflow-hidden transition-colors">
                 {/* Header */}
                 <div className="bg-gradient-to-r from-emerald-500 to-teal-600 p-6 text-white">
                     <div className="flex items-center justify-between">
                         <h2 className="text-xl font-bold">
-                            {paymentType === 'JOB_POSTING' ? 'Post Your Job' : 'Unlock Chat'}
+                            {paymentType === 'JOB_POSTING'
+                                ? (language === 'en' ? 'Post Your Job' : 'जॉब पोस्ट करें')
+                                : (language === 'en' ? 'Unlock Chat' : 'चैट अनलॉक करें')}
                         </h2>
                         <button onClick={onClose} className="p-1 hover:bg-white/20 rounded-full">
                             <X size={24} />
@@ -128,8 +130,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     </div>
                     <p className="text-emerald-100 mt-2 text-sm">
                         {paymentType === 'JOB_POSTING'
-                            ? 'Complete payment to publish your job'
-                            : 'Pay to unlock chat and contact details'}
+                            ? (language === 'en' ? 'Complete payment to publish your job' : 'जॉब प्रकाशित करने के लिए भुगतान करें')
+                            : (language === 'en' ? 'Pay to unlock chat and contact details' : 'चैट और संपर्क विवरण अनलॉक करने के लिए भुगतान करें')}
                     </p>
                 </div>
 
@@ -141,50 +143,64 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                         </div>
                     ) : status === 'success' ? (
                         <div className="flex flex-col items-center py-8">
-                            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-4">
-                                <CheckCircle className="text-emerald-600" size={40} />
+                            <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mb-4">
+                                <CheckCircle className="text-emerald-600 dark:text-emerald-400" size={40} />
                             </div>
-                            <h3 className="text-lg font-bold text-gray-800">Payment Successful!</h3>
-                            <p className="text-gray-500 text-sm mt-2">Redirecting...</p>
+                            <h3 className="text-lg font-bold text-gray-800 dark:text-white">
+                                {language === 'en' ? 'Payment Successful!' : 'भुगतान सफल!'}
+                            </h3>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm mt-2">
+                                {language === 'en' ? 'Redirecting...' : 'रीडायरेक्ट हो रहा है...'}
+                            </p>
                         </div>
                     ) : status === 'error' ? (
                         <div className="flex flex-col items-center py-8">
-                            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
-                                <AlertCircle className="text-red-600" size={40} />
+                            <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-4">
+                                <AlertCircle className="text-red-600 dark:text-red-400" size={40} />
                             </div>
-                            <h3 className="text-lg font-bold text-gray-800">Payment Failed</h3>
-                            <p className="text-red-500 text-sm mt-2">{errorMessage}</p>
+                            <h3 className="text-lg font-bold text-gray-800 dark:text-white">
+                                {language === 'en' ? 'Payment Failed' : 'भुगतान विफल'}
+                            </h3>
+                            <p className="text-red-500 dark:text-red-400 text-sm mt-2">{errorMessage}</p>
                             <button
                                 onClick={() => setStatus('idle')}
-                                className="mt-4 px-4 py-2 bg-gray-100 rounded-full text-sm font-medium hover:bg-gray-200"
+                                className="mt-4 px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-full text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
                             >
-                                Try Again
+                                {language === 'en' ? 'Try Again' : 'पुनः प्रयास करें'}
                             </button>
                         </div>
                     ) : (
                         <>
                             {/* Amount Display */}
-                            <div className="bg-gray-50 rounded-2xl p-6 mb-6">
+                            <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-6 mb-6">
                                 <div className="text-center">
-                                    <p className="text-gray-500 text-sm mb-1">Amount to Pay</p>
-                                    <p className="text-4xl font-bold text-gray-800">₹{amount}</p>
+                                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">
+                                        {language === 'en' ? 'Amount to Pay' : 'भुगतान राशि'}
+                                    </p>
+                                    <p className="text-4xl font-bold text-gray-800 dark:text-white">₹{amount}</p>
                                 </div>
                             </div>
 
                             {/* Payment Methods */}
                             <div className="space-y-3 mb-6">
-                                <div className="flex items-center gap-3 p-3 border rounded-xl bg-emerald-50 border-emerald-200">
-                                    <Smartphone className="text-emerald-600" size={24} />
+                                <div className="flex items-center gap-3 p-3 border rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800">
+                                    <Smartphone className="text-emerald-600 dark:text-emerald-400" size={24} />
                                     <div>
-                                        <p className="font-medium text-gray-800">UPI / GPay / PhonePe</p>
-                                        <p className="text-xs text-gray-500">Pay using any UPI app</p>
+                                        <p className="font-medium text-gray-800 dark:text-white">UPI / GPay / PhonePe</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                                            {language === 'en' ? 'Pay using any UPI app' : 'किसी भी UPI ऐप से भुगतान करें'}
+                                        </p>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-3 p-3 border rounded-xl opacity-60">
-                                    <CreditCard className="text-gray-400" size={24} />
+                                <div className="flex items-center gap-3 p-3 border rounded-xl opacity-60 dark:border-gray-700">
+                                    <CreditCard className="text-gray-400 dark:text-gray-500" size={24} />
                                     <div>
-                                        <p className="font-medium text-gray-600">Credit/Debit Card</p>
-                                        <p className="text-xs text-gray-400">All major cards accepted</p>
+                                        <p className="font-medium text-gray-600 dark:text-gray-400">
+                                            {language === 'en' ? 'Credit/Debit Card' : 'क्रेडिट/डेबिट कार्ड'}
+                                        </p>
+                                        <p className="text-xs text-gray-400 dark:text-gray-500">
+                                            {language === 'en' ? 'All major cards accepted' : 'सभी प्रमुख कार्ड स्वीकार'}
+                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -198,17 +214,17 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                 {isProcessing ? (
                                     <>
                                         <Loader2 className="animate-spin" size={20} />
-                                        Processing...
+                                        {language === 'en' ? 'Processing...' : 'प्रोसेसिंग...'}
                                     </>
                                 ) : (
                                     <>
-                                        Pay ₹{amount}
+                                        {language === 'en' ? 'Pay' : 'भुगतान करें'} ₹{amount}
                                     </>
                                 )}
                             </button>
 
-                            <p className="text-center text-xs text-gray-400 mt-4">
-                                Secure payment powered by Razorpay
+                            <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-4">
+                                {language === 'en' ? 'Secure payment powered by Razorpay' : 'Razorpay द्वारा सुरक्षित भुगतान'}
                             </p>
                         </>
                     )}

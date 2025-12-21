@@ -114,7 +114,11 @@ export const JobCard: React.FC<JobCardProps> = ({
   const submitCounter = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!myBid || !onReplyToCounter || !counterAmount) return;
-    onReplyToCounter(job.id, myBid.id, 'COUNTER', parseInt(counterAmount));
+
+    const amount = parseInt(counterAmount);
+    if (isNaN(amount) || amount <= 0) return; // Silent validation - inline input
+
+    onReplyToCounter(job.id, myBid.id, 'COUNTER', amount);
     setShowCounterInput(false);
   };
 
@@ -164,6 +168,7 @@ export const JobCard: React.FC<JobCardProps> = ({
                 value={counterAmount}
                 onChange={e => setCounterAmount(e.target.value)}
                 autoFocus
+                min="1"
               />
               <button onClick={submitCounter} className="bg-emerald-600 text-white text-xs px-2 py-1 rounded font-bold">✓</button>
               <button onClick={(e) => { e.stopPropagation(); setShowCounterInput(false) }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xs px-1">✕</button>

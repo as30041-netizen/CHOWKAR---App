@@ -298,6 +298,8 @@ WHERE key IN ('job_posting_fee', 'connection_fee');
 | ~~No job expiry~~ | ~~Medium~~ | N/A | Not needed per user |
 | ~~Image stored as base64~~ | ~~Medium~~ | ✅ FIXED | Now uploads to Supabase Storage |
 | ~~No draft save~~ | ~~Low~~ | ✅ FIXED | Auto-saves to localStorage |
+| ~~No min attribute on budget input~~ | ~~Low~~ | ✅ FIXED | Added min="1" |
+| ~~No title max length~~ | ~~Low~~ | ✅ FIXED | Added maxLength=100 |
 
 ### Fixes Applied (2025-12-21):
 

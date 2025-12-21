@@ -32,7 +32,16 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
 
     const handleSubmitCounter = () => {
         if (!myBid || !onReplyToCounter || !counterAmount) return;
-        onReplyToCounter(job.id, myBid.id, 'COUNTER', parseInt(counterAmount));
+
+        const amount = parseInt(counterAmount);
+        if (isNaN(amount) || amount <= 0) {
+            showAlert(language === 'en'
+                ? 'Please enter a valid amount greater than ₹0'
+                : 'कृपया ₹0 से अधिक वैध राशि दर्ज करें', 'error');
+            return;
+        }
+
+        onReplyToCounter(job.id, myBid.id, 'COUNTER', amount);
         setShowCounterInput(false);
         onClose();
     };
@@ -67,9 +76,9 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                                     value={counterAmount}
                                     onChange={(e) => setCounterAmount(e.target.value)}
                                     placeholder="Enter ₹"
-                                    placeholder="Enter ₹"
                                     className="flex-1 p-2 rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-gray-800 outline-none font-bold text-gray-900 dark:text-white"
                                     autoFocus
+                                    min="1"
                                 />
                                 <button onClick={handleSubmitCounter} className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold shadow-sm">Send</button>
                                 <button onClick={() => setShowCounterInput(false)} className="bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-3 py-2 rounded-lg">✕</button>

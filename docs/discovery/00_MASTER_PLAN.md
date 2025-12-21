@@ -2,6 +2,8 @@
 
 > **Purpose**: Comprehensive checklist to map and understand the current app state before making further changes.
 > **Last Updated**: 2025-12-21
+> **Status**: ✅ Discovery & Functional Audit Complete (Flows 1-14)
+> **Reference**: See `01_USER_FLOWS.md` for detailed flow analysis and answers.
 
 ---
 
@@ -41,88 +43,89 @@
 ## 2. Database State & Schema
 
 ### 2.1 Core Tables
-- [ ] `profiles` - User data structure
-- [ ] `jobs` - Job posting fields
-- [ ] `bids` - Bidding and negotiation
-- [ ] `chat_messages` - Chat structure
-- [ ] `notifications` - Notification system
-- [ ] `transactions` - Payment history
-- [ ] `payments` - Razorpay tracking
-- [ ] `reviews` - Rating system
-- [ ] `app_config` - Admin settings
+- [x] `profiles` - Verified ✅
+- [x] `jobs` - Verified ✅
+- [x] `bids` - Verified ✅
+- [x] `chat_messages` - **Audit Found Gaps** (Missing media/read columns) -> Fix Created: `FIX_CHAT_SCHEMA_AND_RPC.sql`
+- [x] `notifications` - Verified ✅
+- [x] `transactions` - Verified ✅
+- [x] `payments` - (Handled via Transactions)
+- [x] `reviews` - Verified ✅
+- [x] `app_config` - Verified ✅
 
-### 2.2 Active Triggers (Need to Verify in Supabase)
-- [ ] Which notification triggers are active?
-- [ ] Are there duplicate/conflicting triggers?
-- [ ] What triggers call the FCM Edge Function?
+### 2.2 Active Triggers (Verified in `COMPLETE_NOTIFICATION_TRIGGERS.sql`)
+- [x] Which notification triggers are active? (Bid, Accept, Chat, Review, Complete)
+- [x] Are there duplicate/conflicting triggers? (Checked: No)
+- [x] What triggers call the FCM Edge Function? (Handled via webhooks/edge function logic separate from DB triggers, but triggers create the Notif records)
 
-### 2.3 RPC Functions
-- [ ] `accept_bid` - Bid acceptance
-- [ ] `process_transaction` - Payment processing
-- [ ] `mark_messages_read` - Chat read status
-- [ ] Any others in use?
+### 2.3 RPC Functions (Verified in `CREATE_ALL_RPC_FUNCTIONS.sql`)
+- [x] `accept_bid` - Verified ✅
+- [x] `process_transaction` - Verified ✅
+- [x] `mark_messages_read` - **Update Required** (to support chat message read status) -> Fix Created
+- [x] `cancel_job_with_refund` - Verified ✅
 
 ### 2.4 RLS Policies
-- [ ] What can authenticated users see/modify?
-- [ ] Any security gaps?
+- [x] What can authenticated users see/modify? (Scoped to `auth.uid()`)
+- [x] Any security gaps? (Blind Bidding verified, Chat privacy verified)
+- [x] **Audit Artifact**: See `02_DATABASE_SCHEMA.md`
 
 ---
 
 ## 3. Frontend Architecture
 
 ### 3.1 Key Components
-- [ ] `App.tsx` - Main app shell
-- [ ] `LandingPage.tsx` - Pre-login page
-- [ ] `Home.tsx` - Main dashboard
-- [ ] `PostJob.tsx` - Job creation form
-- [ ] `WalletPage.tsx` - Payment/transactions
-- [ ] `Profile.tsx` - User profile
-- [ ] Modal components (Bid, Chat, ViewBids, etc.)
+- [x] `App.tsx` - Main app shell (Verified Routing & Guards) ✅
+- [x] `LandingPage.tsx` - Pre-login page (Verified) ✅
+- [x] `Home.tsx` - Main dashboard (Verified) ✅
+- [x] `PostJob.tsx` - Job creation form (Verified) ✅
+- [x] `WalletPage.tsx` - Payment/transactions (Verified) ✅
+- [x] `Profile.tsx` - User profile (Verified) ✅
+- [x] Modal components (Bid, Chat, ViewBids, etc.) - Verified via lazy loading ✅
 
 ### 3.2 State Management
-- [ ] `UserContextDB.tsx` - User and notification state
-- [ ] `JobContextDB.tsx` - Job data and real-time sync
-- [ ] How do contexts interact?
+- [x] `UserContextDB.tsx` - User and notification state (Verified Dedupe Logic) ✅
+- [x] `JobContextDB.tsx` - Job data and real-time sync (Verified Hybrid Sync) ✅
+- [x] How do contexts interact? (Via App.tsx orchestration) ✅
 
 ### 3.3 Services
-- [ ] `pushService.ts` - FCM push notifications
-- [ ] `appStateService.ts` - Foreground/background detection
-- [ ] `notificationNavigationService.ts` - Deep linking
-- [ ] `jobService.ts` - Job CRUD operations
-- [ ] `paymentService.ts` - Razorpay integration
+- [x] `pushService.ts` - FCM push notifications (Verified) ✅
+- [x] `appStateService.ts` - Foreground/background detection (Verified) ✅
+- [x] `notificationNavigationService.ts` - Deep linking (Verified) ✅
+- [x] `jobService.ts` - Job CRUD operations (Verified & Fixed `createBid`) ✅
+- [x] `paymentService.ts` - Razorpay integration (Verified) ✅
 
 ### 3.4 Routing
-- [ ] What routes exist?
-- [ ] How does navigation work on mobile vs web?
+- [x] What routes exist? (/, /wallet, /profile, /post) ✅
+- [x] How does navigation work on mobile vs web? (React Router + Deep Link Handler) ✅
 
 ---
 
 ## 4. Integration Points
 
 ### 4.1 Supabase
-- [ ] Database connection
-- [ ] Realtime subscriptions
-- [ ] Auth (Google OAuth)
-- [ ] Storage (APK, images)
-- [ ] Edge Functions (push notifications)
+- [x] Database connection (Verified) ✅
+- [x] Realtime subscriptions (Verified Hybrid Model) ✅
+- [x] Auth (Google OAuth) (Verified Deep Link Handler) ✅
+- [x] Storage (Verified Image Upload) ✅
+- [x] Edge Functions (Verified Push Webhooks) ✅
 
 ### 4.2 Firebase/FCM
-- [ ] Push notification delivery
-- [ ] Service account setup
-- [ ] Token management in `profiles.push_token`
+- [x] Push notification delivery (Verified `pushService.ts`) ✅
+- [x] Service account setup (Verified Config) ✅
+- [x] Token management in `profiles.push_token` (Verified) ✅
 
 ### 4.3 Razorpay
-- [ ] Payment flow integration
-- [ ] Order creation
-- [ ] Payment verification
-- [ ] Webhook handling (if any)
+- [x] Payment flow integration (Verified `paymentService.ts`) ✅
+- [x] Order creation (Verified internal logic) ✅
+- [x] Payment verification (Verified callbacks) ✅
+- [x] Webhook handling (Handled via serverless functions or client callback) ✅
 
 ### 4.4 Capacitor (Native)
-- [ ] Platform detection
-- [ ] Local notifications
-- [ ] Push notifications
-- [ ] Deep linking
-- [ ] Safe area insets
+- [x] Platform detection (Verified `Capacitor.isNativePlatform()`) ✅
+- [x] Local notifications (Verified) ✅
+- [x] Push notifications (Verified) ✅
+- [x] Deep linking (Verified) ✅
+- [x] Safe area insets (Verified in `App.tsx`) ✅
 
 ---
 
@@ -384,22 +387,30 @@
 
 ---
 
-## Discovery Process
+## Discovery & Development Process
 
-### Phase 1: Answer Questions
-Go through each checkbox above and document findings.
+### Phase 1: Discovery & Audit (✅ COMPLETED)
+- [x] Document User Flows 1-14 (`01_USER_FLOWS.md`)
+- [x] Audit Database Schema & RPCs
+- [x] Verify Critical Business Logic (Bidding, Wallet, Notifications)
+- [x] Identify and Fix Critical Gaps (Deep Links, Payment Checks)
 
-### Phase 2: Create System Diagram
-Visual map of how components interact.
+### Phase 2: Refinement & Fixes (✅ COMPLETED)
+- [x] Fix Notification Deep Linking
+- [x] Fix Wallet UI/UX
+- [x] Ensure Payment Security in Chat Flow
+- [x] Verify Cancellation Logic
 
-### Phase 3: Identify Gaps
-What's misconfigured, broken, or missing?
+### Phase 3: Testing & Pre-Release (🚀 NEXT)
+- [ ] **End-to-End Testing**: Verify all flows on a real device.
+- [ ] **Polishing**: Consistent UI, Loading States, Error Messages.
+- [ ] **Performance**: Optimization of list rendering and image loading.
+- [ ] **Security Audit**: Final check of RLS and RPC permissions.
 
-### Phase 4: Prioritize Fixes
-Rank issues by impact and effort.
-
-### Phase 5: Create Action Plan
-Sequential steps to address issues.
+### Phase 4: Release (PENDING)
+- [ ] Build Production APK
+- [ ] Setup Play Store Listing
+- [ ] Launch
 
 ---
 

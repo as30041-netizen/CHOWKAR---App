@@ -252,9 +252,9 @@ export const deleteJob = async (jobId: string): Promise<{ success: boolean; erro
 };
 
 // Create a bid
-export const createBid = async (bid: Bid): Promise<{ success: boolean; error?: string }> => {
+export const createBid = async (bid: Bid): Promise<{ success: boolean; error?: string; data?: { id: string } }> => {
   try {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('bids')
       .insert({
         // Let DB generate UUID for id
@@ -272,7 +272,9 @@ export const createBid = async (bid: Bid): Promise<{ success: boolean; error?: s
         message: bid.message,
         status: bid.status,
         negotiation_history: bid.negotiationHistory
-      });
+      })
+      .select('id')
+      .single();
 
     if (error) {
       console.error('[JobService] Error creating bid:', error);
@@ -280,7 +282,7 @@ export const createBid = async (bid: Bid): Promise<{ success: boolean; error?: s
     }
 
     console.log('[JobService] Bid created successfully');
-    return { success: true };
+    return { success: true, data: { id: data.id } };
   } catch (error: any) {
     console.error('[JobService] Error creating bid:', error);
     return { success: false, error: error.message || 'Failed to create bid' };

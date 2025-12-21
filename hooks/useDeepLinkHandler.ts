@@ -85,8 +85,12 @@ export const useDeepLinkHandler = (onAuthSuccess?: () => void) => {
         };
 
         // Listen for app URL open events (deep links)
-        const listener = CapacitorApp.addListener('appUrlOpen', (event) => {
+        let listenerHandle: any = null;
+
+        CapacitorApp.addListener('appUrlOpen', (event) => {
             handleDeepLink(event.url);
+        }).then(handle => {
+            listenerHandle = handle;
         });
 
         // Also check if app was opened with a URL
@@ -97,7 +101,9 @@ export const useDeepLinkHandler = (onAuthSuccess?: () => void) => {
         });
 
         return () => {
-            listener.remove();
+            if (listenerHandle) {
+                listenerHandle.remove();
+            }
         };
     }, [onAuthSuccess]);
 };
