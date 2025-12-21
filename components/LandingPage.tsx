@@ -4,6 +4,7 @@ import {
     ArrowRight, Menu, X, CheckCircle, Smartphone,
     MapPin, Globe, ChevronDown, ChevronUp, PlayCircle
 } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import { Link, useNavigate } from 'react-router-dom';
 import { SEO } from './SEO';
 import { Footer } from './Footer';
@@ -60,7 +61,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
             <TermsModal isOpen={modalState.terms} onClose={() => closeModal('terms')} />
 
             {/* --- Navigation --- */}
-            <nav className="fixed top-0 left-0 right-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md z-40 border-b border-gray-100 dark:border-gray-800 transition-colors">
+            <nav className="fixed top-0 left-0 right-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md z-40 border-b border-gray-100 dark:border-gray-800 transition-colors pt-safe">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center h-16">
                         {/* Logo */}
@@ -108,7 +109,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
 
                 {/* Mobile Menu */}
                 {isMenuOpen && (
-                    <div className="md:hidden absolute top-16 left-0 right-0 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-dark-800 p-4 space-y-4 shadow-xl animate-slide-down z-30">
+                    <div className="md:hidden absolute top-16 left-0 right-0 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-dark-800 p-4 pt-safe space-y-4 shadow-xl animate-slide-down z-30">
                         <button onClick={onGetStarted} disabled={isSigningIn} className="block w-full text-center py-3 bg-emerald-600 text-white rounded-xl font-bold disabled:opacity-70">
                             {isSigningIn ? 'Loading...' : (language === 'en' ? 'Get Started Free' : 'मुफ़्त में शुरू करें')}
                         </button>
@@ -160,17 +161,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                             </button>
                         </div>
 
-                        <div className="mt-8 animate-fade-in-up delay-500">
-                            <a
-                                href="https://eeinickxxgiegwxabzhv.supabase.co/storage/v1/object/public/downloads/chowkar-v1.0.0.apk"
-                                download
-                                className="inline-flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold hover:underline bg-emerald-50 dark:bg-emerald-900/30 px-6 py-3 rounded-xl border border-emerald-100 dark:border-emerald-800/50"
-                            >
-                                <Smartphone size={20} />
-                                {language === 'en' ? 'Download Android App (APK)' : 'एंड्रॉइड ऐप डाउनलोड करें (APK)'}
-                            </a>
-                            <p className="text-xs text-gray-500 mt-2">v1.0.0 • 100% Free</p>
-                        </div>
+                        {!Capacitor.isNativePlatform() && (
+                            <div className="mt-8 animate-fade-in-up delay-500">
+                                <a
+                                    href="https://eeinickxxgiegwxabzhv.supabase.co/storage/v1/object/public/downloads/chowkar-v1.0.0.apk"
+                                    download
+                                    className="inline-flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold hover:underline bg-emerald-50 dark:bg-emerald-900/30 px-6 py-3 rounded-xl border border-emerald-100 dark:border-emerald-800/50"
+                                >
+                                    <Smartphone size={20} />
+                                    {language === 'en' ? 'Download Android App (APK)' : 'एंड्रॉइड ऐप डाउनलोड करें (APK)'}
+                                </a>
+                                <p className="text-xs text-gray-500 mt-2">v1.0.0 • 100% Free</p>
+                            </div>
+                        )}
                     </div>
                 </section>
 

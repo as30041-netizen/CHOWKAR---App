@@ -698,8 +698,8 @@ const AppContent: React.FC = () => {
   return (
     <div className="h-[100dvh] w-full bg-green-50 dark:bg-gray-950 font-sans text-gray-900 dark:text-white flex flex-col overflow-hidden transition-colors duration-300">
       {/* Header */}
-      <header className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 z-30 shadow-sm flex-none transition-colors duration-300">
-        <div className="max-w-7xl mx-auto px-4 py-3 pt-safe flex justify-between items-center">
+      <header className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 z-30 shadow-sm flex-none transition-colors duration-300 pt-safe">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
             <MapPin size={24} className="text-emerald-600 dark:text-emerald-500" fill="#10b981" />
             <div><h1 className="text-xl font-bold text-emerald-900 dark:text-white leading-none">CHOWKAR</h1></div>
@@ -725,7 +725,11 @@ const AppContent: React.FC = () => {
                 </span>
               )}
             </button>
-            <button onClick={() => setShowNotifications(true)} className="relative p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+            <button
+              onClick={() => setShowNotifications(true)}
+              data-notifications-button
+              className="relative p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+            >
               <Bell size={20} className="text-gray-600 dark:text-gray-400" />
               {unreadCount > 0 && (
                 <span className="absolute top-1.5 right-2 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">

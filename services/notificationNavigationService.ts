@@ -26,6 +26,7 @@ export const handleNotificationNavigation = (
     const { type, jobId, chatId, bidId } = data;
 
     switch (type) {
+        case 'new_bid':
         case 'bid_received':
         case 'counter_offer':
         case 'bid_accepted':
@@ -40,6 +41,7 @@ export const handleNotificationNavigation = (
 
         case 'new_message':
         case 'chat_message':
+        case 'chat_unlocked':
             // Open chat for this job
             if (jobId && openModal) {
                 console.log('[DeepLink] Opening chat for job:', jobId);
@@ -50,6 +52,7 @@ export const handleNotificationNavigation = (
 
         case 'job_completed':
         case 'worker_ready':
+        case 'job_update':
             // Open job details
             if (jobId && openModal) {
                 console.log('[DeepLink] Opening job details:', jobId);

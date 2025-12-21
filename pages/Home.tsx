@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useUser } from '../contexts/UserContextDB';
 import { useJobs } from '../contexts/JobContextDB';
 import { JobCard } from '../components/JobCard';
@@ -6,7 +6,10 @@ import { JobCardSkeleton } from '../components/Skeleton';
 import { Job, UserRole, JobStatus } from '../types';
 import { calculateDistance } from '../utils/geo';
 import { CATEGORIES, CATEGORY_TRANSLATIONS } from '../constants';
-import { Search, SlidersHorizontal, CheckCircle2, Mic, MicOff, Briefcase, RotateCw, Loader2 } from 'lucide-react';
+import { Search, SlidersHorizontal, CheckCircle2, Mic, MicOff, Briefcase, RotateCw, Loader2, ArrowUpDown } from 'lucide-react';
+
+// Sort options type
+type SortOption = 'NEWEST' | 'BUDGET_HIGH' | 'BUDGET_LOW' | 'NEAREST';
 
 interface HomeProps {
     onBid: (jobId: string) => void;
@@ -43,6 +46,18 @@ export const Home: React.FC<HomeProps> = ({
     const [filterMinBudget, setFilterMinBudget] = useState('');
     const [filterMaxDistance, setFilterMaxDistance] = useState('');
     const [showFilters, setShowFilters] = useState(false);
+
+    // Sorting state
+    const [sortBy, setSortBy] = useState<SortOption>('NEWEST');
+    const [showSortMenu, setShowSortMenu] = useState(false);
+
+    // Sort options with translations
+    const sortOptions: { value: SortOption; labelEn: string; labelHi: string }[] = [
+        { value: 'NEWEST', labelEn: 'Newest First', labelHi: 'नया पहले' },
+        { value: 'BUDGET_HIGH', labelEn: 'Budget: High to Low', labelHi: 'बजट: ज्यादा से कम' },
+        { value: 'BUDGET_LOW', labelEn: 'Budget: Low to High', labelHi: 'बजट: कम से ज्यादा' },
+        { value: 'NEAREST', labelEn: 'Nearest First', labelHi: 'पास वाले पहले' },
+    ];
 
     const toggleVoiceInput = () => {
         const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
@@ -139,6 +154,39 @@ export const Home: React.FC<HomeProps> = ({
                             {isSearchingVoice ? <MicOff size={16} /> : <Mic size={16} />}
                         </button>
                     </div>
+
+                    {/* Sort Dropdown - Only for Worker mode */}
+                    {role === UserRole.WORKER && (
+                        <div className="relative">
+                            <button
+                                onClick={() => setShowSortMenu(!showSortMenu)}
+                                className={`p-2.5 rounded-xl border transition-colors shadow-sm flex items-center gap-1.5 ${sortBy !== 'NEWEST' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800' : 'bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 border-gray-100 dark:border-gray-800'}`}
+                            >
+                                <ArrowUpDown size={18} />
+                            </button>
+
+                            {/* Dropdown Menu */}
+                            {showSortMenu && (
+                                <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setShowSortMenu(false)} />
+                                    <div className="absolute right-0 top-12 z-50 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 min-w-[180px] animate-fade-in">
+                                        {sortOptions.map(option => (
+                                            <button
+                                                key={option.value}
+                                                onClick={() => { setSortBy(option.value); setShowSortMenu(false); }}
+                                                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${sortBy === option.value
+                                                    ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-semibold'
+                                                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                                            >
+                                                {language === 'en' ? option.labelEn : option.labelHi}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
+
                     <button onClick={() => setShowFilters(true)} className={`p-2.5 rounded-xl border transition-colors shadow-sm ${filterLocation || filterMinBudget || filterMaxDistance ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800' : 'bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 border-gray-100 dark:border-gray-800'}`}>
                         <SlidersHorizontal size={20} />
                         {(filterLocation || filterMinBudget || filterMaxDistance) && <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white dark:border-gray-900 transform translate-x-1 -translate-y-1"></span>}
@@ -231,7 +279,33 @@ export const Home: React.FC<HomeProps> = ({
                         if (filterMaxDistance && j.distance !== undefined && j.distance > parseInt(filterMaxDistance)) return false;
 
                         return true;
-                    }).map(job => (
+                    })
+                    // Apply Sorting (Worker mode only)
+                    .sort((a, b) => {
+                        // Poster mode: always newest first
+                        if (role === UserRole.POSTER) {
+                            return b.createdAt - a.createdAt;
+                        }
+
+                        // Worker mode: apply selected sort
+                        switch (sortBy) {
+                            case 'NEWEST':
+                                return b.createdAt - a.createdAt;
+                            case 'BUDGET_HIGH':
+                                return b.budget - a.budget;
+                            case 'BUDGET_LOW':
+                                return a.budget - b.budget;
+                            case 'NEAREST':
+                                // Jobs without distance go to the end
+                                if (a.distance === undefined && b.distance === undefined) return 0;
+                                if (a.distance === undefined) return 1;
+                                if (b.distance === undefined) return -1;
+                                return a.distance - b.distance;
+                            default:
+                                return b.createdAt - a.createdAt;
+                        }
+                    })
+                    .map(job => (
                         <div key={job.id} className="animate-fade-in-up h-full">
                             <JobCard job={job} currentUserId={user.id} userRole={role} distance={job.distance} language={language}
                                 hasUnreadBids={notifications.some(n =>

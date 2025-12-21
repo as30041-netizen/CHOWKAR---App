@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useUser } from '../contexts/UserContextDB';
 import { useJobs } from '../contexts/JobContextDB';
 import { Job, JobStatus, Coordinates } from '../types';
@@ -8,6 +8,9 @@ import { getDeviceLocation } from '../utils/geo';
 import { Mic, MicOff, Sparkles, Lock, Loader2, Calculator, MapPin, ChevronRight, ArrowDownWideNarrow, Camera, X, Wallet } from 'lucide-react';
 import { PaymentModal } from './PaymentModal';
 import { getAppConfig, deductFromWallet, checkWalletBalance } from '../services/paymentService';
+import { uploadJobImage, isBase64Image } from '../services/storageService';
+
+const DRAFT_STORAGE_KEY = 'chowkar_job_draft';
 
 interface JobPostingFormProps {
     onSuccess: () => void;
@@ -35,6 +38,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [pendingJob, setPendingJob] = useState<Job | null>(null);
     const [postingFee, setPostingFee] = useState<number>(10);
+    const [isUploadingImage, setIsUploadingImage] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -46,6 +50,53 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
     useEffect(() => {
         getAppConfig().then(config => setPostingFee(config.job_posting_fee));
     }, []);
+
+    // Load draft from localStorage (only for new jobs)
+    useEffect(() => {
+        if (!isEditing) {
+            const savedDraft = localStorage.getItem(DRAFT_STORAGE_KEY);
+            if (savedDraft) {
+                try {
+                    const draft = JSON.parse(savedDraft);
+                    if (draft.title) setNewJobTitle(draft.title);
+                    if (draft.description) setNewJobDesc(draft.description);
+                    if (draft.budget) setNewJobBudget(draft.budget);
+                    if (draft.category) setNewJobCategory(draft.category);
+                    if (draft.date) setNewJobDate(draft.date);
+                    if (draft.duration) setNewJobDuration(draft.duration);
+                    console.log('[Draft] Loaded saved draft');
+                } catch (e) {
+                    console.warn('[Draft] Failed to parse saved draft');
+                }
+            }
+        }
+    }, [isEditing]);
+
+    // Save draft to localStorage (debounced)
+    const saveDraft = useCallback(() => {
+        if (isEditing) return; // Don't save drafts when editing
+        const draft = {
+            title: newJobTitle,
+            description: newJobDesc,
+            budget: newJobBudget,
+            category: newJobCategory,
+            date: newJobDate,
+            duration: newJobDuration,
+            savedAt: Date.now()
+        };
+        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    }, [newJobTitle, newJobDesc, newJobBudget, newJobCategory, newJobDate, newJobDuration, isEditing]);
+
+    // Auto-save draft when form changes
+    useEffect(() => {
+        const timeoutId = setTimeout(saveDraft, 1000); // Debounce 1 second
+        return () => clearTimeout(timeoutId);
+    }, [saveDraft]);
+
+    // Clear draft after successful submission
+    const clearDraft = () => {
+        localStorage.removeItem(DRAFT_STORAGE_KEY);
+    };
 
     // Prefill form when editing
     useEffect(() => {
@@ -127,10 +178,29 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                     }
                 }
 
-                // Reset form
+                // Reset form and clear draft
                 setNewJobTitle(''); setNewJobDesc(''); setNewJobBudget(''); setNewJobDate(''); setNewJobDuration(''); setNewJobCoords(undefined); setNewJobImage(undefined);
+                clearDraft();
                 onSuccess();
             } else {
+                // NEW JOB: Handle image upload first if base64
+                let finalImageUrl = newJobImage;
+                if (newJobImage && isBase64Image(newJobImage)) {
+                    setIsUploadingImage(true);
+                    showAlert(language === 'en' ? 'Uploading image...' : 'फोटो अपलोड हो रही है...', 'info');
+
+                    const rawBase64 = newJobImage.split(',')[1];
+                    const { url, error: uploadError } = await uploadJobImage(rawBase64, `job_${Date.now()}`);
+                    setIsUploadingImage(false);
+
+                    if (url) {
+                        finalImageUrl = url;
+                    } else {
+                        console.warn('Image upload failed, continuing without image:', uploadError);
+                        finalImageUrl = undefined; // Don't block job creation, just skip image
+                    }
+                }
+
                 // NEW JOB: Prepare job data
                 const newJob: Job = {
                     id: `j${Date.now()}`,
@@ -149,7 +219,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                     status: JobStatus.OPEN,
                     createdAt: Date.now(),
                     bids: [],
-                    image: newJobImage
+                    image: finalImageUrl
                 };
 
                 // CHECK WALLET FIRST
@@ -174,8 +244,9 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                             ? `Job posted! ₹${postingFee} deducted from wallet.`
                             : `जॉब पोस्ट हुई! वॉलेट से ₹${postingFee} काटे गए।`, 'success');
 
-                        // Reset form
+                        // Reset form and clear draft
                         setNewJobTitle(''); setNewJobDesc(''); setNewJobBudget(''); setNewJobDate(''); setNewJobDuration(''); setNewJobCoords(undefined); setNewJobImage(undefined);
+                        clearDraft();
                         onSuccess();
                         return; // IMPORTANT: Stop here
                     } else {
@@ -214,8 +285,9 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
             }
             showAlert('Job posted successfully!', 'success');
 
-            // Reset form
+            // Reset form and clear draft
             setNewJobTitle(''); setNewJobDesc(''); setNewJobBudget(''); setNewJobDate(''); setNewJobDuration(''); setNewJobCoords(undefined); setNewJobImage(undefined);
+            clearDraft();
             setPendingJob(null);
             onSuccess();
         } catch (error) {
