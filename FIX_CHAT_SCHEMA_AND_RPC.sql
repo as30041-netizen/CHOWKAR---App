@@ -43,4 +43,7 @@ BEGIN
 END;
 $$;
 
-RAISE NOTICE '✅ Chat Schema Fixed and RPC Updated';
+DO $$
+BEGIN
+    RAISE NOTICE '✅ Chat Schema Fixed and RPC Updated';
+END $$;

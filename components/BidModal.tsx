@@ -98,7 +98,13 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
         };
 
         try {
-            await addBid(newBid);
+            const result = await addBid(newBid);
+            // Check if result returned an error (addBid in context calls createBid in service)
+            // But context's addBid currently doesn't return the error object cleanly in all versions.
+            // Let's rely on the fact that if it throws, we catch it.
+            // HOWEVER, if addBid implementation in context swallows error, we need to check that first.
+            // Looking at context: it throws if service returns error.
+
             // Note: DB trigger 'on_bid_created' automatically notifies the poster
             // So we don't call addNotification here - prevents duplicate notifications!
             showAlert(contextT.alertBidPlaced, 'success');
@@ -107,8 +113,14 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
             // Reset state
             setBidAmount('');
             setBidMessage('');
-        } catch {
-            showAlert('Failed to place bid. Please try again.', 'error');
+        } catch (err: any) {
+            console.error('Bid Error:', err);
+            const msg = err.message || '';
+            if (msg.includes('Job is closed') || msg.includes('no longer accepting')) {
+                showAlert(contextLanguage === 'en' ? 'Job is closed or no longer accepting bids.' : 'यह जॉब बंद हो गया है।', 'error');
+            } else {
+                showAlert('Failed to place bid. Please try again.', 'error');
+            }
         }
     };
 

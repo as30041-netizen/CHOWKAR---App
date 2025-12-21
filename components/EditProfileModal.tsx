@@ -7,9 +7,10 @@ interface EditProfileModalProps {
     isOpen: boolean;
     onClose: () => void;
     showAlert: (msg: string, type: 'success' | 'error' | 'info') => void;
+    isMandatory?: boolean;
 }
 
-export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose, showAlert }) => {
+export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose, showAlert, isMandatory = false }) => {
     const { user, updateUserInDB, addNotification, t, language } = useUser();
 
     const [editProfileName, setEditProfileName] = useState('');
@@ -119,7 +120,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose}></div>
+            <div className={`absolute inset-0 bg-black/60 backdrop-blur-sm ${!isMandatory ? 'cursor-pointer' : ''}`} onClick={!isMandatory ? onClose : undefined}></div>
             <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-3xl p-6 relative z-10 max-h-[90vh] overflow-y-auto">
                 <h3 className="text-xl font-bold mb-4 dark:text-white">
                     {language === 'en' ? 'Edit Profile' : 'प्रोफाइल संपादित करें'}

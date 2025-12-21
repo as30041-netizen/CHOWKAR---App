@@ -110,9 +110,16 @@ const AppContent: React.FC = () => {
   // Check onboarding status
   useEffect(() => {
     if (isLoggedIn && !isAuthLoading && !user.name.includes('Mock')) { // Don't show for mock user if we want
+      // 1. Role Selection
       const hasCompletedOnboarding = localStorage.getItem('chowkar_onboarding_complete');
       if (hasCompletedOnboarding !== 'true') {
         setShowOnboarding(true);
+        return; // Prioritize Role Selection
+      }
+
+      // 2. Profile Completion (Phone/Location)
+      if (!user.phone || !user.location) {
+        setShowEditProfile(true);
       }
     }
   }, [isLoggedIn, isAuthLoading, user]);
@@ -816,6 +823,7 @@ const AppContent: React.FC = () => {
           isOpen={showEditProfile}
           onClose={() => setShowEditProfile(false)}
           showAlert={showAlert}
+          isMandatory={isLoggedIn && (!user.phone || !user.location) && user.name !== 'Mock User'}
         />
 
         <ViewBidsModal

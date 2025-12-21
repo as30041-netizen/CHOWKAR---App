@@ -278,6 +278,12 @@ export const createBid = async (bid: Bid): Promise<{ success: boolean; error?: s
 
     if (error) {
       console.error('[JobService] Error creating bid:', error);
+
+      // Handle RLS violation (which presents as "new row violates row-level security policy")
+      if (error.code === '42501' || error.message?.includes('row-level security')) {
+        return { success: false, error: 'Job is is closed or no longer accepting bids.' };
+      }
+
       throw error;
     }
 
