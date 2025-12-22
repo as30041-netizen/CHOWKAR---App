@@ -40,7 +40,7 @@ export const Home: React.FC<HomeProps> = ({
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string>('All');
     const [isSearchingVoice, setIsSearchingVoice] = useState(false);
-    // Removed legacy showMyBidsOnly toggle
+
 
     // Filter Logic integrated
     const [filterLocation, setFilterLocation] = useState('');
