@@ -32,14 +32,15 @@ export const Home: React.FC<HomeProps> = ({
     const { user, role, setRole, t, language, notifications } = useUser();
     const { jobs, loading, error, refreshJobs, fetchMoreJobs, hasMore, isLoadingMore } = useJobs();
 
-    // Poster Dashboard State
+    // Dashboard State (Unified for Poster/Worker)
     const [dashboardTab, setDashboardTab] = useState<'ALL' | 'OPEN' | 'IN_PROGRESS' | 'COMPLETED'>('ALL');
+    const [workerTab, setWorkerTab] = useState<'FIND' | 'ACTIVE' | 'HISTORY'>('FIND');
 
     // Local state for search/filter within Home
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string>('All');
     const [isSearchingVoice, setIsSearchingVoice] = useState(false);
-    const [showMyBidsOnly, setShowMyBidsOnly] = useState(false);
+    // Removed legacy showMyBidsOnly toggle
 
     // Filter Logic integrated
     const [filterLocation, setFilterLocation] = useState('');
@@ -115,17 +116,40 @@ export const Home: React.FC<HomeProps> = ({
                 </button>
             </div>
 
-            {/* Header Title (Dynamic based on Mode) */}
-            <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold text-emerald-900 dark:text-emerald-500 flex items-center gap-2">
-                    {role === UserRole.POSTER
-                        ? t.myJobDashboard
-                        : (showMyBidsOnly ? t.myApplications : t.jobsNearMe)
-                    }
-                    <button onClick={refreshJobs} className="p-1 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-gray-800 rounded-full transition-colors" title="Refresh Jobs">
-                        <div className={loading ? 'animate-spin' : ''}><RotateCw size={16} /></div>
-                    </button>
-                </h2>
+            {/* Header Title & Worker Tabs */}
+            <div className="mb-4">
+                <div className="flex justify-between items-center mb-3">
+                    <h2 className="text-xl font-bold text-emerald-900 dark:text-emerald-500 flex items-center gap-2">
+                        {role === UserRole.POSTER ? t.myJobDashboard : t.jobsNearMe}
+                        <button onClick={refreshJobs} className="p-1 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-gray-800 rounded-full transition-colors" title="Refresh Jobs">
+                            <div className={loading ? 'animate-spin' : ''}><RotateCw size={16} /></div>
+                        </button>
+                    </h2>
+                </div>
+
+                {/* WORKER TABS: Find / Active / History */}
+                {role === UserRole.WORKER && (
+                    <div className="bg-gray-100 dark:bg-gray-800/60 p-1 rounded-xl flex mb-2">
+                        <button
+                            onClick={() => setWorkerTab('FIND')}
+                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors ${workerTab === 'FIND' ? 'bg-white dark:bg-gray-700 text-emerald-700 dark:text-emerald-400 shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}
+                        >
+                            {language === 'en' ? 'Find Work' : 'काम खोजें'}
+                        </button>
+                        <button
+                            onClick={() => setWorkerTab('ACTIVE')}
+                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors ${workerTab === 'ACTIVE' ? 'bg-white dark:bg-gray-700 text-blue-700 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}
+                        >
+                            {language === 'en' ? 'My Applications' : 'मेरे आवेदन'}
+                        </button>
+                        <button
+                            onClick={() => setWorkerTab('HISTORY')}
+                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors ${workerTab === 'HISTORY' ? 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}
+                        >
+                            {language === 'en' ? 'History' : 'इतिहास'}
+                        </button>
+                    </div>
+                )}
             </div>
 
             {error && (

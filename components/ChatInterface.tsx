@@ -601,12 +601,22 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           <div className="p-3">
             {/* Archive Banner for COMPLETED jobs */}
             {isArchived && (
-              <div className="mb-3 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-4 py-3 rounded-xl flex items-center gap-3">
-                <LockKeyhole size={18} className="text-gray-400" />
-                <div>
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">This job has been completed</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Chat is read-only. Contact info is no longer visible.</p>
+              <div className="mb-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 p-4 rounded-xl text-center">
+                <div className="inline-flex items-center gap-2 text-emerald-600 dark:text-emerald-500 font-bold bg-emerald-50 dark:bg-emerald-900/20 px-4 py-2 rounded-full mb-3">
+                  <CheckCircle size={16} />
+                  This job has been completed
                 </div>
+
+                <button
+                  onClick={onCompleteJob}
+                  className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 rounded-xl shadow-sm flex items-center justify-center gap-2 transition-all active:scale-95 mb-2"
+                >
+                  <Sparkles size={18} fill="white" />
+                  Rate Your Experience
+                </button>
+                <p className="text-xs text-gray-400">
+                  Chat is archived and read-only.
+                </p>
               </div>
             )}
 

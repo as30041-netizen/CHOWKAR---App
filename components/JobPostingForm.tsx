@@ -137,8 +137,8 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                 if (initialJob.status !== 'OPEN') {
                     showAlert(
                         initialJob.status === 'IN_PROGRESS'
-                            ? 'Cannot edit a job that is in progress. Please contact the worker directly.'
-                            : 'Cannot edit a completed or cancelled job.',
+                            ? t.cantEditInProgress
+                            : t.cantEditCompleted,
                         'error'
                     );
                     return;
@@ -158,7 +158,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                 };
 
                 await updateJob(updatedJob);
-                showAlert('Job updated successfully!', 'success');
+                showAlert(t.alertJobUpdated, 'success');
 
                 // Notify poster
                 await addNotification(user.id, 'Job Updated', `Job "${newJobTitle}" has been updated.`, "SUCCESS", initialJob.id);
@@ -187,7 +187,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                 let finalImageUrl = newJobImage;
                 if (newJobImage && isBase64Image(newJobImage)) {
                     setIsUploadingImage(true);
-                    showAlert(language === 'en' ? 'Uploading image...' : 'फोटो अपलोड हो रही है...', 'info');
+                    showAlert(t.uploadingImage, 'info');
 
                     const rawBase64 = newJobImage.split(',')[1];
                     const { url, error: uploadError } = await uploadJobImage(rawBase64, `job_${Date.now()}`);
@@ -240,9 +240,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                         if (createdJobId) {
                             await addNotification(user.id, "Job Posted", `"${newJobTitle}" is now live!`, "SUCCESS", createdJobId);
                         }
-                        showAlert(language === 'en'
-                            ? `Job posted! ₹${postingFee} deducted from wallet.`
-                            : `जॉब पोस्ट हुई! वॉलेट से ₹${postingFee} काटे गए।`, 'success');
+                        showAlert(t.jobPostedDeduction.replace('{fee}', postingFee.toString()), 'success');
 
                         // Reset form and clear draft
                         setNewJobTitle(''); setNewJobDesc(''); setNewJobBudget(''); setNewJobDate(''); setNewJobDuration(''); setNewJobCoords(undefined); setNewJobImage(undefined);
@@ -283,7 +281,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
             if (createdJobId) {
                 await addNotification(user.id, "Job Posted", `"${pendingJob.title}" is now live!`, "SUCCESS", createdJobId);
             }
-            showAlert('Job posted successfully!', 'success');
+            showAlert(t.alertJobPosted, 'success');
 
             // Reset form and clear draft
             setNewJobTitle(''); setNewJobDesc(''); setNewJobBudget(''); setNewJobDate(''); setNewJobDuration(''); setNewJobCoords(undefined); setNewJobImage(undefined);
@@ -292,7 +290,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
             onSuccess();
         } catch (error) {
             console.error("Failed to post job after payment:", error);
-            showAlert('Payment successful but failed to create job. Please contact support.', 'error');
+            showAlert(t.paymentSuccessJobFail, 'error');
         }
     };
 
@@ -313,7 +311,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
     const handleEstimateWage = async () => {
         if (!checkFreeLimit()) return;
         if (!newJobCategory || !user.location) {
-            showAlert("Please check your profile location and category.", 'error');
+            showAlert(t.alertFillFields, 'error');
             return;
         }
 
@@ -327,9 +325,9 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
         if (estimatedPrice) {
             setNewJobBudget(estimatedPrice);
             incrementAiUsage();
-            addNotification(user.id, "Wage Estimated", `Recommended: ₹${estimatedPrice}`, "SUCCESS");
+            addNotification(user.id, "Wage Estimated", t.wageRecommended.replace('{price}', estimatedPrice), "SUCCESS");
         } else {
-            showAlert("Could not estimate wage at this time.", 'error');
+            showAlert(t.wageEstimateFail, 'error');
         }
     };
 
@@ -337,7 +335,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
         const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
 
         if (!SpeechRecognition) {
-            showAlert("Voice input is not supported in this browser. Please use Google Chrome or Edge.", 'error');
+            showAlert(t.voiceNotSupported, 'error');
             return;
         }
 
@@ -366,7 +364,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                 console.error("Voice Error:", event.error);
                 setIsListening(false);
                 if (event.error === 'not-allowed') {
-                    showAlert("Microphone access blocked.", 'error');
+                    showAlert(t.micBlocked, 'error');
                 }
             };
 
@@ -375,7 +373,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
         } catch (e) {
             console.error(e);
             setIsListening(false);
-            showAlert("Failed to start voice input.", 'error');
+            showAlert(t.voiceStartFailed, 'error');
         }
     };
 
@@ -444,20 +442,20 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
     if (isEditing && !showEditForm) {
         return (
             <div className="p-4 animate-fade-in pb-10">
-                <h2 className="text-2xl font-bold text-emerald-900 dark:text-emerald-500 mb-6">{language === 'en' ? 'Edit Job' : 'नौकरी संपादित करें'}</h2>
+                <h2 className="text-2xl font-bold text-emerald-900 dark:text-emerald-500 mb-6">{t.editJob}</h2>
                 <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-emerald-100 dark:border-emerald-900/30 text-center transition-colors">
                     <p className="text-gray-600 dark:text-gray-300 mb-6">Update the details for <strong>{initialJob?.title}</strong></p>
                     <button
                         onClick={() => setShowEditForm(true)}
                         className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 active:scale-95 transition-all"
                     >
-                        {language === 'en' ? 'Start Editing' : 'संपादन शुरू करें'}
+                        {t.editJob}
                     </button>
                     <button
                         onClick={onSuccess}
                         className="mt-3 text-gray-500 font-medium hover:text-gray-800"
                     >
-                        Cancel
+                        {t.cancel}
                     </button>
                 </div>
             </div>
@@ -467,7 +465,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
     return (
         <div className="p-4 animate-fade-in pb-10">
             <h2 className="text-2xl font-bold text-emerald-900 dark:text-emerald-500 mb-6">
-                {isEditing ? (language === 'en' ? 'Edit Job Details' : 'नौकरी विवरण संपादित करें') : t.postJobHeader}
+                {isEditing ? t.editJob : t.postJobHeader}
             </h2>
             <div className="space-y-5 bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 transition-colors">
                 <div>
@@ -507,13 +505,13 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                                     }`}
                             >
                                 {isAnalyzingImage ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
-                                {isAnalyzingImage ? "Analyzing..." : "Add Photo"}
+                                {isAnalyzingImage ? t.uploading : t.addPhoto}
                                 {!user.isPremium && remainingFreeTries > 0 && !isAnalyzingImage && (
                                     <span className="bg-purple-600 text-white text-[9px] px-1.5 py-0.5 rounded-full ml-1 shadow-sm font-extrabold">AI</span>
                                 )}
                             </button>
                             <button onClick={toggleVoiceInput} className={`text-xs flex items-center gap-1 font-bold px-2 py-1 rounded-lg transition-colors ${isListening ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 animate-pulse' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'}`}>
-                                {isListening ? <MicOff size={12} /> : <Mic size={12} />} {isListening ? 'Stop' : 'Voice'}
+                                {isListening ? <MicOff size={12} /> : <Mic size={12} />} {isListening ? t.stop : t.voice}
                             </button>
                             <button
                                 onClick={handleEnhanceDescription}
@@ -528,7 +526,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                                 ) : (
                                     !showLockIcon ? <Sparkles size={12} /> : <Lock size={12} />
                                 )}
-                                {isEnhancing ? 'Enhancing...' : t.aiEnhance}
+                                {isEnhancing ? t.enhancing : t.aiEnhance}
                                 {!user.isPremium && remainingFreeTries > 0 && (
                                     <span className="bg-emerald-600 text-white text-[9px] px-1.5 py-0.5 rounded-full ml-1 shadow-sm font-extrabold">
                                         {remainingFreeTries} Left
@@ -621,16 +619,14 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                 className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 hover:bg-emerald-700 active:scale-95 transition-all mt-4 relative z-10"
             >
                 {isEditing
-                    ? (language === 'en' ? 'Update Job' : 'नौकरी अपडेट करें')
-                    : (language === 'en' ? `Post Job (₹${postingFee})` : `नौकरी पोस्ट करें (₹${postingFee})`)
+                    ? t.updateJob
+                    : t.postJobWithFee.replace('{fee}', postingFee.toString())
                 } <ChevronRight size={20} />
             </button>
             {!isEditing && (user.walletBalance || 0) >= postingFee && (
                 <p className="text-center text-sm text-emerald-600 mt-2 flex items-center justify-center gap-1">
                     <Wallet size={14} />
-                    {language === 'en'
-                        ? `Will use ₹${postingFee} from wallet (Balance: ₹${user.walletBalance})`
-                        : `वॉलेट से ₹${postingFee} का उपयोग होगा (शेष: ₹${user.walletBalance})`}
+                    {t.walletUsageDisclaimer.replace('{fee}', postingFee.toString()).replace('{balance}', user.walletBalance)}
                 </p>
             )}
             {onCancel && (
@@ -639,7 +635,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                     onClick={onCancel}
                     className="w-full mt-3 text-gray-500 font-bold py-3 hover:text-gray-800 transition-colors"
                 >
-                    {language === 'en' ? 'Cancel' : 'रद्द करें'}
+                    {t.cancel}
                 </button>
             )}
 

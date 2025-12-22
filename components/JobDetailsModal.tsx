@@ -35,9 +35,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
 
         const amount = parseInt(counterAmount);
         if (isNaN(amount) || amount <= 0) {
-            showAlert(language === 'en'
-                ? 'Please enter a valid amount greater than ₹0'
-                : 'कृपया ₹0 से अधिक वैध राशि दर्ज करें', 'error');
+            showAlert(t.alertInvalidAmount, 'error');
             return;
         }
 
@@ -101,7 +99,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                                     onClick={() => { onReplyToCounter?.(job.id, myBid!.id, 'REJECT'); onClose(); }}
                                     className="col-span-2 text-xs text-red-500 dark:text-red-400 font-bold hover:underline py-1"
                                 >
-                                    {language === 'en' ? 'Decline Counter Offer' : 'बोली अस्वीकार करें'}
+                                    {t.declineCounterPrompt}
                                 </button>
                             </div>
                         )}
@@ -179,13 +177,13 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                             <div className="flex items-center justify-between mb-3">
                                 <h4 className="text-sm font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2">
                                     <Users size={16} className="text-emerald-600" />
-                                    {language === 'en' ? 'Bids Received' : 'प्राप्त बोलियां'} ({job.bids.length})
+                                    {t.bidsReceived} ({job.bids.length})
                                 </h4>
                                 <button
                                     onClick={() => onViewBids(job)}
                                     className="text-xs text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1 hover:underline"
                                 >
-                                    {language === 'en' ? 'View All' : 'सभी देखें'} <ChevronRight size={14} />
+                                    {t.viewAll} <ChevronRight size={14} />
                                 </button>
                             </div>
                             <div className="space-y-2">
@@ -226,7 +224,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                                         onClick={() => onViewBids(job)}
                                         className="w-full py-2 text-center text-sm text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-900/20 rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
                                     >
-                                        +{job.bids.length - 3} {language === 'en' ? 'more bids' : 'और बोलियां'}
+                                        +{job.bids.length - 3} {t.moreBids}
                                     </button>
                                 )}
                             </div>
@@ -273,17 +271,38 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                         </button>
                     )}
 
+                    {/* Actions for COMPLETED jobs */}
+                    {job.status === JobStatus.COMPLETED && (
+                        <div className="flex w-full gap-3">
+                            <button
+                                onClick={() => showAlert('Please open Chat to rate user.', 'info')}
+                                // Ideally open review modal directly, but logic resides in App.tsx or we need a prop.
+                                // For now, let's just point to Chat where we added the button, OR add a callback.
+                                // Actually, better to just let them open Chat, as we added the Review button there.
+                                className="flex-1 bg-amber-500 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-amber-600 active:scale-95 transition-all flex items-center justify-center gap-2"
+                            >
+                                <Star size={18} fill="currentColor" /> {t.rateExperience}
+                            </button>
+                            <button
+                                onClick={() => onChat(job)}
+                                className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 py-3 rounded-xl font-bold hover:bg-gray-200 active:scale-95 transition-all"
+                            >
+                                {t.chat} (Archived)
+                            </button>
+                        </div>
+                    )}
+
                     {/* Poster: Cancel Job (with Refund) - only if IN_PROGRESS */}
                     {job.posterId === user.id && job.status === JobStatus.IN_PROGRESS && onCancel && (
                         <button
                             onClick={() => {
-                                if (confirm(language === 'en' ? 'Cancel job and refund fees?' : 'जॉब रद्द करें और रिफंड पाएं?')) {
+                                if (confirm(t.cancelJobRefundPrompt)) {
                                     onCancel(job.id);
                                 }
                             }}
                             className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 py-3 rounded-xl font-bold hover:bg-gray-200 dark:hover:bg-gray-700 active:scale-95 transition-all flex items-center justify-center gap-2"
                         >
-                            <XCircle size={16} /> {language === 'en' ? 'Cancel Job' : 'रद्द करें'}
+                            <XCircle size={16} /> {t.cancelJob}
                         </button>
                     )}
 
@@ -293,7 +312,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                             onClick={() => onEdit(job)}
                             className="flex-1 bg-blue-500 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-blue-600 active:scale-95 transition-all flex items-center justify-center gap-2"
                         >
-                            <Pencil size={16} /> {language === 'en' ? 'Edit' : 'संपादित करें'}
+                            <Pencil size={16} /> {t.editJob}
                         </button>
                     )}
 
@@ -301,13 +320,13 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                     {job.posterId === user.id && job.status === JobStatus.OPEN && !job.acceptedBidId && (
                         <button
                             onClick={() => {
-                                if (confirm(language === 'en' ? 'Are you sure you want to delete this job?' : 'क्या आप इस जॉब को हटाना चाहते हैं?')) {
+                                if (confirm(t.deleteJobPrompt)) {
                                     onDelete(job.id);
                                 }
                             }}
                             className="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-red-600 active:scale-95 transition-all flex items-center justify-center gap-2"
                         >
-                            <XCircle size={16} /> {language === 'en' ? 'Delete' : 'हटाएं'}
+                            <XCircle size={16} /> {t.delete}
                         </button>
                     )}
                 </div>

@@ -264,7 +264,75 @@ export const TRANSLATIONS = {
     active: "Active",
     done: "Done",
     loadMore: "Load More Jobs",
-    loading: "Loading..."
+    loading: "Loading...",
+
+    // Validation
+    alertInvalidAmount: "Please enter a valid amount greater than ₹0",
+
+    // Lists
+    bidsReceived: "Bids Received",
+    viewAll: "View All",
+    moreBids: "more bids",
+
+    // App Errors & Success
+    chatReceiverError: "Error: Cannot determine who to send message to.",
+    jobCompletionError: "Failed to complete job",
+    genericError: "Failed: ",
+    withdrawBidError: "Error withdrawing bid",
+    jobCancelledRefunded: "Job cancelled and funds refunded.",
+    cancelError: "Failed to cancel",
+    cancellationError: "Error during cancellation",
+    paymentSuccessChat: "Payment successful! Chat unlocked.",
+
+    // Common Actions
+    cancel: "Cancel",
+    delete: "Delete",
+    stop: "Stop",
+    voice: "Voice",
+    uploading: "Uploading...",
+
+    // Notifications Panel
+    markRead: "Mark Read",
+    clearAll: "Clear All",
+    clearAllPrompt: "Clear all notifications?",
+    noNotifications: "No notifications yet",
+
+    // Job Posting Form
+    updateJob: "Update Job",
+    postJobWithFee: "Post Job (₹{fee})",
+    walletUsageDisclaimer: "Will use ₹{fee} from wallet (Balance: ₹{balance})",
+    uploadingImage: "Uploading image...",
+    jobPostedDeduction: "Job posted! ₹{fee} deducted from wallet.",
+    photoAnalyzed: "Details updated based on your photo.",
+    analyzeAi: "Analyze with AI",
+    addPhoto: "Add Photo",
+    enhancing: "Enhancing...",
+    wageRecommended: "Recommended: ₹{price}",
+    wageEstimateFail: "Could not estimate wage.",
+
+    // Voice & Errors
+    voiceNotSupported: "Voice input is not supported in this browser.",
+    micBlocked: "Microphone access blocked.",
+    voiceStartFailed: "Failed to start voice input.",
+    paymentSuccessJobFail: "Payment successful but failed to create job. Please contact support.",
+    cantEditInProgress: "Cannot edit a job that is in progress.",
+    cantEditCompleted: "Cannot edit a completed or cancelled job.",
+    cancelJobRefundPrompt: "Cancel job and refund fees?",
+    cancelJob: "Cancel Job",
+    deleteJobPrompt: "Are you sure you want to delete this job?",
+    withdrawBidPrompt: "Are you sure you want to withdraw your bid?",
+    bidWithdrawn: "Bid withdrawn successfully.",
+    declineCounterPrompt: "Decline this counter offer? Your bid will be removed.",
+    counterDeclined: "Counter declined. Your bid has been withdrawn.",
+    counterAcceptedPay: "Counter accepted! Pay to unlock chat.",
+    chatUnlocked: "Chat unlocked! ₹{fee} deducted.",
+    chatUnlockFail: "Payment recorded but chat unlock failed.",
+    chatOnlyAfterAccept: "Chat is only available after job is accepted.",
+    notParticipant: "You are not a participant in this job.",
+
+    // App State
+    online: "Online",
+    offline: "Offline",
   },
   hi: {
     // Auth
@@ -486,7 +554,75 @@ export const TRANSLATIONS = {
     active: "सक्रिय",
     done: "पूर्ण",
     loadMore: "और जॉब देखें",
-    loading: "लोड हो रहा है..."
+    loading: "लोड हो रहा है...",
+
+    // Validation
+    alertInvalidAmount: "कृपया ₹0 से अधिक वैध राशि दर्ज करें",
+
+    // Lists
+    bidsReceived: "प्राप्त बोलियां",
+    viewAll: "सभी देखें",
+    moreBids: "और बोलियां",
+
+    // App Errors & Success
+    chatReceiverError: "त्रुटि: संदेश किसको भेजना है यह तय नहीं कर पा रहे।",
+    jobCompletionError: "जॉब पूरा करने में विफल",
+    genericError: "विफल: ",
+    withdrawBidError: "बोली वापस लेने में त्रुटि",
+    jobCancelledRefunded: "जॉब रद्द और पैसे वापस कर दिए गए।",
+    cancelError: "रद्द करने में विफल",
+    cancellationError: "रद्द करते समय त्रुटि",
+    paymentSuccessChat: "भुगतान सफल! चैट अनलॉक।",
+
+    // Common Actions
+    cancel: "रद्द करें",
+    delete: "हटाएं",
+    stop: "रोकें",
+    voice: "आवाज़ (Voice)",
+    uploading: "अपलोड हो रहा है...",
+
+    // Notifications Panel
+    markRead: "पढ़ा हुआ",
+    clearAll: "सभी हटाएं",
+    clearAllPrompt: "सभी सूचनाएं हटाएं?",
+    noNotifications: "अभी तक कोई सूचना नहीं",
+
+    // Job Posting Form
+    updateJob: "जॉब अपडेट करें",
+    postJobWithFee: "जॉब पोस्ट करें (₹{fee})",
+    walletUsageDisclaimer: "वॉलेट से ₹{fee} का उपयोग होगा (शेष: ₹{balance})",
+    uploadingImage: "फोटो अपलोड हो रही है...",
+    jobPostedDeduction: "जॉब पोस्ट हुई! वॉलेट से ₹{fee} काटे गए।",
+    photoAnalyzed: "फोटो के आधार पर विवरण अपडेट किया गया।",
+    analyzeAi: "AI विश्लेषण",
+    addPhoto: "फोटो जोड़ें",
+    enhancing: "सुधार रहा है...",
+    wageRecommended: "अनुशंसित: ₹{price}",
+    wageEstimateFail: "अनुमान नहीं लगा सके।",
+
+    // Voice & Errors
+    voiceNotSupported: "आपका ब्राउज़र वॉयस इनपुट सपोर्ट नहीं करता।",
+    micBlocked: "माइक्रोफ़ोन एक्सेस ब्लॉक है।",
+    voiceStartFailed: "वॉयस इनपुट शुरू करने में विफल।",
+    paymentSuccessJobFail: "भुगतान सफल लेकिन जॉब बनाने में विफल। सहायता से संपर्क करें।",
+    cantEditInProgress: "प्रगति पर चल रहे काम को संपादित नहीं कर सकते।",
+    cantEditCompleted: "पूरे हो चुके या रद्द किए गए काम को संपादित नहीं कर सकते।",
+    cancelJobRefundPrompt: "जॉब रद्द करें और रिफंड पाएं?",
+    cancelJob: "रॉब रद्द करें",
+    deleteJobPrompt: "क्या आप इस जॉब को हटाना चाहते हैं?",
+    withdrawBidPrompt: "क्या आप अपनी बोली वापस लेना चाहते हैं?",
+    bidWithdrawn: "बोली सफलतापूर्वक वापस ली गई।",
+    declineCounterPrompt: "क्या आप इस प्रस्ताव को अस्वीकार करना चाहते हैं?",
+    counterDeclined: "प्रस्ताव अस्वीकार। आपकी बोली वापस ले ली गई।",
+    counterAcceptedPay: "काउंटर स्वीकार! चैट अनलॉक करने के लिए भुगतान करें।",
+    chatUnlocked: "चैट अनलॉक! वॉलेट से ₹{fee} काटे गए।",
+    chatUnlockFail: "भुगतान दर्ज किया गया लेकिन अनलॉक विफल रहा।",
+    chatOnlyAfterAccept: "चैट केवल जॉब स्वीकार होने के बाद उपलब्ध है",
+    notParticipant: "आप इस जॉब में भागीदार नहीं हैं",
+
+    // App State
+    online: "ऑनलाइन",
+    offline: "ऑफ़लाइन",
   }
 };
 

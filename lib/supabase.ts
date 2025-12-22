@@ -257,20 +257,40 @@ export type Database = {
           id: string;
           job_id: string;
           sender_id: string;
+          receiver_id: string | null;
           text: string;
           translated_text: string | null;
+          is_deleted: boolean;
+          read: boolean;
+          read_at: string | null;
+          media_type: 'voice' | 'image' | 'video' | null;
+          media_url: string | null;
+          media_duration: number | null;
           created_at: string;
         };
         Insert: {
           id?: string;
           job_id: string;
           sender_id: string;
+          receiver_id?: string | null;
           text: string;
           translated_text?: string | null;
+          is_deleted?: boolean;
+          read?: boolean;
+          read_at?: string | null;
+          media_type?: 'voice' | 'image' | 'video' | null;
+          media_url?: string | null;
+          media_duration?: number | null;
         };
         Update: {
           text?: string;
           translated_text?: string | null;
+          is_deleted?: boolean;
+          read?: boolean;
+          read_at?: string | null;
+          media_type?: 'voice' | 'image' | 'video' | null;
+          media_url?: string | null;
+          media_duration?: number | null;
         };
       };
       reviews: {

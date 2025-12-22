@@ -391,7 +391,7 @@ const AppContent: React.FC = () => {
 
     if (!receiverId) {
       console.error('Cannot determine chat receiver');
-      showAlert('Error: Cannot determine who to send message to.', 'error');
+      showAlert(t.chatReceiverError, 'error');
       return;
     }
 
@@ -471,7 +471,7 @@ const AppContent: React.FC = () => {
       showAlert(t.jobCompletedAlert, 'success');
     } catch (err: any) {
       console.error('[App] Error in handleCompleteJob:', err);
-      showAlert(`Failed to complete job: ${err.message || 'Unknown error'}`, 'error');
+      showAlert(`${t.jobCompletionError}: ${err.message || 'Unknown error'}`, 'error');
     }
   };
 
@@ -544,11 +544,11 @@ const AppContent: React.FC = () => {
 
         // 4. Show worker their payment modal to unlock chat
         setWorkerPaymentModal({ isOpen: true, job, bidId });
-        showAlert(language === 'en' ? 'Counter accepted! Pay to unlock chat.' : 'काउंटर स्वीकार! चैट अनलॉक करने के लिए भुगतान करें।', 'success');
+        showAlert(t.counterAcceptedPay, 'success');
 
       } else if (action === 'REJECT') {
         // Confirmation dialog
-        if (!confirm(language === 'en' ? 'Decline this counter offer? Your bid will be removed.' : 'क्या आप इस प्रस्ताव को अस्वीकार करना चाहते हैं?')) return;
+        if (!confirm(t.declineCounterPrompt)) return;
 
         const updatedJob = { ...job, bids: job.bids.filter(b => b.id !== bidId) };
         await updateJob(updatedJob);
@@ -556,7 +556,7 @@ const AppContent: React.FC = () => {
         // await addNotification(job.posterId, "Offer Declined", `${bid.workerName} declined your offer for "${job.title}". You can try other workers!`, "WARNING", jobId);
         // Note: addNotification now handles push automatically
 
-        showAlert(language === 'en' ? 'Counter declined. Your bid has been withdrawn.' : 'प्रस्ताव अस्वीकार। आपकी बोली वापस ले ली गई।', 'info');
+        showAlert(t.counterDeclined, 'info');
 
       } else if (action === 'COUNTER' && amount) {
         const updatedBid = { ...bid, amount, negotiationHistory: [...(bid.negotiationHistory || []), { amount, by: UserRole.WORKER, timestamp: Date.now() }] };
@@ -567,12 +567,12 @@ const AppContent: React.FC = () => {
       }
     } catch (err: any) {
       console.error('[WorkerReply] Error:', err);
-      showAlert(`Failed: ${err.message || 'Unknown error'}`, 'error');
+      showAlert(`${t.genericError}${err.message || 'Unknown error'}`, 'error');
     }
   };
 
   const handleWithdrawBid = async (jobId: string, bidId: string) => {
-    if (!confirm(language === 'en' ? 'Are you sure you want to withdraw your bid?' : 'क्या आप अपनी बोली वापस लेना चाहते हैं?')) return;
+    if (!confirm(t.withdrawBidPrompt)) return;
     try {
       const job = jobs.find(j => j.id === jobId); if (!job) return;
       const bid = job.bids.find(b => b.id === bidId);
@@ -593,8 +593,8 @@ const AppContent: React.FC = () => {
       }
       */  // Note: addNotification now handles push automatically
 
-      showAlert(language === 'en' ? 'Bid withdrawn successfully' : 'बोली सफलतापूर्वक वापस ली गई', 'info');
-    } catch { showAlert('Error withdrawing bid', 'error'); }
+      showAlert(t.bidWithdrawn, 'info');
+    } catch { showAlert(t.withdrawBidError, 'error'); }
   };
 
   const handleEditJobLink = (job: Job) => {
@@ -622,15 +622,15 @@ const AppContent: React.FC = () => {
     try {
       const result = await cancelJob(jobId, 'Cancelled by user');
       if (result.success) {
-        showAlert(language === 'en' ? 'Job cancelled and funds refunded.' : 'जॉब रद्द कर दिया गया और पैसे वापस कर दिए गए।', 'success');
+        showAlert(t.jobCancelledRefunded, 'success');
         setSelectedJob(null);
         await refreshUser(); // Update wallet balance
       } else {
-        showAlert(result.error || 'Failed to cancel', 'error');
+        showAlert(result.error || t.cancelError, 'error');
       }
     } catch (e) {
       console.error(e);
-      showAlert('Error during cancellation', 'error');
+      showAlert(t.cancellationError, 'error');
     }
   };
 
@@ -670,10 +670,10 @@ const AppContent: React.FC = () => {
       setChatOpen({ isOpen: true, job, receiverId: job.posterId });
       setActiveChatId(job.id);
       setActiveJobId(job.id);
-      showAlert(language === 'en' ? 'Payment successful! Chat unlocked.' : 'भुगतान सफल! चैट अनलॉक।', 'success');
+      showAlert(t.paymentSuccessChat, 'success');
     } catch (error) {
       console.error('Error updating payment status:', error);
-      showAlert('Payment recorded but chat unlock failed. Try again.', 'error');
+      showAlert(t.chatUnlockFail, 'error');
     }
   };
 
@@ -872,17 +872,23 @@ const AppContent: React.FC = () => {
               }
             }
             else if (title.includes("job completed") || title.includes("complete")) {
-              // Trigger review if poster
+              // Both Poster and Worker should review each other
+              // Previously this was poster-only. Now we check if user is a participant.
               const acceptedBid = job.bids.find(b => b.id === job.acceptedBidId);
-              if (user.id === job.posterId && acceptedBid) {
-                setReviewModalData({
-                  isOpen: true,
-                  revieweeId: acceptedBid.workerId,
-                  revieweeName: acceptedBid.workerName,
-                  jobId: job.id
-                });
+              if (acceptedBid) {
+                const isWorker = user.id === acceptedBid.workerId;
+                const isPoster = user.id === job.posterId;
+
+                if (isWorker || isPoster) {
+                  setReviewModalData({
+                    isOpen: true,
+                    revieweeId: isWorker ? job.posterId : acceptedBid.workerId, // Review the OTHER person
+                    revieweeName: isWorker ? job.posterName : acceptedBid.workerName,
+                    jobId: job.id
+                  });
+                }
               } else {
-                handleChatOpen(job); // Or just show details
+                handleChatOpen(job);
               }
             }
             else if (title.includes("review")) {

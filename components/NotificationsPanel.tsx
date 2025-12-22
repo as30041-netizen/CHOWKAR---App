@@ -24,7 +24,7 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ isOpen, 
     };
 
     const handleClearAll = async () => {
-        if (!confirm(language === 'en' ? 'Clear all notifications?' : 'सभी सूचनाएं हटाएं?')) return;
+        if (!confirm(t.clearAllPrompt)) return;
         try {
             await supabase.rpc('clear_all_notifications');
             setNotifications(prev => prev.filter(n => n.userId !== user.id)); // Clear current user's notifs locally
@@ -64,13 +64,13 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ isOpen, 
                                 onClick={handleMarkAllRead}
                                 className="text-xs flex items-center gap-1 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-3 py-1.5 rounded-full font-medium active:scale-95 transition-all"
                             >
-                                <CheckCheck size={14} /> {language === 'en' ? 'Mark Read' : 'पढ़ा हुआ'}
+                                <CheckCheck size={14} /> {t.markRead}
                             </button>
                             <button
                                 onClick={handleClearAll}
                                 className="text-xs flex items-center gap-1 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-3 py-1.5 rounded-full font-medium active:scale-95 transition-all"
                             >
-                                <Trash2 size={14} /> {language === 'en' ? 'Clear All' : 'सभी हटाएं'}
+                                <Trash2 size={14} /> {t.clearAll}
                             </button>
                         </div>
                     )}
@@ -80,7 +80,7 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ isOpen, 
                     {myNotifications.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-gray-500">
                             <Bell size={48} className="mb-4 opacity-20" />
-                            <p>{language === 'en' ? 'No notifications yet' : 'अभी तक कोई सूचना नहीं'}</p>
+                            <p>{t.noNotifications}</p>
                         </div>
                     ) : (
                         myNotifications.map(notif => (

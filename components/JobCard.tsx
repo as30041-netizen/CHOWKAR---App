@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Job, JobStatus, UserRole, Bid } from '../types';
-import { MapPin, IndianRupee, Clock, CheckCircle2 as CheckCircle, User as UserIcon, Calendar, Hourglass, XCircle, AlertCircle, ChevronRight, Ban, Pencil, ExternalLink, Navigation, Volume2, Square, TrendingUp, Handshake, CornerDownRight } from 'lucide-react';
+import { MapPin, IndianRupee, Clock, CheckCircle2 as CheckCircle, User as UserIcon, Calendar, Hourglass, XCircle, AlertCircle, ChevronRight, Ban, Pencil, ExternalLink, Navigation, Volume2, Square, TrendingUp, Handshake, CornerDownRight, Star } from 'lucide-react';
 import { TRANSLATIONS, CATEGORY_TRANSLATIONS } from '../constants';
 
 interface JobCardProps {
@@ -201,7 +201,7 @@ export const JobCard: React.FC<JobCardProps> = ({
             onClick={(e) => { e.stopPropagation(); onWithdrawBid(job.id, myBid.id); }}
             className="bg-white/50 dark:bg-black/20 hover:bg-white dark:hover:bg-black/40 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 px-2 py-0.5 rounded border border-transparent hover:border-red-100 transition-all text-[10px]"
           >
-            {language === 'en' ? 'Withdraw' : 'वापस लें'}
+            {t.withdraw}
           </button>
         )}
       </div>
@@ -356,17 +356,39 @@ export const JobCard: React.FC<JobCardProps> = ({
             )
           )}
 
-          {/* Contact Button */}
-          {(job.status === JobStatus.IN_PROGRESS || job.status === JobStatus.COMPLETED) &&
-            (isPoster || (acceptedBid && acceptedBid.workerId === currentUserId)) && (
+          {/* Contact / Review Button */}
+          {job.status === JobStatus.COMPLETED && (isPoster || (acceptedBid && acceptedBid.workerId === currentUserId)) && (
+            <div className="flex gap-2">
+              {/* Only show Review button if not reviewed yet? We'd need to know if user reviewed. 
+                    For now, showing it always for completed jobs allows editing or checking. 
+                    Ideally, we filter this out if reviewed. */}
+              <button
+                onClick={(e) => { e.stopPropagation(); onClick(); /* Opens modal which has review logic */ }}
+                className="bg-amber-100 text-amber-800 border border-amber-200 px-4 py-2.5 rounded-xl text-sm font-bold flex items-center shadow-sm hover:bg-amber-200 transition-all"
+              >
+                <Star size={16} className="mr-2 fill-amber-600 text-amber-600" />
+                {t.rateExperience}
+              </button>
+
               <button
                 onClick={() => onChat(job)}
-                className="bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold flex items-center shadow-md shadow-emerald-200 hover:bg-emerald-700 transition-all"
+                className="bg-gray-100 text-gray-700 border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-bold flex items-center hover:bg-gray-200 transition-all"
               >
                 <UserIcon size={16} className="mr-2" />
                 {t.chat}
               </button>
-            )}
+            </div>
+          )}
+
+          {job.status === JobStatus.IN_PROGRESS && (isPoster || (acceptedBid && acceptedBid.workerId === currentUserId)) && (
+            <button
+              onClick={() => onChat(job)}
+              className="bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold flex items-center shadow-md shadow-emerald-200 hover:bg-emerald-700 transition-all"
+            >
+              <UserIcon size={16} className="mr-2" />
+              {t.chat}
+            </button>
+          )}
         </div>
       </div>
     </div>
