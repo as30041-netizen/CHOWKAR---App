@@ -3,9 +3,10 @@ import { supabase } from '../lib/supabase';
 import { fetchJobMessages } from '../services/chatService';
 import { fetchJobContact } from '../services/jobService';
 import { Job, ChatMessage, User } from '../types';
-import { Send, Phone, CheckCircle, ArrowLeft, LockKeyhole, Paperclip, MoreVertical, Check, CheckCheck, Languages, Mic, MicOff, Loader2, Sparkles, Lock, Volume2, Square, Trash2, ShieldAlert, FileText, Flag } from 'lucide-react';
+import { Send, Phone, CheckCircle, ArrowLeft, LockKeyhole, Paperclip, MoreVertical, Check, CheckCheck, Languages, Mic, MicOff, Loader2, Sparkles, Lock, Volume2, Square, Trash2, ShieldAlert, FileText, Flag, ChevronRight } from 'lucide-react';
 import { SafetyTipsModal } from './SafetyTipsModal';
 import { ReportUserModal } from './ReportUserModal';
+import { UserProfileModal } from './UserProfileModal';
 
 interface ChatInterfaceProps {
   job: Job;
@@ -77,6 +78,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [isOtherUserOnline, setIsOtherUserOnline] = useState(false);
   const [showSafetyTips, setShowSafetyTips] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const typingTimeoutRef = useRef<any>(null);
 
   // Local History State (Lazy Loaded)
@@ -398,7 +400,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               <ArrowLeft size={22} />
             </button>
 
-            <div className="flex items-center gap-3">
+            <div
+              className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+              onClick={() => setShowProfileModal(true)}
+            >
               <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-700 dark:text-emerald-400 font-bold overflow-hidden">
                 {otherPersonPhoto ? (
                   <img src={otherPersonPhoto} alt={otherPersonName} className="w-full h-full object-cover" />
@@ -407,7 +412,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 )}
               </div>
               <div>
-                <h2 className="font-bold text-gray-900 dark:text-white leading-none">{otherPersonName}</h2>
+                <h2 className="font-bold text-gray-900 dark:text-white leading-none flex items-center gap-1">
+                  {otherPersonName}
+                  <ChevronRight size={14} className="text-gray-400" />
+                </h2>
                 <div className="flex items-center gap-1.5 mt-1">
                   <span className={`w-2 h-2 rounded-full ${isOtherUserOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-300 dark:bg-gray-600'}`}></span>
                   <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">{isOtherUserOnline ? 'Online' : 'Offline'}</span>
@@ -670,6 +678,14 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           reportedUserName={otherPersonName}
           reporterUserId={currentUser.id}
           jobId={job.id}
+        />
+
+        <UserProfileModal
+          isOpen={showProfileModal}
+          onClose={() => setShowProfileModal(false)}
+          userId={otherPersonId}
+          userName={otherPersonName}
+          phoneNumber={otherPersonPhone} // Pass resolved secure phone if available
         />
       </div>
     </>

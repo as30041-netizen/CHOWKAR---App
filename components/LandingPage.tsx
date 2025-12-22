@@ -20,7 +20,7 @@ interface LandingPageProps {
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSigningIn }) => {
     const navigate = useNavigate();
-    const { language, setLanguage, user } = useUser();
+    const { language, setLanguage, user, t } = useUser();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [activeFaq, setActiveFaq] = useState<number | null>(null);
 
@@ -80,7 +80,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                                 {language === 'en' ? 'Features' : 'सुविधाएँ'}
                             </button>
                             <button onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })} className="text-gray-600 dark:text-gray-300 hover:text-emerald-600 font-medium transition-colors">
-                                {language === 'en' ? 'How it Works' : 'यह कैसे काम करता है'}
+                                {t.howItWorks}
                             </button>
 
                             {/* Language Toggle */}
@@ -93,7 +93,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                             </button>
 
                             <button onClick={onGetStarted} disabled={isSigningIn} className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-lg shadow-emerald-600/20 transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed">
-                                {isSigningIn ? (language === 'en' ? 'Loading...' : '...loading') : (language === 'en' ? 'Get Started Free' : 'मुफ़्त में शुरू करें')}
+                                {isSigningIn ? t.loading : t.heroBtnPoster}
                             </button>
                         </div>
 
@@ -111,7 +111,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                 {isMenuOpen && (
                     <div className="md:hidden absolute top-16 left-0 right-0 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-dark-800 p-4 pt-safe space-y-4 shadow-xl animate-slide-down z-30">
                         <button onClick={onGetStarted} disabled={isSigningIn} className="block w-full text-center py-3 bg-emerald-600 text-white rounded-xl font-bold disabled:opacity-70">
-                            {isSigningIn ? 'Loading...' : (language === 'en' ? 'Get Started Free' : 'मुफ़्त में शुरू करें')}
+                            {isSigningIn ? t.loading : t.heroBtnPoster}
                         </button>
                         <button onClick={() => setLanguage(language === 'en' ? 'hi' : 'en')} className="w-full py-3 flex items-center justify-center gap-2 border border-gray-200 dark:border-gray-700 rounded-xl font-bold text-gray-700 dark:text-gray-300">
                             <Globe size={18} /> {language === 'en' ? 'Switch to Hindi' : 'अंग्रेजी में बदलें'}
@@ -137,27 +137,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                         </div>
 
                         <h1 className="text-5xl md:text-7xl font-black text-gray-900 dark:text-white tracking-tight mb-6 leading-tight animate-fade-in-up delay-100">
-                            {language === 'en' ? (
-                                <>Find Work. <span className="text-emerald-600 dark:text-emerald-400">Hire Locally.</span><br />Zero Commission.</>
-                            ) : (
-                                <>काम खोजें। <span className="text-emerald-600 dark:text-emerald-400">स्थानीय लोगों को रखें।</span><br />शून्य कमीशन।</>
-                            )}
+                            {t.heroTitle}
                         </h1>
 
                         <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto mb-10 leading-relaxed animate-fade-in-up delay-200">
-                            {language === 'en'
-                                ? "Connect directly with trusted workers and employers in your village or town. No middlemen, no hidden fees."
-                                : "अपने गांव या शहर में भरोसेमंद कामगारों और नियोक्ताओं से सीधे जुड़ें। कोई बिचौलिया नहीं, कोई छिपी हुई फीस नहीं।"}
+                            {t.heroSubtitle}
                         </p>
 
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in-up delay-300">
                             <button onClick={onGetStarted} disabled={isSigningIn} className="w-full sm:w-auto px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-lg shadow-xl shadow-emerald-600/20 transition-all hover:-translate-y-1 hover:shadow-2xl flex items-center justify-center gap-2">
                                 <Briefcase size={24} />
-                                {isSigningIn ? 'Loading...' : (language === 'en' ? 'Get Started Free' : 'मुफ़्त में शुरू करें')}
+                                {isSigningIn ? t.loading : t.heroBtnPoster}
                             </button>
                             <button onClick={onGetStarted} disabled={isSigningIn} className="w-full sm:w-auto px-8 py-4 bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-2 border-gray-200 dark:border-gray-700 hover:border-emerald-500 dark:hover:border-emerald-500 rounded-2xl font-bold text-lg transition-all hover:-translate-y-1 flex items-center justify-center gap-2">
                                 <Users size={24} className="text-emerald-600" />
-                                {isSigningIn ? 'Loading...' : (language === 'en' ? 'Find Work' : 'काम खोजें')}
+                                {isSigningIn ? t.loading : t.heroBtnWorker}
                             </button>
                         </div>
 
@@ -169,7 +163,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                                     className="inline-flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold hover:underline bg-emerald-50 dark:bg-emerald-900/30 px-6 py-3 rounded-xl border border-emerald-100 dark:border-emerald-800/50"
                                 >
                                     <Smartphone size={20} />
-                                    {language === 'en' ? 'Download Android App (APK)' : 'एंड्रॉइड ऐप डाउनलोड करें (APK)'}
+                                    {t.downloadApp}
                                 </a>
                                 <p className="text-xs text-gray-500 mt-2">v1.0.0 • 100% Free</p>
                             </div>
@@ -189,12 +183,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                                         <Briefcase size={32} />
                                     </div>
                                     <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2">
-                                        {language === 'en' ? 'For Employers' : 'नियोक्ताओं के लिए'}
+                                        {t.forEmployers}
                                     </h3>
                                     <p className="text-gray-600 dark:text-gray-300 mb-6 h-12">
-                                        {language === 'en'
-                                            ? 'Hire skilled drivers, farm laborers, maids, and construction workers instantly.'
-                                            : 'ड्राइवर, खेत मजदूर, नौकरानी और निर्माण श्रमिकों को तुरंत किराए पर लें।'}
+                                        {t.employerDesc}
                                     </p>
                                     <ul className="space-y-3 mb-8">
                                         {['Verified Profiles', 'Direct Calling', 'Negotiate Your Price'].map((item, i) => (
@@ -205,7 +197,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                                         ))}
                                     </ul>
                                     <button onClick={onGetStarted} className="inline-flex items-center gap-2 font-bold text-blue-600 dark:text-blue-400 hover:gap-3 transition-all">
-                                        {language === 'en' ? 'Post a Job Now' : 'अभी जॉब पोस्ट करें'} <ArrowRight size={20} />
+                                        {t.postJobNow} <ArrowRight size={20} />
                                     </button>
                                 </div>
                             </div>
@@ -218,12 +210,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                                         <Users size={32} />
                                     </div>
                                     <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2">
-                                        {language === 'en' ? 'For Workers' : 'कामगारों के लिए'}
+                                        {t.forWorkers}
                                     </h3>
                                     <p className="text-gray-600 dark:text-gray-300 mb-6 h-12">
-                                        {language === 'en'
-                                            ? 'Find daily wage jobs near you. Get paid directly by the employer. No commission.'
-                                            : 'अपने पास रोज़गार खोजें। नियोक्ता द्वारा सीधे भुगतान प्राप्त करें। कोई कमीशन नहीं।'}
+                                        {t.workerDesc}
                                     </p>
                                     <ul className="space-y-3 mb-8">
                                         {['Jobs Near You', 'Keep 100% Earnings', 'Build Your Reputation'].map((item, i) => (
@@ -234,7 +224,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                                         ))}
                                     </ul>
                                     <button onClick={onGetStarted} className="inline-flex items-center gap-2 font-bold text-emerald-600 dark:text-emerald-400 hover:gap-3 transition-all">
-                                        {language === 'en' ? 'Create Worker Profile' : 'प्रोफाइल बनाएं'} <ArrowRight size={20} />
+                                        {t.createProfile} <ArrowRight size={20} />
                                     </button>
                                 </div>
                             </div>
@@ -276,10 +266,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="text-center mb-16">
                             <h2 className="text-3xl font-black text-gray-900 dark:text-white mb-4">
-                                {language === 'en' ? 'Popular Services' : 'लोकप्रिय सेवाएं'}
+                                {t.popularServices}
                             </h2>
                             <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-                                {language === 'en' ? 'Find help for any task, anytime.' : 'किसी भी कार्य के लिए मदद पाएं, कभी भी।'}
+                                {t.popularServicesDesc}
                             </p>
                         </div>
 
@@ -310,10 +300,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="text-center mb-16">
                             <h2 className="text-3xl font-black text-gray-900 dark:text-white mb-4">
-                                {language === 'en' ? 'Success Stories' : 'सफलता की कहानियां'}
+                                {t.successStories}
                             </h2>
                             <p className="text-xl text-gray-600 dark:text-gray-400">
-                                {language === 'en' ? 'Real people, real earnings.' : 'असली लोग, असली कमाई।'}
+                                {t.successStoriesDesc}
                             </p>
                         </div>
 
@@ -361,7 +351,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="text-center mb-16">
                             <h2 className="text-3xl font-black text-gray-900 dark:text-white mb-4">
-                                {language === 'en' ? 'How It Works' : 'यह कैसे काम करता है'}
+                                {t.howItWorks}
                             </h2>
                         </div>
 
@@ -393,7 +383,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
 
                         <div className="text-center mt-12">
                             <button onClick={() => openModal('safety')} className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline flex items-center justify-center gap-2 mx-auto">
-                                <PlayCircle size={20} /> Watch Video Guide
+                                <PlayCircle size={20} /> {t.watchVideo}
                             </button>
                         </div>
                     </div>
@@ -404,7 +394,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="text-center mb-12">
                             <h2 className="text-3xl font-black text-gray-900 dark:text-white mb-4">
-                                Frequently Asked Questions
+                                {t.faqTitle}
                             </h2>
                         </div>
 
@@ -433,6 +423,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                         </div>
                     </div>
                 </section>
+
 
                 {/* --- Footer Component --- */}
                 <Footer language={language} onOpenModal={openModal} />

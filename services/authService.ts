@@ -149,6 +149,30 @@ export const getCurrentUser = async (existingAuthUser?: any): Promise<{ user: Us
     }
 
     console.log('[AuthService] Profile found, processing...');
+    // Fetch Reviews for Self
+    const { data: reviewsData, error: reviewsError } = await supabase
+      .from('reviews')
+      .select(`
+        id,
+        reviewer_id,
+        rating,
+        comment,
+        created_at,
+        reviewer:profiles!reviewer_id (name)
+      `)
+      .eq('reviewee_id', authUser.id)
+      .order('created_at', { ascending: false });
+
+    const reviews = (reviewsData || []).map((r: any) => ({
+      id: r.id,
+      reviewerId: r.reviewer_id,
+      reviewerName: r.reviewer?.name || 'Unknown User',
+      rating: r.rating,
+      comment: r.comment,
+      date: new Date(r.created_at).getTime(),
+      tags: []
+    }));
+
     const user: User = {
       id: profile.id,
       name: profile.name,
@@ -168,7 +192,7 @@ export const getCurrentUser = async (existingAuthUser?: any): Promise<{ user: Us
       experience: profile.experience || undefined,
       jobsCompleted: profile.jobs_completed,
       joinDate: new Date(profile.join_date).getTime(),
-      reviews: []
+      reviews: reviews
     };
 
     return { user };
@@ -268,6 +292,30 @@ export const getUserProfile = async (userId: string): Promise<{ user: User | nul
 
     if (!profile) return { user: null };
 
+    // Fetch Reviews
+    const { data: reviewsData, error: reviewsError } = await supabase
+      .from('reviews')
+      .select(`
+        id,
+        reviewer_id,
+        rating,
+        comment,
+        created_at,
+        reviewer:profiles!reviewer_id (name)
+      `)
+      .eq('reviewee_id', userId)
+      .order('created_at', { ascending: false });
+
+    const reviews = (reviewsData || []).map((r: any) => ({
+      id: r.id,
+      reviewerId: r.reviewer_id,
+      reviewerName: r.reviewer?.name || 'Unknown User',
+      rating: r.rating,
+      comment: r.comment,
+      date: new Date(r.created_at).getTime(),
+      tags: [] // Tags not yet implemented in DB
+    }));
+
     const user: User = {
       id: profile.id,
       name: profile.name,
@@ -287,7 +335,7 @@ export const getUserProfile = async (userId: string): Promise<{ user: User | nul
       experience: profile.experience || undefined,
       jobsCompleted: profile.jobs_completed,
       joinDate: new Date(profile.join_date).getTime(),
-      reviews: []
+      reviews: reviews
     };
 
     return { user };

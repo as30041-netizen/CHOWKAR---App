@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useJobs } from '../contexts/JobContextDB';
+import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContextDB';
 import { Pencil, Crown, CheckCircle2, MapPin, Star, Award, Briefcase, LogOut } from 'lucide-react';
 import { REVIEW_TAGS_TRANSLATIONS } from '../constants';
@@ -24,8 +24,21 @@ export const Profile: React.FC<ProfileProps> = ({ onEditProfile, setShowSubscrip
     // Let's pass it as prop? No, let's use the context here if we can.
     // Actually, let's just use useJobs() here too.
 
-    const { jobs } = useJobs();
-    const postedJobsCount = jobs.filter((j: any) => j.posterId === user.id).length;
+    const [postedJobsCount, setPostedJobsCount] = useState(0);
+
+    React.useEffect(() => {
+        const fetchJobCount = async () => {
+            const { count, error } = await supabase
+                .from('jobs')
+                .select('*', { count: 'exact', head: true })
+                .eq('poster_id', user.id);
+
+            if (!error && count !== null) {
+                setPostedJobsCount(count);
+            }
+        };
+        fetchJobCount();
+    }, [user.id]);
 
     return (
         <div className="pb-24 md:pb-6 animate-fade-in">

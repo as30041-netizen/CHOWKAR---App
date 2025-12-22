@@ -101,7 +101,7 @@ export const Home: React.FC<HomeProps> = ({
                         }`}
                 >
                     <Briefcase size={18} />
-                    {language === 'en' ? 'Find Work' : 'काम ढूंढे'}
+                    {t.findWork}
                 </button>
                 <button
                     onClick={() => setRole(UserRole.POSTER)}
@@ -111,7 +111,7 @@ export const Home: React.FC<HomeProps> = ({
                         }`}
                 >
                     <CheckCircle2 size={18} />
-                    {language === 'en' ? 'Hire / My Jobs' : 'हायर / मेरे जॉब्स'}
+                    {t.hireMyJobs}
                 </button>
             </div>
 
@@ -119,7 +119,7 @@ export const Home: React.FC<HomeProps> = ({
             <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold text-emerald-900 dark:text-emerald-500 flex items-center gap-2">
                     {role === UserRole.POSTER
-                        ? (language === 'en' ? 'My Job Dashboard' : 'मेरा जॉब डैशबोर्ड')
+                        ? t.myJobDashboard
                         : (showMyBidsOnly ? t.myApplications : t.jobsNearMe)
                     }
                     <button onClick={refreshJobs} className="p-1 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-gray-800 rounded-full transition-colors" title="Refresh Jobs">
@@ -141,7 +141,7 @@ export const Home: React.FC<HomeProps> = ({
                     <div className="relative flex-1">
                         <input
                             type="text"
-                            placeholder={role === UserRole.WORKER ? t.searchWork : (language === "en" ? "Search my jobs..." : "मेरे जॉब्स खोजें...")}
+                            placeholder={role === UserRole.WORKER ? t.searchWork : t.searchPosts}
                             className="w-full pl-10 pr-10 py-2.5 appearance-none bg-white dark:bg-gray-900 text-black dark:text-white border border-emerald-100 dark:border-emerald-900/30 rounded-xl text-sm outline-none shadow-sm placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
@@ -242,10 +242,10 @@ export const Home: React.FC<HomeProps> = ({
                                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                                     }`}
                             >
-                                {tab === 'ALL' ? (language === 'en' ? 'All Jobs' : 'सभी') :
-                                    tab === 'OPEN' ? (language === 'en' ? 'Open' : 'ओपन') :
-                                        tab === 'IN_PROGRESS' ? (language === 'en' ? 'Active' : 'सक्रिय') :
-                                            (language === 'en' ? 'Done' : 'पूर्ण')}
+                                {tab === 'ALL' ? t.all :
+                                    tab === 'OPEN' ? t.open :
+                                        tab === 'IN_PROGRESS' ? t.active :
+                                            t.done}
                             </button>
                         ))}
                     </div>
@@ -339,12 +339,12 @@ export const Home: React.FC<HomeProps> = ({
                         {isLoadingMore ? (
                             <>
                                 <Loader2 size={18} className="animate-spin text-emerald-600 dark:text-emerald-400" />
-                                {language === 'en' ? 'Loading...' : 'लोड हो रहा है...'}
+                                {t.loading}
                             </>
                         ) : (
                             <>
                                 <RotateCw size={18} className="text-emerald-600 dark:text-emerald-400" />
-                                {language === 'en' ? 'Load More Jobs' : 'और जॉब देखें'}
+                                {t.loadMore}
                             </>
                         )}
                     </button>

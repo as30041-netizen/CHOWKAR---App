@@ -17,15 +17,26 @@ export const registerPushNotifications = async (userId: string): Promise<{ succe
         let permission = await PushNotifications.checkPermissions();
 
         if (permission.receive !== 'granted') {
-            permission = await PushNotifications.requestPermissions();
+            const result = await PushNotifications.requestPermissions();
+            if (result.receive !== 'granted') {
+                console.log('[Push] Permission denied after request');
+                return { success: false, error: 'Permission denied' };
+            }
         }
 
-        if (permission.receive !== 'granted') {
-            console.log('[Push] Permission denied');
-            return { success: false, error: 'Permission denied' };
+        // Create Notification Channel for Android 8+
+        if (Capacitor.getPlatform() === 'android') {
+            await PushNotifications.createChannel({
+                id: 'chowkar_notifications',
+                name: 'General Notifications',
+                description: 'General app notifications for messages and bids',
+                importance: 5, // High importance
+                visibility: 1, // Public
+                vibration: true,
+            });
         }
 
-        // Register with FCM
+        // Register with FCM/APNS
         await PushNotifications.register();
 
         // Wait for registration to complete and get token

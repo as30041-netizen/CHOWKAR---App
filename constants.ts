@@ -233,7 +233,38 @@ export const TRANSLATIONS = {
     withdraw: "Withdraw",
     yourOfferLabel: "Your Offer",
     noBidsFound: "No bids found.",
-    acceptingBidFeeWarn: "Accepting this bid will deduct a ₹{fee} platform fee from your wallet. Continue?"
+    acceptingBidFeeWarn: "Accepting this bid will deduct a ₹{fee} platform fee from your wallet. Continue?",
+
+    // Landing Page
+    heroTitle: "Find Work. Hire Locally. Zero Commission.",
+    heroSubtitle: "Connect directly with trusted workers and employers in your village or town. No middlemen, no hidden fees.",
+    heroBtnWorker: "Find Work",
+    heroBtnPoster: "Get Started Free",
+    popularServices: "Popular Services",
+    popularServicesDesc: "Find help for any task, anytime.",
+    successStories: "Success Stories",
+    successStoriesDesc: "Real people, real earnings.",
+    howItWorks: "How It Works",
+    watchVideo: "Watch Video Guide",
+    faqTitle: "Frequently Asked Questions",
+    downloadApp: "Download Android App (APK)",
+    forEmployers: "For Employers",
+    forWorkers: "For Workers",
+    employerDesc: "Hire skilled drivers, farm laborers, maids, and construction workers instantly.",
+    workerDesc: "Find daily wage jobs near you. Get paid directly by the employer. No commission.",
+    postJobNow: "Post a Job Now",
+    createProfile: "Create Worker Profile",
+
+    // Home - Mode Switcher
+    findWork: "Find Work",
+    hireMyJobs: "Hire / My Jobs",
+    myJobDashboard: "My Job Dashboard",
+    all: "All Jobs",
+    open: "Open",
+    active: "Active",
+    done: "Done",
+    loadMore: "Load More Jobs",
+    loading: "Loading..."
   },
   hi: {
     // Auth
@@ -424,7 +455,38 @@ export const TRANSLATIONS = {
     withdraw: "निकालें",
     yourOfferLabel: "आपका प्रस्ताव",
     noBidsFound: "कोई बोली नहीं मिली।",
-    acceptingBidFeeWarn: "इस बोली को स्वीकार करने पर आपके वॉलेट से ₹{fee} प्लेटफॉर्म शुल्क काट लिया जाएगा। जारी रखें?"
+    acceptingBidFeeWarn: "इस बोली को स्वीकार करने पर आपके वॉलेट से ₹{fee} प्लेटफॉर्म शुल्क काट लिया जाएगा। जारी रखें?",
+
+    // Landing Page
+    heroTitle: "काम खोजें। स्थानीय लोगों को रखें। शून्य कमीशन।",
+    heroSubtitle: "अपने गांव या शहर में भरोसेमंद कामगारों और नियोक्ताओं से सीधे जुड़ें। कोई बिचौलिया नहीं, कोई छिपी हुई फीस नहीं।",
+    heroBtnWorker: "काम खोजें",
+    heroBtnPoster: "मुफ़्त में शुरू करें",
+    popularServices: "लोकप्रिय सेवाएं",
+    popularServicesDesc: "किसी भी कार्य के लिए मदद पाएं, कभी भी।",
+    successStories: "सफलता की कहानियां",
+    successStoriesDesc: "असली लोग, असली कमाई।",
+    howItWorks: "यह कैसे काम करता है",
+    watchVideo: "वीडियो गाइड देखें",
+    faqTitle: "अक्सर पूछे जाने वाले प्रश्न",
+    downloadApp: "एंड्रॉइड ऐप डाउनलोड करें (APK)",
+    forEmployers: "नियोक्ताओं के लिए",
+    forWorkers: "कामगारों के लिए",
+    employerDesc: "ड्राइवर, खेत मजदूर, नौकरानी और निर्माण श्रमिकों को तुरंत किराए पर लें।",
+    workerDesc: "अपने पास रोज़गार खोजें। नियोक्ता द्वारा सीधे भुगतान प्राप्त करें। कोई कमीशन नहीं।",
+    postJobNow: "अभी जॉब पोस्ट करें",
+    createProfile: "प्रोफाइल बनाएं",
+
+    // Home - Mode Switcher
+    findWork: "काम ढूंढे",
+    hireMyJobs: "हायर / मेरे जॉब्स",
+    myJobDashboard: "मेरा जॉब डैशबोर्ड",
+    all: "सभी",
+    open: "ओपन",
+    active: "सक्रिय",
+    done: "पूर्ण",
+    loadMore: "और जॉब देखें",
+    loading: "लोड हो रहा है..."
   }
 };
 

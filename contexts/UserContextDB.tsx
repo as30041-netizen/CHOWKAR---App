@@ -462,7 +462,9 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             showAlert(`${newNotif.title}: ${newNotif.message}`, 'info');
 
             // Trigger System Tray Notification (Native Only, Background Only)
-            // Only schedule push notification if app is in background
+            // REMOVED: LocalNotifications.schedule caused duplicate notifications because server also sends FCM.
+            // We rely 100% on the server-side Edge Function to send FCM push when needed.
+            /* 
             if (Capacitor.isNativePlatform() && shouldSendPushNotification()) {
               LocalNotifications.schedule({
                 notifications: [{
@@ -481,6 +483,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }]
               }).catch(err => console.error('[LocalNotification] Error:', err));
             }
+            */
           }, 0);
         }
 
