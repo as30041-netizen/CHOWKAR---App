@@ -217,11 +217,6 @@ export const Home: React.FC<HomeProps> = ({
                     </button>
                 </div>
                 <div className="flex overflow-x-auto gap-2 pb-2 no-scrollbar">
-                    {role === UserRole.WORKER && (
-                        <button onClick={() => setShowMyBidsOnly(!showMyBidsOnly)} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold border transition-colors ${showMyBidsOnly ? 'bg-emerald-800 text-white' : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'}`}>
-                            <CheckCircle2 size={12} /> {t.myBids}
-                        </button>
-                    )}
                     {['All', ...CATEGORIES].map(cat => (
                         <button key={cat} onClick={() => setSelectedCategory(cat)} className={`px-4 py-1.5 rounded-full text-xs font-semibold border transition-colors ${selectedCategory === cat ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border-gray-100 dark:border-gray-800'}`}>
                             {cat === 'All' ? t.allJobs : (CATEGORY_TRANSLATIONS[cat]?.[language] || cat)}
@@ -292,8 +287,23 @@ export const Home: React.FC<HomeProps> = ({
                         const myBid = j.bids.find(b => b.workerId === user.id);
 
                         if (isMyJob) return false; // Don't show own jobs in finder
-                        if (showMyBidsOnly && !myBid) return false;
-                        if (j.status !== JobStatus.OPEN && !myBid) return false;
+
+                        // Filter based on Worker Tabs
+                        if (workerTab === 'FIND') {
+                            // Show Open jobs wheren I haven't bid
+                            if (j.status !== JobStatus.OPEN) return false;
+                            // Optional: Hide jobs I've already bid on? 
+                            // Yes, move them to Active
+                            if (myBid) return false;
+                        } else if (workerTab === 'ACTIVE') {
+                            // Show jobs I've bid on (Pending/Accepted)
+                            if (!myBid) return false;
+                            if (j.status === JobStatus.COMPLETED) return false;
+                        } else if (workerTab === 'HISTORY') {
+                            // Show completed jobs I worked on
+                            if (!myBid) return false;
+                            if (j.status !== JobStatus.COMPLETED) return false;
+                        }
 
                         // Apply Filters
                         if (searchQuery && !j.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
