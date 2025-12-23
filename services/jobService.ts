@@ -22,6 +22,8 @@ const dbJobToApp = (dbJob: any, bids: Bid[] = []): Job => {
     status: dbJob.status as JobStatus,
     acceptedBidId: dbJob.accepted_bid_id || undefined,
     image: dbJob.image || undefined,
+    isBoosted: dbJob.is_boosted,
+    boostExpiry: dbJob.boost_expiry ? new Date(dbJob.boost_expiry).getTime() : undefined,
     createdAt: new Date(dbJob.created_at).getTime(),
     bids
   };
@@ -44,6 +46,7 @@ const dbBidToApp = (dbBid: any): Bid => {
     amount: dbBid.amount,
     message: dbBid.message,
     status: dbBid.status as 'PENDING' | 'ACCEPTED' | 'REJECTED',
+    isHighlighted: dbBid.is_highlighted,
     negotiationHistory: dbBid.negotiation_history || [],
     createdAt: new Date(dbBid.created_at).getTime(),
     posterId: dbBid.poster_id
@@ -130,6 +133,8 @@ export const fetchHomeFeed = async (
       createdAt: new Date(row.created_at).getTime(),
       acceptedBidId: row.accepted_bid_id || undefined,
       image: row.image || undefined,
+      isBoosted: row.is_boosted,
+      boostExpiry: row.boost_expiry ? new Date(row.boost_expiry).getTime() : undefined,
       // FEED OPTIMIZATION: Pre-computed values (no need to load all bids!)
       bids: [], // Empty - will be lazy loaded when needed
       bidCount: Number(row.bid_count),

@@ -99,6 +99,18 @@ export const getCurrentUser = async (existingAuthUser?: any): Promise<{ user: Us
         authUser.email?.split('@')[0] ||
         'User';
 
+      // Handle Referral Lookup
+      let referredBy = null;
+      const refCode = localStorage.getItem('chowkar_referred_by_code');
+      if (refCode) {
+        const { data: refUser } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('referral_code', refCode)
+          .maybeSingle();
+        if (refUser) referredBy = refUser.id;
+      }
+
       const { data: newProfile, error: createError } = await supabase
         .from('profiles')
         .insert({
@@ -115,7 +127,8 @@ export const getCurrentUser = async (existingAuthUser?: any): Promise<{ user: Us
           ai_usage_count: 0,
           jobs_completed: 0,
           join_date: new Date().toISOString(),
-          skills: []
+          skills: [],
+          referred_by: referredBy
         })
         .select()
         .single();
@@ -124,6 +137,9 @@ export const getCurrentUser = async (existingAuthUser?: any): Promise<{ user: Us
         console.error('[Auth] Error creating profile:', createError);
         return { user: null, error: 'Failed to create user profile' };
       }
+
+      // Clear referral after use
+      localStorage.removeItem('chowkar_referred_by_code');
 
       const user: User = {
         id: newProfile.id,
@@ -142,6 +158,9 @@ export const getCurrentUser = async (existingAuthUser?: any): Promise<{ user: Us
         experience: newProfile.experience || undefined,
         jobsCompleted: newProfile.jobs_completed,
         joinDate: new Date(newProfile.join_date).getTime(),
+        referralCode: newProfile.referral_code,
+        referredBy: newProfile.referred_by,
+        verified: newProfile.verified,
         reviews: []
       };
 
@@ -192,6 +211,9 @@ export const getCurrentUser = async (existingAuthUser?: any): Promise<{ user: Us
       experience: profile.experience || undefined,
       jobsCompleted: profile.jobs_completed,
       joinDate: new Date(profile.join_date).getTime(),
+      referralCode: profile.referral_code,
+      referredBy: profile.referred_by,
+      verified: profile.verified,
       reviews: reviews
     };
 
@@ -245,7 +267,8 @@ export const updateUserProfile = async (
         profile_photo: updates.profilePhoto,
         bio: updates.bio,
         skills: updates.skills,
-        experience: updates.experience
+        experience: updates.experience,
+        referred_by: updates.referredBy
       })
       .eq('id', userId);
 
@@ -335,6 +358,9 @@ export const getUserProfile = async (userId: string): Promise<{ user: User | nul
       experience: profile.experience || undefined,
       jobsCompleted: profile.jobs_completed,
       joinDate: new Date(profile.join_date).getTime(),
+      referralCode: profile.referral_code,
+      referredBy: profile.referred_by,
+      verified: profile.verified,
       reviews: reviews
     };
 

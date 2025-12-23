@@ -9,7 +9,7 @@ interface JobContextType {
   addJob: (job: Job) => Promise<string | undefined>;
   updateJob: (job: Job) => Promise<void>;
   deleteJob: (jobId: string) => Promise<void>;
-  addBid: (bid: Bid) => Promise<void>;
+  addBid: (bid: Bid) => Promise<string | undefined>;
   updateBid: (bid: Bid) => Promise<void>;
   refreshJobs: () => Promise<void>;
   fetchMoreJobs: () => Promise<void>;
@@ -422,6 +422,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           return j;
         }));
       }
+      return data?.id; // Return the new Bid ID
     } catch (err) {
       console.error('Error adding bid:', err);
       throw err;

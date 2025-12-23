@@ -27,6 +27,13 @@ export const useDeepLinkHandler = (onAuthSuccess?: () => void) => {
                     const access_token = urlObj.searchParams.get('access_token');
                     const refresh_token = urlObj.searchParams.get('refresh_token');
                     const error_description = urlObj.searchParams.get('error_description');
+                    const ref = urlObj.searchParams.get('ref');
+
+                    // If a referral code is present in the deep link, save it
+                    if (ref) {
+                        console.log('[DeepLink] Found referral code:', ref);
+                        localStorage.setItem('chowkar_referred_by_code', ref);
+                    }
 
                     // Check for errors first
                     if (error_description) {

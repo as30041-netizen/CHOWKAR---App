@@ -41,6 +41,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
         setActiveFaq(activeFaq === index ? null : index);
     };
 
+    // URL Referral Handling
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const refCode = params.get('ref');
+        if (refCode) {
+            console.log('[Referral] Found referral code in URL:', refCode);
+            localStorage.setItem('chowkar_referred_by_code', refCode);
+
+            // Optional: Clean up URL without reload
+            const newUrl = window.location.pathname + window.location.hash;
+            window.history.replaceState({}, document.title, newUrl);
+        }
+    }, []);
+
     // Auto-redirect if logged in (optional UX choice)
     useEffect(() => {
         if (user) {
@@ -59,6 +73,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
             <SafetyTipsModal isOpen={modalState.safety} onClose={() => closeModal('safety')} />
             <CommunityGuidelinesModal isOpen={modalState.guidelines} onClose={() => closeModal('guidelines')} />
             <TermsModal isOpen={modalState.terms} onClose={() => closeModal('terms')} />
+
+            {/* --- Promo Top Banner --- */}
+            <div className="bg-gradient-to-r from-orange-500 via-red-500 to-orange-500 py-2.5 relative z-50 text-center animate-pulse-subtle">
+                <p className="text-white text-sm font-bold flex items-center justify-center gap-2">
+                    <span className="bg-white text-orange-600 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-widest leading-none">Special Offer</span>
+                    {language === 'en'
+                        ? "Get ₹100 FREE in your wallet on joining! Offer valid till 17 June 2026."
+                        : "जुड़ने पर ₹100 मुफ्त पाएं! यह ऑफर 17 जून 2026 तक मान्य है।"
+                    }
+                </p>
+            </div>
 
             {/* --- Navigation --- */}
             <nav className="fixed top-0 left-0 right-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md z-40 border-b border-gray-100 dark:border-gray-800 transition-colors pt-safe">
@@ -143,6 +168,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                         <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto mb-10 leading-relaxed animate-fade-in-up delay-200">
                             {t.heroSubtitle}
                         </p>
+
+                        {/* Promo Badge in Hero */}
+                        <div className="mb-10 animate-bounce duration-3000 inline-block">
+                            <div className="bg-white dark:bg-gray-800 px-6 py-4 rounded-3xl shadow-2xl border-2 border-orange-500 flex items-center gap-4">
+                                <div className="text-4xl">💰</div>
+                                <div className="text-left">
+                                    <p className="text-xs font-bold text-orange-600 uppercase tracking-widest">{language === 'en' ? 'Limited Time' : 'सीमित समय'}</p>
+                                    <p className="text-xl font-black text-gray-900 dark:text-white">
+                                        {language === 'en' ? '₹100 Signup Bonus' : '₹100 साइनअप बोनस'}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
 
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in-up delay-300">
                             <button onClick={onGetStarted} disabled={isSigningIn} className="w-full sm:w-auto px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-lg shadow-xl shadow-emerald-600/20 transition-all hover:-translate-y-1 hover:shadow-2xl flex items-center justify-center gap-2">
@@ -282,7 +320,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                                 { title: 'Electrician', icon: '⚡', color: 'bg-yellow-100 text-yellow-600' },
                                 { title: 'Plumber', icon: '🔧', color: 'bg-cyan-100 text-cyan-600' },
                                 { title: 'Painter', icon: '🎨', color: 'bg-pink-100 text-pink-600' },
-                                { title: 'Other', icon: '🔨', color: 'bg-gray-100 text-gray-600' },
+                                { title: language === 'en' ? 'Refer & Earn' : 'रेफर करें', icon: '🎁', color: 'bg-indigo-100 text-indigo-600' },
                             ].map((cat, i) => (
                                 <button onClick={onGetStarted} key={i} className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm hover:shadow-xl transition-all hover:-translate-y-1 border border-gray-100 dark:border-gray-700 group text-left block w-full">
                                     <div className={`w-12 h-12 ${cat.color} dark:bg-opacity-20 rounded-xl flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform`}>

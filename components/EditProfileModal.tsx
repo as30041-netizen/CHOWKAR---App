@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UserCircle, Loader2 } from 'lucide-react';
 import { useUser } from '../contexts/UserContextDB';
 import { uploadProfileImage, isBase64Image } from '../services/storageService';
+import { supabase } from '../lib/supabase';
 
 interface EditProfileModalProps {
     isOpen: boolean;
@@ -20,6 +21,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
     const [editProfileExp, setEditProfileExp] = useState('');
     const [editProfileSkills, setEditProfileSkills] = useState('');
     const [editProfilePhoto, setEditProfilePhoto] = useState('');
+    const [referralCodeInput, setReferralCodeInput] = useState('');
     const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
@@ -64,7 +66,36 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                 }
             }
 
-            const updates = {
+            // Handle Referral Code (if entered and not already referred)
+            let referrerId = null;
+            if (referralCodeInput.trim() && !user.referredBy) {
+                const code = referralCodeInput.trim().toUpperCase();
+
+                // check if it is own code
+                if (user.referralCode === code) {
+                    showAlert(language === 'en' ? 'You cannot use your own referral code' : 'आप अपने खुद के रेफरल कोड का उपयोग नहीं कर सकते', 'error');
+                    setIsSaving(false);
+                    return;
+                }
+
+                // Verify code existence
+                const { data: referrer, error: refError } = await supabase
+                    .from('profiles')
+                    .select('id')
+                    .eq('referral_code', code)
+                    .single();
+
+                if (refError || !referrer) {
+                    showAlert(language === 'en' ? 'Invalid Referral Code' : 'अमान्य रेफरल कोड', 'error');
+                    setIsSaving(false);
+                    return;
+                }
+
+                referrerId = referrer.id;
+            }
+
+            // Add referral ID to updates if found
+            const updates: any = {
                 name: editProfileName.trim(),
                 phone: editProfilePhone.trim(),
                 location: editProfileLocation.trim(),
@@ -74,7 +105,18 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                 profilePhoto: finalPhotoUrl
             };
 
+            if (referrerId) {
+                updates.referredBy = referrerId;
+            }
+
             await updateUserInDB(updates);
+
+            // Send specific notification for referral success
+            if (referrerId) {
+                await addNotification(user.id, "Referral Applied!", language === 'en' ? "Welcome bonus applied." : "वेलकम बोनस लागू किया गया।", "SUCCESS");
+            }
+
+
             onClose();
             await addNotification(user.id, t.notifProfileUpdated, t.notifProfileUpdatedBody, "SUCCESS");
             showAlert(t.notifProfileUpdated, 'success');
@@ -184,6 +226,31 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                         maxLength={200}
                         className="w-full p-3 rounded-xl border dark:bg-gray-800 dark:border-gray-700 dark:text-white"
                     />
+
+                    {/* Referral Code Input (Only if not already referred) */}
+                    <div className="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700">
+                        <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">
+                            {language === 'en' ? 'Referral Code (Optional)' : 'रेफरल कोड (वैकल्पिक)'}
+                        </label>
+                        {user.referredBy ? (
+                            <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+                                ✅ {language === 'en' ? 'Referred by a friend' : 'मित्र द्वारा रेफर किया गया'}
+                            </p>
+                        ) : (
+                            <input
+                                value={referralCodeInput}
+                                onChange={(e) => setReferralCodeInput(e.target.value.toUpperCase())}
+                                placeholder="USER123"
+                                maxLength={10}
+                                className="w-full p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 font-mono tracking-widest text-center uppercase"
+                            />
+                        )}
+                        {!user.referredBy && (
+                            <p className="text-[10px] text-gray-400 mt-1 text-center">
+                                {language === 'en' ? 'Enter code to verify and support your friend!' : 'अपने दोस्त का अनुरोध स्वीकार करने के लिए कोड डालें!'}
+                            </p>
+                        )}
+                    </div>
                     <button
                         onClick={handleSaveProfile}
                         disabled={isSaving}

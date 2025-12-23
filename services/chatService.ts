@@ -71,3 +71,34 @@ export const fetchLastMessage = async (jobId: string) => {
         return null;
     }
 };
+
+export const editMessage = async (messageId: string, newText: string): Promise<{ success: boolean; error?: any }> => {
+    try {
+        const { error } = await supabase
+            .from('chat_messages')
+            .update({ text: newText })
+            .eq('id', messageId);
+
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error('Error editing message:', error);
+        return { success: false, error };
+    }
+};
+
+export const deleteMessage = async (messageId: string): Promise<{ success: boolean; error?: any }> => {
+    try {
+        // Soft delete
+        const { error } = await supabase
+            .from('chat_messages')
+            .update({ is_deleted: true, text: 'This message was deleted', media_url: null })
+            .eq('id', messageId);
+
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error('Error deleting message:', error);
+        return { success: false, error };
+    }
+};

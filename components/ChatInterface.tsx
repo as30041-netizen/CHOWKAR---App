@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { fetchJobMessages } from '../services/chatService';
 import { fetchJobContact } from '../services/jobService';
 import { Job, ChatMessage, User } from '../types';
-import { Send, Phone, CheckCircle, ArrowLeft, LockKeyhole, Paperclip, MoreVertical, Check, CheckCheck, Languages, Mic, MicOff, Loader2, Sparkles, Lock, Volume2, Square, Trash2, ShieldAlert, FileText, Flag, ChevronRight } from 'lucide-react';
+import { Send, Phone, CheckCircle, ArrowLeft, LockKeyhole, Paperclip, MoreVertical, Check, CheckCheck, Languages, Mic, MicOff, Loader2, Sparkles, Lock, Volume2, Square, Trash2, ShieldAlert, FileText, Flag, ChevronRight, Pencil } from 'lucide-react';
 import { SafetyTipsModal } from './SafetyTipsModal';
 import { ReportUserModal } from './ReportUserModal';
 import { UserProfileModal } from './UserProfileModal';
@@ -22,6 +22,7 @@ interface ChatInterfaceProps {
   isPremium?: boolean;
   remainingTries?: number;
   onMessageUpdate?: (msg: ChatMessage) => void;
+  onEditMessage?: (messageId: string, text: string) => void;
 }
 
 const QUICK_REPLIES_WORKER = [
@@ -54,6 +55,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   onCompleteJob,
   onTranslateMessage,
   onDeleteMessage,
+  onEditMessage,
   onViewJobDetails,
   isPremium,
   remainingTries,
@@ -71,6 +73,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [isListening, setIsListening] = useState(false);
   const [translatingId, setTranslatingId] = useState<string | null>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
 
   // UI State
   const [showMenu, setShowMenu] = useState(false);
@@ -483,6 +487,42 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                   const isMe = msg.senderId === currentUser.id;
                   const isThisSpeaking = speakingMessageId === msg.id;
 
+                  // Inline Editing Mode
+                  if (editingMessageId === msg.id) {
+                    return (
+                      <div key={msg.id} className="flex justify-end mb-2 w-full animate-in fade-in zoom-in-95">
+                        <div className="bg-white dark:bg-gray-800 p-2 rounded-2xl shadow-md border border-emerald-100 dark:border-emerald-900 border-l-4 border-l-emerald-500 w-[85%] max-w-[400px]">
+                          <textarea
+                            className="w-full text-sm p-2 bg-gray-50 dark:bg-gray-900 rounded-lg outline-none focus:ring-1 ring-emerald-500 text-gray-800 dark:text-gray-100 resize-none"
+                            value={editText}
+                            onChange={(e) => setEditText(e.target.value)}
+                            rows={3}
+                            autoFocus
+                          />
+                          <div className="flex justify-end gap-2 mt-2">
+                            <button
+                              onClick={() => setEditingMessageId(null)}
+                              className="text-xs px-3 py-1.5 rounded-lg font-medium text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (editText.trim() && editText !== msg.text) {
+                                  onEditMessage?.(msg.id, editText);
+                                }
+                                setEditingMessageId(null);
+                              }}
+                              className="text-xs px-3 py-1.5 rounded-lg font-bold bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
+                            >
+                              Save
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
                   return (
                     <div key={msg.id} className={`flex group ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up`}>
                       <div className="flex items-end gap-1 max-w-[85%]">
@@ -554,6 +594,18 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                                 title="Delete"
                               >
                                 <Trash2 size={12} />
+                              </button>
+                            )}
+                            {onEditMessage && !msg.isDeleted && (
+                              <button
+                                onClick={() => {
+                                  setEditingMessageId(msg.id);
+                                  setEditText(msg.text);
+                                }}
+                                className="p-1.5 rounded-full shadow-sm bg-white/80 hover:bg-blue-50 hover:text-blue-500 text-gray-400 transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                                title="Edit"
+                              >
+                                <Pencil size={12} />
                               </button>
                             )}
                           </div>

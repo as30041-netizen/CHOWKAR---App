@@ -37,7 +37,7 @@ interface PaymentOptions {
     currency?: string;
     description: string;
     userId: string;
-    paymentType: 'JOB_POSTING' | 'CONNECTION';
+    paymentType: 'JOB_POSTING' | 'CONNECTION' | 'WALLET_REFILL';
     relatedJobId?: string;
     relatedBidId?: string;
 }

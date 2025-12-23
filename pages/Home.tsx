@@ -345,6 +345,10 @@ export const Home: React.FC<HomeProps> = ({
                             return b.createdAt - a.createdAt;
                         }
 
+                        // BOOST LOGIC: Boosted jobs always appear first!
+                        if (a.isBoosted && !b.isBoosted) return -1;
+                        if (!a.isBoosted && b.isBoosted) return 1;
+
                         // Worker mode: apply selected sort
                         switch (sortBy) {
                             case 'NEWEST':

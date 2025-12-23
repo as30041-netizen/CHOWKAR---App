@@ -129,6 +129,41 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                                 </div>
                             )}
 
+                            {/* Reviews */}
+                            <div className="w-full">
+                                <h3 className="font-bold text-gray-900 dark:text-white mb-3 text-sm flex items-center gap-2">
+                                    {t.reviews || 'Reviews'} <span className="bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full text-[10px] text-gray-500">{user.reviews?.length || 0}</span>
+                                </h3>
+                                {user.reviews && user.reviews.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {user.reviews.map((review, i) => (
+                                            <div key={review.id || i} className="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-2xl border border-gray-100 dark:border-gray-700">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div>
+                                                        <p className="text-xs font-bold text-gray-900 dark:text-white">{review.reviewerName}</p>
+                                                        <p className="text-[10px] text-gray-400">{new Date(review.date).toLocaleDateString()}</p>
+                                                    </div>
+                                                    <div className="flex gap-0.5">
+                                                        {[...Array(5)].map((_, i) => (
+                                                            <Star
+                                                                key={i}
+                                                                size={10}
+                                                                className={i < review.rating ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                                <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed italic">"{review.comment}"</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-6 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700">
+                                        <p className="text-xs text-gray-400 italic">No reviews yet.</p>
+                                    </div>
+                                )}
+                            </div>
+
                         </div>
                     ) : (
                         <div className="text-center py-10">User not found</div>

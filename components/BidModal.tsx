@@ -6,6 +6,8 @@ import { Bid, UserRole } from '../types';
 import { enhanceBidMessageStream } from '../services/geminiService';
 import { getAppConfig } from '../services/paymentService';
 
+import { supabase } from '../lib/supabase';
+
 interface BidModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -28,6 +30,8 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
     const [bidAmount, setBidAmount] = useState('');
     const [bidMessage, setBidMessage] = useState('');
     const [isEnhancingBid, setIsEnhancingBid] = useState(false);
+    // Add missing state for checkout logic
+    const [shouldHighlight, setShouldHighlight] = useState(false);
 
     if (!isOpen || !jobId) return null;
 
@@ -98,21 +102,29 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
         };
 
         try {
-            const result = await addBid(newBid);
-            // Check if result returned an error (addBid in context calls createBid in service)
-            // But context's addBid currently doesn't return the error object cleanly in all versions.
-            // Let's rely on the fact that if it throws, we catch it.
-            // HOWEVER, if addBid implementation in context swallows error, we need to check that first.
-            // Looking at context: it throws if service returns error.
+            const realBidId = await addBid(newBid);
 
-            // Note: DB trigger 'on_bid_created' automatically notifies the poster
-            // So we don't call addNotification here - prevents duplicate notifications!
-            showAlert(contextT.alertBidPlaced, 'success');
+            // Handle Highlight if requested
+            if (shouldHighlight && realBidId) {
+                try {
+                    const { error: highlightError } = await supabase.rpc('highlight_bid', { p_bid_id: realBidId });
+                    if (highlightError) throw highlightError;
+
+                    showAlert(contextLanguage === 'en' ? 'Bid placed & Highlighted! ✨' : 'बोली लगाई गई और हाईलाइट की गई! ✨', 'success');
+                } catch (hErr) {
+                    console.error('Highlight failed:', hErr);
+                    showAlert(contextLanguage === 'en' ? 'Bid placed, but highlight failed.' : 'बोली लगाई गई, लेकिन हाईलाइट विफल रही।', 'info');
+                }
+            } else {
+                showAlert(contextT.alertBidPlaced, 'success');
+            }
+
             onSuccess();
             onClose();
             // Reset state
             setBidAmount('');
             setBidMessage('');
+            setShouldHighlight(false);
         } catch (err: any) {
             console.error('Bid Error:', err);
             const msg = err.message || '';
@@ -187,6 +199,34 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
                                 : `बोली लगाना मुफ्त है! यदि आपकी बोली स्वीकार की जाती है, तो चैट और संपर्क विवरण अनलॉक करने के लिए एक छोटी कनेक्शन फीस का भुगतान करना होगा।`}
                         </p>
                     </div>
+
+                    {/* Highlight Bid Option (Upsell) */}
+                    <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/10 dark:to-orange-900/10 p-3 rounded-xl border border-amber-200 dark:border-amber-800/50 flex items-center gap-3">
+                        <input
+                            type="checkbox"
+                            id="highlightBid"
+                            className="w-5 h-5 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                            checked={shouldHighlight}
+                            onChange={(e) => {
+                                // Check balance before allowing check
+                                if (e.target.checked && contextUser.walletBalance < 10) {
+                                    showAlert(contextLanguage === 'en' ? 'Insufficient balance for highlighting (₹10). Add money to wallet.' : 'हाईलाइट करने के लिए बैलेंस कम है (₹10)। वॉलेट में पैसे डालें।', 'error');
+                                    return;
+                                }
+                                setShouldHighlight(e.target.checked);
+                            }}
+                        />
+                        <label htmlFor="highlightBid" className="flex-1 cursor-pointer">
+                            <p className="text-sm font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1">
+                                {contextLanguage === 'en' ? 'Highlight my Bid' : 'मेरी बोली को हाईलाइट करें'}
+                                <span className="bg-amber-200 text-amber-900 text-[9px] px-1.5 rounded-full border border-amber-300 ml-1">✨ ₹10</span>
+                            </p>
+                            <p className="text-xs text-amber-700 dark:text-amber-400 leading-tight mt-0.5">
+                                {contextLanguage === 'en' ? 'Get noticed faster with a golden border!' : 'गोल्डन बॉर्डर के साथ जल्दी noticed हों!'}
+                            </p>
+                        </label>
+                    </div>
+
                     <button
                         onClick={handlePlaceBid}
                         disabled={!!existingBid}
@@ -201,7 +241,7 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
                         }
                     </button>
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 };

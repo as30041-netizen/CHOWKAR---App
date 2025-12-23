@@ -229,7 +229,10 @@ export const JobCard: React.FC<JobCardProps> = ({
   return (
     <div
       onClick={onClick}
-      className="bg-white dark:bg-gray-900 rounded-2xl p-4 sm:p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-gray-100 dark:border-gray-800 transition-all hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:border-emerald-100 dark:hover:border-emerald-900 relative overflow-hidden group cursor-pointer"
+      className={`bg-white dark:bg-gray-900 rounded-2xl p-4 sm:p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border transition-all hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] relative overflow-hidden group cursor-pointer ${job.isBoosted
+        ? 'border-amber-400 dark:border-amber-700 bg-gradient-to-br from-amber-50/50 to-white dark:from-amber-900/10 dark:to-gray-900'
+        : 'border-gray-100 dark:border-gray-800 hover:border-emerald-100 dark:hover:border-emerald-900'
+        }`}
     >
 
       {/* Top Header Row */}
@@ -267,6 +270,13 @@ export const JobCard: React.FC<JobCardProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Boosted Banner */}
+      {job.isBoosted && (
+        <div className="absolute top-0 left-0 bg-amber-400 text-amber-900 text-[9px] font-black px-2 py-0.5 rounded-br-lg z-10 shadow-sm flex items-center gap-1">
+          <TrendingUp size={10} /> BOOSTED
+        </div>
+      )}
 
       {/* Info Chips Row */}
       <div className="flex flex-wrap gap-2 mb-4">
@@ -372,6 +382,16 @@ export const JobCard: React.FC<JobCardProps> = ({
                 )}
               </button>
             )
+          )}
+
+          {/* Boost Button (Poster Only) */}
+          {userRole === UserRole.POSTER && isPoster && job.status === JobStatus.OPEN && !job.isBoosted && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onEdit({ ...job, isBoosted: true }); }} // Hack: Pass boost intent via onEdit or handle separately
+              className="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400 border border-amber-200 dark:border-amber-800 px-3 py-2 rounded-xl text-xs font-black shadow-sm flex items-center gap-1 hover:scale-105 transition-transform"
+            >
+              <TrendingUp size={14} /> BOOST
+            </button>
           )}
 
           {/* Contact / Review Button */}

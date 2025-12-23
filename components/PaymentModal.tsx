@@ -2,14 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { X, Loader2, CreditCard, Smartphone, CheckCircle, AlertCircle } from 'lucide-react';
 import { getAppConfig, initiateRazorpayPayment, createPaymentRecord, updatePaymentStatus } from '../services/paymentService';
 import { useUser } from '../contexts/UserContextDB';
+import { supabase } from '../lib/supabase';
 
 interface PaymentModalProps {
     isOpen: boolean;
     onClose: () => void;
-    paymentType: 'JOB_POSTING' | 'CONNECTION';
+    paymentType: 'JOB_POSTING' | 'CONNECTION' | 'WALLET_REFILL';
     relatedJobId?: string;
     relatedBidId?: string;
-    onPaymentSuccess: (paymentId: string) => void;
+    initialAmount?: number;
+    onPaymentSuccess: (paymentId: string, amount: number) => void;
     onPaymentFailure?: (error: string) => void;
 }
 
@@ -19,6 +21,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     paymentType,
     relatedJobId,
     relatedBidId,
+    initialAmount,
     onPaymentSuccess,
     onPaymentFailure
 }) => {
@@ -38,9 +41,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     const loadPricing = async () => {
         setIsLoading(true);
         try {
-            const config = await getAppConfig();
-            const fee = paymentType === 'JOB_POSTING' ? config.job_posting_fee : config.connection_fee;
-            setAmount(fee);
+            if (paymentType === 'WALLET_REFILL') {
+                setAmount(initialAmount || 100);
+            } else {
+                const config = await getAppConfig();
+                const fee = paymentType === 'JOB_POSTING' ? config.job_posting_fee : config.connection_fee;
+                setAmount(fee);
+            }
         } catch (error) {
             console.error('Failed to load pricing:', error);
             setAmount(paymentType === 'JOB_POSTING' ? 10 : 20); // Fallback
@@ -61,7 +68,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 paymentType,
                 relatedJobId,
                 relatedBidId,
-                description: paymentType === 'JOB_POSTING' ? 'Job Posting Fee' : 'Connection Fee'
+                description: paymentType === 'JOB_POSTING' ? 'Job Posting Fee' : (paymentType === 'CONNECTION' ? 'Connection Fee' : 'Wallet Refill')
             });
 
             if (createError || !paymentId) {
@@ -75,7 +82,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     name: 'CHOWKAR',
                     description: paymentType === 'JOB_POSTING'
                         ? 'Job Posting Fee'
-                        : 'Unlock Chat - Connection Fee',
+                        : (paymentType === 'CONNECTION' ? 'Unlock Chat - Connection Fee' : 'Wallet Refill'),
                     orderId: paymentId, // Using our payment ID as order reference
                     prefillName: user.name,
                     prefillPhone: user.phone || ''
@@ -88,9 +95,19 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                         response.razorpay_payment_id,
                         response.razorpay_order_id
                     );
+
+                    // 2.5 SPECIAL: If Wallet Refill, actually CREDIT the user balance via RPC
+                    if (paymentType === 'WALLET_REFILL') {
+                        await supabase.rpc('process_transaction', {
+                            p_amount: amount,
+                            p_type: 'CREDIT',
+                            p_description: 'Wallet Refill Payment'
+                        });
+                    }
+
                     setStatus('success');
                     setTimeout(() => {
-                        onPaymentSuccess(paymentId);
+                        onPaymentSuccess(paymentId, amount);
                         onClose();
                     }, 1500);
                 },
@@ -122,7 +139,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                         <h2 className="text-xl font-bold">
                             {paymentType === 'JOB_POSTING'
                                 ? (language === 'en' ? 'Post Your Job' : 'जॉब पोस्ट करें')
-                                : (language === 'en' ? 'Unlock Chat' : 'चैट अनलॉक करें')}
+                                : (paymentType === 'CONNECTION'
+                                    ? (language === 'en' ? 'Unlock Chat' : 'चैट अनलॉक करें')
+                                    : (language === 'en' ? 'Add Money to Wallet' : 'वॉलेट में पैसे जोड़ें')
+                                )}
                         </h2>
                         <button onClick={onClose} className="p-1 hover:bg-white/20 rounded-full">
                             <X size={24} />
@@ -131,7 +151,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     <p className="text-emerald-100 mt-2 text-sm">
                         {paymentType === 'JOB_POSTING'
                             ? (language === 'en' ? 'Complete payment to publish your job' : 'जॉब प्रकाशित करने के लिए भुगतान करें')
-                            : (language === 'en' ? 'Pay to unlock chat and contact details' : 'चैट और संपर्क विवरण अनलॉक करने के लिए भुगतान करें')}
+                            : (paymentType === 'CONNECTION'
+                                ? (language === 'en' ? 'Pay to unlock chat and contact details' : 'चैट और संपर्क विवरण अनलॉक करने के लिए भुगतान करें')
+                                : (language === 'en' ? 'Increase your wallet balance instantly' : 'अपना वॉलेट बैलेंस तुरंत बढ़ाएं')
+                            )}
                     </p>
                 </div>
 
@@ -171,13 +194,31 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                         </div>
                     ) : (
                         <>
+                            {/* Amount Selection for Wallet Refill */}
+                            {paymentType === 'WALLET_REFILL' && (
+                                <div className="grid grid-cols-2 gap-3 mb-6">
+                                    {[100, 200, 500, 1000].map((val) => (
+                                        <button
+                                            key={val}
+                                            onClick={() => setAmount(val)}
+                                            className={`py-3 px-4 rounded-xl border-2 font-bold transition-all ${amount === val
+                                                ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                                                : 'border-gray-100 bg-white text-gray-500 hover:border-emerald-200'
+                                                }`}
+                                        >
+                                            ₹{val}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
                             {/* Amount Display */}
                             <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-6 mb-6">
                                 <div className="text-center">
                                     <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">
                                         {language === 'en' ? 'Amount to Pay' : 'भुगतान राशि'}
                                     </p>
-                                    <p className="text-4xl font-bold text-gray-800 dark:text-white">₹{amount}</p>
+                                    <p className="text-4xl font-bold text-gray-800 dark:text-white transition-all transform duration-300">₹{amount}</p>
                                 </div>
                             </div>
 

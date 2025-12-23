@@ -64,7 +64,8 @@ export const Profile: React.FC<ProfileProps> = ({ onEditProfile, setShowSubscrip
                         )}
                     </div>
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                        {user.name} <CheckCircle2 size={20} className="text-blue-500 fill-blue-50 dark:fill-blue-900" />
+                        {user.name}
+                        {user.verified && <CheckCircle2 size={20} className="text-blue-500 fill-blue-50 dark:fill-blue-900" />}
                     </h2>
                     <p className="text-gray-500 dark:text-gray-400 font-medium text-sm flex items-center gap-1">
                         <MapPin size={14} /> {user.location}
@@ -94,61 +95,104 @@ export const Profile: React.FC<ProfileProps> = ({ onEditProfile, setShowSubscrip
                         <div className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">{t.jobsPosted}</div>
                     </div>
                 </div>
-                <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
-                    <h3 className="font-bold text-gray-900 dark:text-white mb-3">{t.aboutMe}</h3>
-                    <p className="text-gray-600 dark:text-gray-300 text-sm">{user.bio || "No bio added yet."}</p>
-                </div>
-                <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
-                    <h3 className="font-bold text-gray-900 dark:text-white mb-3">{t.skills}</h3>
-                    <div className="flex flex-wrap gap-2">
-                        {user.skills?.map((s, i) => (
-                            <span key={i} className="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-3 py-1.5 rounded-lg text-sm font-semibold border border-emerald-100 dark:border-emerald-800">{s}</span>
-                        ))}
-                        {(!user.skills || user.skills.length === 0) && <span className="text-gray-400 dark:text-gray-500 text-sm italic">No skills added.</span>}
+            </div>
+
+            {/* Referral Section */}
+            <div className="bg-gradient-to-br from-indigo-600 to-violet-600 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mt-10 -mr-10"></div>
+                <div className="relative z-10">
+                    <h3 className="font-bold text-lg mb-1 flex items-center gap-2">
+                        🎁 {language === 'en' ? 'Refer & Earn' : 'रेफर करें और कमाएं'}
+                    </h3>
+                    <p className="text-indigo-100 text-sm mb-4">
+                        {language === 'en'
+                            ? 'Invite friends and earn ₹50 each!'
+                            : 'दोस्तों को आमंत्रित करें और ₹50 कमाएं!'}
+                    </p>
+
+                    <div className="bg-white/20 backdrop-blur-sm border border-white/30 rounded-xl p-3 flex items-center justify-between">
+                        <div>
+                            <p className="text-[10px] text-indigo-200 uppercase font-bold tracking-wider">
+                                {language === 'en' ? 'YOUR CODE' : 'आपका कोड'}
+                            </p>
+                            <p className="text-xl font-mono font-black tracking-widest">
+                                {user.referralCode || '...'}
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => {
+                                if (user.referralCode) {
+                                    navigator.clipboard.writeText(user.referralCode);
+                                    // Simple alert or toast replacement
+                                    // Since we don't have showAlert prop here, we can use a temporary state or just native alert if needed, 
+                                    // or better, rely on user feedback. 
+                                    // Actually, let's just make the button text change temporarily?
+                                    // For simplicity in this edit, I'll assume users know it copied or use a simple alert if environment permits.
+                                    alert(language === 'en' ? 'Code copied!' : 'कोड कॉपी किया गया!');
+                                }
+                            }}
+                            className="bg-white text-indigo-600 px-4 py-2 rounded-lg font-bold text-sm shadow-sm active:scale-95 transition-transform"
+                        >
+                            {language === 'en' ? 'Copy' : 'कॉपी'}
+                        </button>
                     </div>
                 </div>
+            </div>
 
-                {/* Reviews Section */}
-                <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-4 transition-colors">
-                    <h3 className="font-bold text-gray-900 dark:text-white">{t.reviews || "Reviews"} ({user.reviews?.length || 0})</h3>
-                    {user.reviews && user.reviews.length > 0 ? (
-                        user.reviews.map(review => (
-                            <div key={review.id} className="border-b border-gray-50 dark:border-gray-800 last:border-0 pb-4 last:pb-0">
-                                <div className="flex justify-between items-start mb-1">
-                                    <span className="font-bold text-sm text-gray-800 dark:text-gray-200">{review.reviewerName}</span>
-                                    <span className="text-[10px] text-gray-400 dark:text-gray-500">{new Date(review.date).toLocaleDateString()}</span>
-                                </div>
-                                <div className="flex items-center gap-1 mb-2">
-                                    {[1, 2, 3, 4, 5].map(star => (
-                                        <Star key={star} size={12} fill={star <= review.rating ? "orange" : "transparent"} className={star <= review.rating ? "text-orange-400" : "text-gray-300 dark:text-gray-700"} />
+            <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
+                <h3 className="font-bold text-gray-900 dark:text-white mb-3">{t.aboutMe}</h3>
+                <p className="text-gray-600 dark:text-gray-300 text-sm">{user.bio || "No bio added yet."}</p>
+            </div>
+            <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
+                <h3 className="font-bold text-gray-900 dark:text-white mb-3">{t.skills}</h3>
+                <div className="flex flex-wrap gap-2">
+                    {user.skills?.map((s, i) => (
+                        <span key={i} className="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-3 py-1.5 rounded-lg text-sm font-semibold border border-emerald-100 dark:border-emerald-800">{s}</span>
+                    ))}
+                    {(!user.skills || user.skills.length === 0) && <span className="text-gray-400 dark:text-gray-500 text-sm italic">No skills added.</span>}
+                </div>
+            </div>
+
+            {/* Reviews Section */}
+            <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-4 transition-colors">
+                <h3 className="font-bold text-gray-900 dark:text-white">{t.reviews || "Reviews"} ({user.reviews?.length || 0})</h3>
+                {user.reviews && user.reviews.length > 0 ? (
+                    user.reviews.map(review => (
+                        <div key={review.id} className="border-b border-gray-50 dark:border-gray-800 last:border-0 pb-4 last:pb-0">
+                            <div className="flex justify-between items-start mb-1">
+                                <span className="font-bold text-sm text-gray-800 dark:text-gray-200">{review.reviewerName}</span>
+                                <span className="text-[10px] text-gray-400 dark:text-gray-500">{new Date(review.date).toLocaleDateString()}</span>
+                            </div>
+                            <div className="flex items-center gap-1 mb-2">
+                                {[1, 2, 3, 4, 5].map(star => (
+                                    <Star key={star} size={12} fill={star <= review.rating ? "orange" : "transparent"} className={star <= review.rating ? "text-orange-400" : "text-gray-300 dark:text-gray-700"} />
+                                ))}
+                            </div>
+                            {review.tags && review.tags.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mb-2">
+                                    {review.tags.map((tag, i) => (
+                                        <span key={i} className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-[9px] px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700">
+                                            {REVIEW_TAGS_TRANSLATIONS[tag]?.[language === 'hi' ? 'hi' : 'en'] || tag}
+                                        </span>
                                     ))}
                                 </div>
-                                {review.tags && review.tags.length > 0 && (
-                                    <div className="flex flex-wrap gap-1 mb-2">
-                                        {review.tags.map((tag, i) => (
-                                            <span key={i} className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-[9px] px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700">
-                                                {REVIEW_TAGS_TRANSLATIONS[tag]?.[language === 'hi' ? 'hi' : 'en'] || tag}
-                                            </span>
-                                        ))}
-                                    </div>
-                                )}
-                                <p className="text-xs text-gray-600 dark:text-gray-400 italic">"{review.comment}"</p>
-                            </div>
-                        ))
-                    ) : (
-                        <p className="text-sm text-gray-400 dark:text-gray-500 italic">No reviews yet.</p>
-                    )}
-                </div>
-
-                {!user.isPremium && (
-                    <button onClick={() => setShowSubscriptionModal(true)} className="w-full bg-gradient-to-r from-amber-400 to-yellow-500 text-amber-950 py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg hover:scale-[1.02] transition-transform">
-                        <Crown size={18} fill="currentColor" /> {t.upgradePremium}
-                    </button>
+                            )}
+                            <p className="text-xs text-gray-600 dark:text-gray-400 italic">"{review.comment}"</p>
+                        </div>
+                    ))
+                ) : (
+                    <p className="text-sm text-gray-400 dark:text-gray-500 italic">No reviews yet.</p>
                 )}
-                <button onClick={onLogout} className="w-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 py-3 rounded-xl font-bold flex items-center justify-center gap-2 border border-red-100 dark:border-red-900/30 transition-colors">
-                    <LogOut size={18} /> {t.signOut}
-                </button>
             </div>
+
+            {!user.isPremium && (
+                <button onClick={() => setShowSubscriptionModal(true)} className="w-full bg-gradient-to-r from-amber-400 to-yellow-500 text-amber-950 py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg hover:scale-[1.02] transition-transform">
+                    <Crown size={18} fill="currentColor" /> {t.upgradePremium}
+                </button>
+            )}
+            <button onClick={onLogout} className="w-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 py-3 rounded-xl font-bold flex items-center justify-center gap-2 border border-red-100 dark:border-red-900/30 transition-colors">
+                <LogOut size={18} /> {t.signOut}
+            </button>
         </div>
     );
 };

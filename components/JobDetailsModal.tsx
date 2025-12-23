@@ -15,11 +15,12 @@ interface JobDetailsModalProps {
     onDelete: (jobId: string) => void;
     onCancel?: (jobId: string) => void;
     onReplyToCounter?: (jobId: string, bidId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', amount?: number) => void;
+    onViewProfile: (userId: string, name?: string) => void;
     showAlert: (message: string, type: 'success' | 'error' | 'info') => void;
 }
 
 export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
-    job, onClose, onBid, onViewBids, onChat, onEdit, onDelete, onCancel, onReplyToCounter, showAlert
+    job, onClose, onBid, onViewBids, onChat, onEdit, onDelete, onCancel, onReplyToCounter, onViewProfile, showAlert
 }) => {
     const { user, role, t, language } = useUser();
     const { getJobWithFullDetails, jobs } = useJobs();
@@ -187,7 +188,10 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                 )}
 
                 {/* Poster Info */}
-                <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 mb-4">
+                <div
+                    className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 mb-4 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    onClick={() => onViewProfile(liveJob.posterId, liveJob.posterName)}
+                >
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-700 dark:text-emerald-400 font-bold overflow-hidden">
                             {liveJob.posterPhoto ? (
@@ -196,10 +200,14 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                                 (liveJob.posterName || 'User').charAt(0)
                             )}
                         </div>
-                        <div>
-                            <p className="font-bold text-gray-900 dark:text-white">{liveJob.posterName || 'User'}</p>
+                        <div className="flex-1">
+                            <p className="font-bold text-gray-900 dark:text-white flex items-center gap-1">
+                                {liveJob.posterName || 'User'}
+                                <ExternalLink size={12} className="text-gray-400" />
+                            </p>
                             <p className="text-xs text-gray-500 dark:text-gray-400">Posted {new Date(liveJob.createdAt).toLocaleDateString()}</p>
                         </div>
+                        <ChevronRight size={18} className="text-gray-300" />
                     </div>
                 </div>
 
@@ -297,8 +305,42 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
 
                     {/* Worker: Pending Bid view if not turn */}
                     {role === UserRole.WORKER && myBid && !isWorkerTurn && liveJob.status === JobStatus.OPEN && (
-                        <div className="flex-1 text-center py-2 bg-blue-50 rounded-xl border border-blue-200">
-                            <p className="text-xs font-bold text-blue-700">{t.pending}: ₹{myBid.amount}</p>
+                        <div className="flex-1 flex gap-2">
+                            <div className="flex-1 text-center py-2 bg-blue-50 dark:bg-blue-900/30 rounded-xl border border-blue-200 dark:border-blue-800">
+                                <p className="text-xs font-bold text-blue-700 dark:text-blue-300">{t.pending}: ₹{myBid.amount}</p>
+                            </div>
+                            {/* Hightlight Button for Existing Bid */}
+                            {myBid && !myBid.isHighlighted && (
+                                <button
+                                    onClick={async () => {
+                                        if (!confirm(language === 'en' ? 'Highlight your bid for ₹10?' : '₹10 में अपनी बोली हाइलाइट करें?')) return;
+
+                                        const { checkWalletBalance } = await import('../services/paymentService');
+                                        const { sufficient } = await checkWalletBalance(user.id, 10);
+                                        if (!sufficient) {
+                                            showAlert(language === 'en' ? 'Insufficient balance.' : 'कम बैलेंस।', 'error');
+                                            return;
+                                        }
+
+                                        try {
+                                            const { supabase } = await import('../lib/supabase');
+                                            const { error } = await supabase.rpc('highlight_bid', { p_bid_id: myBid.id });
+                                            if (error) throw error;
+
+                                            showAlert(language === 'en' ? 'Bid Highlighted! ✨' : 'बोली हाइलाइट की गई! ✨', 'success');
+                                            // Refresh job details to show update
+                                            getJobWithFullDetails(liveJob.id);
+                                        } catch (err: any) {
+                                            console.error(err);
+                                            showAlert('Failed to highlight bid', 'error');
+                                        }
+                                    }}
+                                    className="px-3 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 rounded-xl font-bold hover:scale-105 transition-transform flex items-center gap-1"
+                                >
+                                    <Star size={12} className="fill-current" />
+                                    {language === 'en' ? 'Highlight' : 'हाइलाइट'}
+                                </button>
+                            )}
                         </div>
                     )}
 

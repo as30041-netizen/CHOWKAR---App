@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { XCircle, UserCircle, Star } from 'lucide-react';
+import { XCircle, UserCircle, Star, ExternalLink } from 'lucide-react';
 import { Job, UserRole } from '../types';
 import { useUser } from '../contexts/UserContextDB';
 import { supabase } from '../lib/supabase';
@@ -11,10 +11,11 @@ interface ViewBidsModalProps {
     onClose: () => void;
     job: Job | null;
     onCounter: (bidId: string, amount: number) => void;
+    onViewProfile: (userId: string, name?: string) => void;
     showAlert: (msg: string, type: 'success' | 'error' | 'info') => void;
 }
 
-export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, job, onCounter, showAlert }) => {
+export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, job, onCounter, onViewProfile, showAlert }) => {
     const { user, t, addNotification, language } = useUser();
     const [isAcceptingBid, setIsAcceptingBid] = useState(false);
     const [connectionFee, setConnectionFee] = useState(20);
@@ -70,6 +71,7 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                                 amount: fullBid.amount,
                                 message: fullBid.message,
                                 status: fullBid.status,
+                                isHighlighted: fullBid.is_highlighted, // MAP HIGHLIGHT STATUS
                                 negotiationHistory: fullBid.negotiation_history || [],
                                 createdAt: new Date(fullBid.created_at).getTime()
                             };
@@ -100,6 +102,7 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                                             ...bid,
                                             amount: payload.new.amount,
                                             status: payload.new.status,
+                                            isHighlighted: payload.new.is_highlighted, // MAP HIGHLIGHT STATUS
                                             negotiationHistory: payload.new.negotiation_history || bid.negotiationHistory
                                         }
                                         : bid
@@ -237,10 +240,15 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
         return Date.now() - timestamp < 3600000; // 1 hour in ms
     };
 
-    // Sort bids: newest first
-    const sortedBids = [...(localJob.bids || [])].sort((a, b) =>
-        (b.createdAt || 0) - (a.createdAt || 0)
-    );
+    // Sort bids: Highlighted first, then newest
+    const sortedBids = [...(localJob.bids || [])].sort((a, b) => {
+        // 1. Highlighted Bids First
+        if (a.isHighlighted && !b.isHighlighted) return -1;
+        if (!a.isHighlighted && b.isHighlighted) return 1;
+
+        // 2. Then Newest
+        return (b.createdAt || 0) - (a.createdAt || 0);
+    });
 
     // language is now from context
 
@@ -262,24 +270,36 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                             return (
                                 <div
                                     key={bid.id}
-                                    className={`bg-white dark:bg-gray-800 border rounded-xl p-4 shadow-sm relative transition-all duration-300 ${isNew
-                                        ? 'border-emerald-400 dark:border-emerald-500 ring-2 ring-emerald-100 dark:ring-emerald-900/30 animate-pulse-once'
-                                        : 'border-gray-200 dark:border-gray-700'
+                                    className={`bg-white dark:bg-gray-800 border rounded-xl p-4 shadow-sm relative transition-all duration-300 ${bid.isHighlighted
+                                        ? 'border-amber-400 dark:border-amber-600 bg-gradient-to-br from-amber-50/80 to-white dark:from-amber-900/20 dark:to-gray-800 ring-1 ring-amber-200 dark:ring-amber-800'
+                                        : isNew
+                                            ? 'border-emerald-400 dark:border-emerald-500 ring-2 ring-emerald-100 dark:ring-emerald-900/30'
+                                            : 'border-gray-200 dark:border-gray-700'
                                         }`}
                                 >
-                                    {/* NEW Badge */}
-                                    {isNew && (
+                                    {/* Highlighted Badge */}
+                                    {bid.isHighlighted && (
+                                        <div className="absolute -top-2 left-4 bg-amber-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-md flex items-center gap-1 z-10">
+                                            <Star size={8} fill="currentColor" /> HIGHLIGHTED
+                                        </div>
+                                    )}
+
+                                    {/* NEW Badge (Only if not highlighted, to avoid clutter) */}
+                                    {isNew && !bid.isHighlighted && (
                                         <div className="absolute -top-2 -right-2 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md animate-bounce z-10">
                                             NEW
                                         </div>
                                     )}
 
-                                    <div className="flex items-start gap-3 mb-3">
-                                        <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700/50 rounded-full overflow-hidden">
+                                    <div className="flex items-start gap-3 mb-3 cursor-pointer group" onClick={() => onViewProfile(bid.workerId, bid.workerName)}>
+                                        <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700/50 rounded-full overflow-hidden group-hover:ring-2 ring-emerald-500 transition-all">
                                             {bid.workerPhoto ? <img src={bid.workerPhoto} className="w-full h-full object-cover" /> : <UserCircle size={40} className="text-gray-400 dark:text-gray-500" />}
                                         </div>
                                         <div>
-                                            <h4 className="font-bold text-gray-900 dark:text-white">{bid.workerName}</h4>
+                                            <h4 className="font-bold text-gray-900 dark:text-white group-hover:text-emerald-600 transition-colors flex items-center gap-1">
+                                                {bid.workerName}
+                                                <ExternalLink size={12} className="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                            </h4>
                                             <div className="flex items-center gap-1 text-xs text-yellow-600 font-bold"><Star size={12} fill="currentColor" /> {bid.workerRating}</div>
                                         </div>
                                         <div className="ml-auto text-right">
