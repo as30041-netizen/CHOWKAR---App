@@ -140,7 +140,8 @@ export const fetchHomeFeed = async (
       bidCount: Number(row.bid_count),
       myBidId: row.my_bid_id || undefined,
       myBidStatus: row.my_bid_status || undefined,
-      myBidAmount: row.my_bid_amount ? Number(row.my_bid_amount) : undefined
+      myBidAmount: row.my_bid_amount ? Number(row.my_bid_amount) : undefined,
+      myBidLastNegotiationBy: row.my_bid_last_negotiation_by || undefined
     }));
 
     console.log(`[JobService] Fetched ${jobs.length} jobs via optimized feed`);
@@ -192,6 +193,7 @@ export const fetchMyJobsFeed = async (
       bids: [],
       bidCount: Number(row.bid_count),
       myBidId: undefined, // Posters don't have their own bids on their jobs
+      myBidLastNegotiationBy: row.last_bid_negotiation_by || undefined
     }));
 
     return { jobs, hasMore: jobs.length === limit };
@@ -244,7 +246,8 @@ export const fetchMyApplicationsFeed = async (
       bidCount: Number(row.bid_count),
       myBidId: row.my_bid_id || undefined,
       myBidStatus: row.my_bid_status || undefined,
-      myBidAmount: row.my_bid_amount ? Number(row.my_bid_amount) : undefined
+      myBidAmount: row.my_bid_amount ? Number(row.my_bid_amount) : undefined,
+      myBidLastNegotiationBy: row.my_bid_last_negotiation_by || undefined
     }));
 
     return { jobs, hasMore: jobs.length === limit };

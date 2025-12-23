@@ -128,7 +128,8 @@ export const getCurrentUser = async (existingAuthUser?: any): Promise<{ user: Us
           jobs_completed: 0,
           join_date: new Date().toISOString(),
           skills: [],
-          referred_by: referredBy
+          referred_by: referredBy,
+          has_seen_welcome_bonus: false
         })
         .select()
         .single();
@@ -161,6 +162,7 @@ export const getCurrentUser = async (existingAuthUser?: any): Promise<{ user: Us
         referralCode: newProfile.referral_code,
         referredBy: newProfile.referred_by,
         verified: newProfile.verified,
+        hasSeenWelcomeBonus: newProfile.has_seen_welcome_bonus,
         reviews: []
       };
 
@@ -214,6 +216,7 @@ export const getCurrentUser = async (existingAuthUser?: any): Promise<{ user: Us
       referralCode: profile.referral_code,
       referredBy: profile.referred_by,
       verified: profile.verified,
+      hasSeenWelcomeBonus: profile.has_seen_welcome_bonus,
       reviews: reviews
     };
 
@@ -388,5 +391,20 @@ export const incrementAIUsage = async (
   } catch (error) {
     console.error('Error incrementing AI usage:', error);
     return { success: false, error: 'Failed to update AI usage' };
+  }
+};
+
+export const markWelcomeBonusAsSeen = async (userId: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ has_seen_welcome_bonus: true })
+      .eq('id', userId);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error marking welcome bonus as seen:', error);
+    return { success: false, error: error.message };
   }
 };

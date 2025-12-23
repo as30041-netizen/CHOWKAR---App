@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { UserCircle, Loader2 } from 'lucide-react';
+import { UserCircle, Loader2, MapPin } from 'lucide-react';
 import { useUser } from '../contexts/UserContextDB';
 import { uploadProfileImage, isBase64Image } from '../services/storageService';
+import { getDeviceLocation } from '../utils/geo';
 import { supabase } from '../lib/supabase';
 
 interface EditProfileModalProps {
@@ -24,6 +25,8 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
     const [referralCodeInput, setReferralCodeInput] = useState('');
     const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [isLocating, setIsLocating] = useState(false);
+    const [newCoordinates, setNewCoordinates] = useState<{ lat: number; lng: number } | undefined>(undefined);
 
     // Initialize state when modal opens
     useEffect(() => {
@@ -44,6 +47,17 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
         // Validation
         if (!editProfileName.trim()) {
             showAlert(language === 'en' ? 'Name is required' : 'नाम आवश्यक है', 'error');
+            return;
+        }
+
+        // Validate strictly for MANDATORY fields if user expects app to function
+        if (!editProfilePhone.trim()) {
+            showAlert(language === 'en' ? 'Phone number is required' : 'फोन नंबर आवश्यक है', 'error');
+            return;
+        }
+
+        if (!editProfileLocation.trim() || editProfileLocation === 'Not set') {
+            showAlert(language === 'en' ? 'Valid location is required' : 'सही स्थान आवश्यक है', 'error');
             return;
         }
 
@@ -102,7 +116,8 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                 bio: editProfileBio.trim(),
                 experience: editProfileExp.trim(),
                 skills: editProfileSkills.split(',').map(s => s.trim()).filter(s => s),
-                profilePhoto: finalPhotoUrl
+                profilePhoto: finalPhotoUrl,
+                coordinates: newCoordinates // Include new GPS coords if captured
             };
 
             if (referrerId) {
@@ -160,6 +175,44 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
         reader.readAsDataURL(file);
     };
 
+    const handleGetLocation = () => {
+        setIsLocating(true);
+        getDeviceLocation(
+            (coords) => {
+                setNewCoordinates(coords);
+                // Reverse Geocode using OpenStreetMap (Nominatim)
+                // Note: In production, consider rate limits or a commercial API
+                fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        const addressParts = [];
+                        if (data.address.village) addressParts.push(data.address.village);
+                        else if (data.address.town) addressParts.push(data.address.town);
+                        else if (data.address.city) addressParts.push(data.address.city);
+                        else if (data.address.suburb) addressParts.push(data.address.suburb);
+
+                        if (data.address.state) addressParts.push(data.address.state);
+
+                        const fullLoc = addressParts.length > 0 ? addressParts.join(', ') : `${coords.lat.toFixed(2)}, ${coords.lng.toFixed(2)}`;
+
+                        setEditProfileLocation(fullLoc);
+                        setIsLocating(false);
+                        showAlert(language === 'en' ? "Location updated from GPS!" : "GPS से स्थान अपडेट किया गया!", "success");
+                    })
+                    .catch(e => {
+                        console.error('Geocoding error:', e);
+                        setEditProfileLocation(`${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`);
+                        setIsLocating(false);
+                        showAlert(language === 'en' ? "Location captured (GPS)" : "स्थान कैप्चर किया गया (GPS)", "success");
+                    });
+            },
+            () => {
+                showAlert(language === 'en' ? "Could not get location. Check permissions." : "स्थान प्राप्त नहीं कर सके। अनुमति जांचें।", "error");
+                setIsLocating(false);
+            }
+        );
+    };
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className={`absolute inset-0 bg-black/60 backdrop-blur-sm ${!isMandatory ? 'cursor-pointer' : ''}`} onClick={!isMandatory ? onClose : undefined}></div>
@@ -198,13 +251,23 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                         type="tel"
                         className="w-full p-3 rounded-xl border dark:bg-gray-800 dark:border-gray-700 dark:text-white"
                     />
-                    <input
-                        value={editProfileLocation}
-                        onChange={(e) => setEditProfileLocation(e.target.value)}
-                        placeholder={language === 'en' ? "Location" : "स्थान"}
-                        maxLength={100}
-                        className="w-full p-3 rounded-xl border dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-                    />
+                    <div className="relative">
+                        <input
+                            value={editProfileLocation}
+                            onChange={(e) => setEditProfileLocation(e.target.value)}
+                            placeholder={language === 'en' ? "Location (City/Village)" : "स्थान (शहर/गाँव)"}
+                            maxLength={100}
+                            className="w-full p-3 pr-12 rounded-xl border dark:bg-gray-800 dark:border-gray-700 dark:text-white transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-900"
+                        />
+                        <button
+                            onClick={handleGetLocation}
+                            disabled={isLocating}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 rounded-lg transition-colors"
+                            title={language === 'en' ? "Use Current Location" : "वर्तमान स्थान का उपयोग करें"}
+                        >
+                            {isLocating ? <Loader2 size={20} className="animate-spin" /> : <MapPin size={20} />}
+                        </button>
+                    </div>
                     <textarea
                         value={editProfileBio}
                         onChange={(e) => setEditProfileBio(e.target.value)}

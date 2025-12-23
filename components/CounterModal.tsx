@@ -39,28 +39,51 @@ export const CounterModal: React.FC<CounterModalProps> = ({ isOpen, onClose, bid
             return;
         }
 
+        // Try getting from context first
         const job = jobs.find(j => j.id === jobId);
+        let bid = job?.bids.find(b => b.id === bidId);
 
-        if (job) {
-            try {
-                const bid = job.bids.find(b => b.id === bidId);
-                if (bid) {
-                    const updatedBid = {
-                        ...bid,
-                        amount: newAmount,
-                        negotiationHistory: [...(bid.negotiationHistory || []), { amount: newAmount, by: UserRole.POSTER, timestamp: Date.now() }]
-                    };
-                    await updateBid(updatedBid);
-                    // Note: DB trigger 'notify_on_counter_offer' handles the in-app notification
-                    // and sends it to the correct party. No manual push/notification needed here!
-                }
+        try {
+            // Fallback: If bid not in context (e.g. realtime update), fetch securely
+            if (!bid) {
+                const { data, error } = await supabase
+                    .from('bids')
+                    .select('*, negotiation_history')
+                    .eq('id', bidId)
+                    .single();
 
-                showAlert("Counter offer sent!", "success");
-                onClose();
-                setCounterInputAmount('');
-            } catch {
-                showAlert("Failed to send counter", "error");
+                if (error || !data) throw new Error("Bid not found");
+
+                bid = {
+                    id: data.id,
+                    jobId: data.job_id,
+                    workerId: data.worker_id,
+                    workerName: '', // Not needed for update
+                    workerPhone: '',
+                    workerRating: 0,
+                    workerLocation: '',
+                    amount: data.amount,
+                    message: data.message,
+                    status: data.status,
+                    negotiationHistory: data.negotiation_history || [],
+                    createdAt: new Date(data.created_at).getTime()
+                };
             }
+
+            const updatedBid = {
+                ...bid,
+                amount: newAmount,
+                negotiationHistory: [...(bid.negotiationHistory || []), { amount: newAmount, by: UserRole.POSTER, timestamp: Date.now() }]
+            };
+
+            await updateBid(updatedBid);
+
+            showAlert("Counter offer sent!", "success");
+            onClose();
+            setCounterInputAmount('');
+        } catch (err) {
+            console.error(err);
+            showAlert("Failed to send counter", "error");
         }
     };
 

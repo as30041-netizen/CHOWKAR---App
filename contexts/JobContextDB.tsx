@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { Job, Bid, JobStatus } from '../types';
 import { fetchJobs, fetchHomeFeed, fetchMyJobsFeed, fetchMyApplicationsFeed, fetchJobFullDetails, createJob as createJobDB, updateJob as updateJobDB, deleteJob as deleteJobDB, createBid as createBidDB, updateBid as updateBidDB, checkExpiredBidDeadlines } from '../services/jobService';
 import { supabase } from '../lib/supabase';
@@ -13,8 +13,9 @@ interface JobContextType {
   updateBid: (bid: Bid) => Promise<void>;
   refreshJobs: () => Promise<void>;
   fetchMoreJobs: () => Promise<void>;
-  getJobWithFullDetails: (jobId: string) => Promise<Job | null>; // NEW: Lazy load full details
+  getJobWithFullDetails: (jobId: string, force?: boolean) => Promise<Job | null>; // NEW: Lazy load full details
   loadFeed: (type: 'HOME' | 'POSTER' | 'WORKER_APPS', offset?: number) => Promise<void>; // NEW: Optimized feeds
+  clearJobs: () => void; // NEW: Clear jobs on logout
   loading: boolean;
   isLoadingMore: boolean;
   hasMore: boolean;
@@ -48,6 +49,9 @@ const dbJobToAppJob = (dbJob: any): Omit<Job, 'bids'> => ({
   myBidId: dbJob.my_bid_id,
   myBidStatus: dbJob.my_bid_status,
   myBidAmount: dbJob.my_bid_amount,
+  myBidLastNegotiationBy: dbJob.my_bid_last_negotiation_by,
+  isBoosted: dbJob.is_boosted,
+  boostExpiry: dbJob.boost_expiry ? new Date(dbJob.boost_expiry).getTime() : undefined,
 });
 
 // Convert a DB bid row to our App Bid type
@@ -75,23 +79,12 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [error, setError] = useState<string | null>(null);
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const lastLoadAttemptRef = useRef<{ type: string, time: number }>({ type: '', time: 0 });
+  const subscribedUserIdRef = useRef<string | null>(null);
 
-  // Fetch jobs only when user is logged in
-  useEffect(() => {
-    // Check if user is authenticated before fetching jobs
-    const checkAuthAndFetch = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        console.log('[JobContext] User logged in, fetching jobs...');
-        setCurrentUserId(session.user.id);
-        refreshJobs();
-      } else {
-        console.log('[JobContext] User not logged in, skipping job fetch');
-        setCurrentUserId(null);
-        setLoading(false);
-      }
-    };
-    checkAuthAndFetch();
+  const clearJobs = useCallback(() => {
+    setJobs([]);
+    setError(null);
   }, []);
 
   // --- Surgical Sync Handlers ---
@@ -118,6 +111,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             myBidId: converted.myBidId || j.myBidId,
             myBidStatus: converted.myBidStatus || j.myBidStatus,
             myBidAmount: converted.myBidAmount || j.myBidAmount,
+            myBidLastNegotiationBy: converted.myBidLastNegotiationBy || j.myBidLastNegotiationBy,
           };
         }
         return j;
@@ -143,12 +137,19 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
           const isMyBid = currentUserId && newBid.workerId === currentUserId;
 
+          const lastTurn = newBid.negotiationHistory && newBid.negotiationHistory.length > 0
+            ? newBid.negotiationHistory[newBid.negotiationHistory.length - 1].by
+            : undefined;
+
           return {
             ...j,
             bids: [newBid, ...cleanBids],
+            bidCount: (j.bidCount || 0) + 1,
             myBidId: isMyBid ? newBid.id : j.myBidId,
             myBidStatus: isMyBid ? newBid.status : j.myBidStatus,
-            myBidAmount: isMyBid ? newBid.amount : j.myBidAmount
+            myBidAmount: isMyBid ? newBid.amount : j.myBidAmount,
+            myBidLastNegotiationBy: isMyBid ? lastTurn : j.myBidLastNegotiationBy,
+            hasNewBid: !isMyBid && j.posterId === currentUserId ? true : j.hasNewBid
           };
         }
         return j;
@@ -160,11 +161,17 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (j.id === updatedBid.jobId) {
           const isMyBid = currentUserId && updatedBid.workerId === currentUserId;
 
+          const lastTurn = updatedBid.negotiationHistory && updatedBid.negotiationHistory.length > 0
+            ? updatedBid.negotiationHistory[updatedBid.negotiationHistory.length - 1].by
+            : undefined;
+
           return {
             ...j,
             bids: j.bids.map(b => b.id === updatedBid.id ? updatedBid : b),
             myBidStatus: isMyBid ? updatedBid.status : j.myBidStatus,
-            myBidAmount: isMyBid ? updatedBid.amount : j.myBidAmount
+            myBidAmount: isMyBid ? updatedBid.amount : j.myBidAmount,
+            myBidLastNegotiationBy: isMyBid ? lastTurn : j.myBidLastNegotiationBy,
+            hasNewCounter: !isMyBid && j.posterId === currentUserId ? true : j.hasNewCounter // Track if poster got a counter
           };
         }
         return j;
@@ -203,8 +210,9 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       console.log('[Realtime] Subscribing to jobs and bids with HYBRID Sync...');
+      subscribedUserIdRef.current = currentUserId;
 
-      channel = supabase.channel('job_system_hybrid_sync')
+      channel = supabase.channel(`job_system_${currentUserId}`)
         // Broadcast listeners for instant updates (bypasses RLS)
         .on('broadcast', { event: 'job_updated' }, (payload) => {
           console.log('[Realtime] Broadcast job_updated received:', payload);
@@ -236,7 +244,10 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           (payload) => handleBidChange(payload.eventType, payload)
         )
         .subscribe((status) => {
-          console.log(`[Realtime] Hybrid Sync subscription status: ${status}`);
+          console.log(`[Realtime] Hybrid Sync status for ${currentUserId}: ${status}`);
+          if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
+            // Optional: retry logic
+          }
         });
     };
 
@@ -244,11 +255,12 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     return () => {
       if (channel) {
-        console.log('[Realtime] Cleaning up Hybrid Sync subscription');
+        console.log('[Realtime] Cleaning up Hybrid Sync subscription for:', currentUserId);
         supabase.removeChannel(channel);
+        subscribedUserIdRef.current = null;
       }
     };
-  }, [handleJobChange, handleBidChange]);
+  }, [currentUserId, handleJobChange, handleBidChange]);
 
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -258,6 +270,14 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const loadFeed = useCallback(async (type: 'HOME' | 'POSTER' | 'WORKER_APPS', offset: number = 0) => {
     const isInitial = offset === 0;
     try {
+      // Prevention of duplicate concurrent loads (within 500ms for same type)
+      const now = Date.now();
+      if (isInitial && lastLoadAttemptRef.current.type === type && (now - lastLoadAttemptRef.current.time < 500)) {
+        console.log(`[JobContext] Duplicate load skipped for ${type}`);
+        return;
+      }
+      lastLoadAttemptRef.current = { type, time: now };
+
       if (isInitial) {
         setLoading(true);
         setCurrentFeedType(type);
@@ -270,7 +290,11 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // Get current user ID
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
-      if (!userId) throw new Error("Not authenticated");
+      if (!userId) {
+        setLoading(false);
+        setIsLoadingMore(false);
+        return;
+      }
 
       let result: { jobs: Job[], hasMore?: boolean };
 
@@ -310,6 +334,29 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Legacy refreshJobs now delegates to loadFeed based on current type
     await loadFeed(currentFeedType, 0);
   }, [loadFeed, currentFeedType]);
+
+  // Listen for auth changes to clear state immediately on logout/switch
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setCurrentUserId(null);
+        setJobs([]);
+      } else if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+        const newUserId = session?.user?.id || null;
+        if (newUserId && newUserId !== currentUserId) {
+          console.log('[JobContext] User changed/session initialized, refreshing jobs...');
+          setJobs([]); // Clear stale data from previous user
+          setCurrentUserId(newUserId);
+        }
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [currentUserId, refreshJobs]);
+
+
 
   const fetchMoreJobs = useCallback(async () => {
     if (isLoadingMore || !hasMore) return;
@@ -486,12 +533,12 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const fetchCache = React.useRef<Map<string, number>>(new Map());
 
-  const getJobWithFullDetails = async (jobId: string): Promise<Job | null> => {
+  const getJobWithFullDetails = useCallback(async (jobId: string, force = false): Promise<Job | null> => {
     const now = Date.now();
     const lastFetch = fetchCache.current.get(jobId);
 
-    // Return current state version if fetched recently (< 10 seconds)
-    if (lastFetch && (now - lastFetch < 10000)) {
+    // Return current state version if fetched recently (< 10 seconds) AND not forced
+    if (!force && lastFetch && (now - lastFetch < 10000)) {
       const existing = jobs.find(j => j.id === jobId);
       if (existing && existing.bids && existing.bids.length > 0) {
         console.log('[JobContext] Returning cached detailed job:', jobId);
@@ -527,10 +574,10 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       console.error('Error fetching full job details:', err);
       return null;
     }
-  };
+  }, [jobs]);
 
   return (
-    <JobContext.Provider value={{ jobs, setJobs, addJob, updateJob, deleteJob, addBid, updateBid, refreshJobs, fetchMoreJobs, getJobWithFullDetails, loadFeed, loading, isLoadingMore, hasMore, error }}>
+    <JobContext.Provider value={{ jobs, setJobs, addJob, updateJob, deleteJob, addBid, updateBid, refreshJobs, fetchMoreJobs, getJobWithFullDetails, loadFeed, clearJobs, loading, isLoadingMore, hasMore, error }}>
       {children}
     </JobContext.Provider>
   );

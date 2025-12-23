@@ -61,8 +61,18 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  // Define safe initial user state (empty) to avoid "Rajesh Kumar" mock data leaking
+  const INITIAL_USER: User = {
+    id: '',
+    name: '',
+    rating: 0,
+    walletBalance: 0,
+    jobsCompleted: 0
+  };
+
   // Init user from storage to prevent flashing/empty state on reload
-  const [user, setUser] = useState<User>(() => getInitialState('chowkar_user', MOCK_USER));
+  // BUT fallback to INITIAL_USER instead of MOCK_USER to prevent fake data
+  const [user, setUser] = useState<User>(() => getInitialState('chowkar_user', INITIAL_USER));
   const [role, setRole] = useState<UserRole>(() => getInitialState('chowkar_role', UserRole.WORKER));
   const [language, setLanguage] = useState<'en' | 'hi'>(() => getInitialState('chowkar_language', 'en'));
 
@@ -147,131 +157,76 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     }, 3000);
 
-    // 2. DIRECT SESSION CHECK (Primary Initialization)
-    const initAuth = async () => {
-      try {
-        console.log('[Auth] Checking session directly...');
-        const { data: { session }, error } = await supabase.auth.getSession();
-
-        if (error) throw error;
-
-        if (mounted && session?.user) {
-          console.log('[Auth] Direct session found:', session.user.email);
-          // VALID SESSION FOUND
-          localStorage.setItem('chowkar_isLoggedIn', 'true'); // Ensure flag is set
-
-          // Use cached user if available and matches session, otherwise start fresh
-          // This prevents overwriting rich profile data with basic session data during reload
-          const baseUser = (user.id === session.user.id) ? user : MOCK_USER;
-
-          const optimisticUser: User = {
-            ...baseUser,
-            id: session.user.id,
-            email: session.user.email || baseUser.email || '',
-            name: session.user.user_metadata?.full_name || baseUser.name || session.user.email?.split('@')[0] || 'User'
-          };
-
-          // BATCH UPDATES
-          setUser(optimisticUser);
-          setIsLoggedIn(true);
-          currentUserIdRef.current = session.user.id;
-          setHasInitialized(true);
-          setIsAuthLoading(false); // UNBLOCK UI IMMEDIATELY
-
-          // Background Profile Sync
-          getCurrentUser(session.user).then(({ user: currentUser }) => {
-            if (mounted && currentUser) setUser(currentUser);
-          });
-        } else if (mounted) {
-          // CHECK FOR OAUTH HASH: If we are returning from Google, session might not be ready yet.
-          const isOAuthRedirect = typeof window !== 'undefined' &&
-            (window.location.hash.includes('access_token') ||
-              window.location.hash.includes('type=recovery') ||
-              window.location.hash.includes('error_description'));
-
-          if (isOAuthRedirect) {
-            console.log('[Auth] OAuth redirect detected. Deferring failure decision...');
-            // We do NOT log out yet. We wait for onAuthStateChange or a second check.
-            // We can optionally check again in a few seconds to be safe.
-            setTimeout(async () => {
-              if (!mounted) return;
-              console.log('[Auth] Re-checking session after OAuth delay...');
-              const { data: { session: retrySession } } = await supabase.auth.getSession();
-
-              if (retrySession?.user) {
-                console.log('[Auth] Session verified after delay.');
-                // onAuthStateChange likely handled the state update already
-              } else {
-                console.log('[Auth] OAuth verification failed or timed out.');
-                localStorage.removeItem('chowkar_isLoggedIn');
-                setIsLoggedIn(false);
-                setHasInitialized(true);
-                setIsAuthLoading(false);
-              }
-            }, 4000); // 4 seconds grace period for token processing
-            return;
-          }
-
-          console.log('[Auth] No direct session found.');
-          // If we thought we were logged in (optimistic flag), we were wrong.
-          localStorage.removeItem('chowkar_isLoggedIn');
-          setIsLoggedIn(false);
-          setHasInitialized(true);
-          setIsAuthLoading(false); // Show Login Screen
-        }
-      } catch (err) {
-        console.error('[Auth] Direct session check failed:', err);
-        // Fallback: If we have the flag, we probably shouldn't kick them out on network error alone?
-        // But for safety, if we can't verify, we might stop loading.
-        setIsAuthLoading(false);
-      }
-    };
-
-    initAuth();
-
-    // 3. EVENT LISTENER (Secondary / Updates)
+    // 2. Consolidated Auth handling via Supabase listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
-      console.log('[Auth] Event:', event);
+      console.log('[Auth] Event:', event, session?.user?.email);
+
+      if (event === 'INITIAL_SESSION' && !session?.user) {
+        // Handle case where we thought we were logged in but aren't
+        if (localStorage.getItem('chowkar_isLoggedIn') === 'true') {
+          console.log('[Auth] Optimistic login invalidated by INITIAL_SESSION null');
+          localStorage.removeItem('chowkar_isLoggedIn');
+          setIsLoggedIn(false);
+        }
+        setIsAuthLoading(false);
+        setHasInitialized(true);
+      }
 
       if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
         if (session?.user) {
-          // If we already have this user, minimal update
-          if (currentUserIdRef.current === session.user.id) {
-            // ensure loading is off
+          // Prevent redundant re-initialization if session is already active
+          if (currentUserIdRef.current === session.user.id && isLoggedIn) {
             if (isAuthLoading) setIsAuthLoading(false);
+            setHasInitialized(true);
             return;
           }
 
-          console.log('[Auth] Handling sign-in event.');
-          localStorage.setItem('chowkar_isLoggedIn', 'true'); // Persist
+          console.log('[Auth] Handling session:', event);
+          localStorage.setItem('chowkar_isLoggedIn', 'true');
 
           setIsLoggedIn(true);
           const optimisticUser: User = {
-            ...MOCK_USER,
+            ...INITIAL_USER,
             id: session.user.id,
             email: session.user.email || '',
             name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User'
           };
+
+          // Optimistically set user immediately for perceived speed
           setUser(optimisticUser);
           currentUserIdRef.current = session.user.id;
-          setIsAuthLoading(false);
 
-          // Background sync
-          getCurrentUser(session.user).then(({ user: currentUser }) => {
-            if (mounted && currentUser) setUser(currentUser);
-          });
+          // CRITICAL FIX: Fetch FULL profile (with phone/location) BEFORE releasing loading state
+          // This prevents App.tsx from seeing an incomplete user and popping up the edit modal
+          try {
+            console.log('[Auth] Fetching full profile before release...');
+            const { user: fullUser } = await getCurrentUser(session.user);
+            if (fullUser) {
+              setUser(fullUser);
+            }
+          } catch (err) {
+            console.warn('[Auth] Failed to pre-fetch full profile', err);
+          }
+
+          setIsAuthLoading(false);
+          setHasInitialized(true);
         }
       } else if (event === 'SIGNED_OUT') {
-        console.log('[Auth] Signed out.');
-        localStorage.removeItem('chowkar_isLoggedIn'); // Clear persist
-        setUser(MOCK_USER);
-        setIsLoggedIn(false);
-        currentUserIdRef.current = null;
-        setTransactions([]);
-        setNotifications([]);
-        setMessages([]);
-        setIsAuthLoading(false);
+        if (isLoggedIn || currentUserIdRef.current) {
+          console.log('[Auth] Signed out. Cleaning up strings...');
+          localStorage.removeItem('chowkar_isLoggedIn');
+          setUser(INITIAL_USER);
+          setIsLoggedIn(false);
+          currentUserIdRef.current = null;
+          setTransactions([]);
+          setNotifications([]);
+          setMessages([]);
+          setIsAuthLoading(false);
+          setHasInitialized(true);
+        }
+      } else if (event === 'USER_UPDATED' && session?.user) {
+        currentUserIdRef.current = session.user.id;
       }
     });
 
@@ -284,8 +239,6 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Fetch user data from database when logged in
   useEffect(() => {
-    // Only fetch data if logged in AND initial auth loading is complete
-    // This prevents race conditions with the initial profile fetch
     if (isLoggedIn && user.id && !isAuthLoading) {
       fetchUserData();
     }
@@ -293,13 +246,9 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const fetchUserData = async () => {
     console.log('[Data] Starting to fetch user data...');
-
-    // Guard: Only fetch if user.id is a valid UUID (not mock 'u1')
+    // Guard: Only fetch if user.id is a valid UUID
     const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id);
-    if (!isValidUUID) {
-      console.log('[Data] Skipping fetch - user.id is not a valid UUID:', user.id);
-      return;
-    }
+    if (!isValidUUID) return;
 
     try {
       console.log('[Data] Fetching user data in parallel...');

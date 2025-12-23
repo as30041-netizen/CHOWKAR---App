@@ -39,6 +39,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
     const [pendingJob, setPendingJob] = useState<Job | null>(null);
     const [postingFee, setPostingFee] = useState<number>(10);
     const [isUploadingImage, setIsUploadingImage] = useState(false);
+    const [isPosting, setIsPosting] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -131,6 +132,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
             return;
         }
 
+        setIsPosting(true);
         try {
             if (isEditing && initialJob) {
                 // CHECK: Can only edit OPEN jobs
@@ -263,6 +265,8 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
         } catch (error) {
             console.error(isEditing ? "Failed to update job:" : "Failed to prepare job:", error);
             showAlert(`An error occurred while ${isEditing ? 'updating' : 'preparing'} the job. Please try again.`, 'error');
+        } finally {
+            setIsPosting(false);
         }
     };
 
@@ -616,12 +620,19 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
             <button
                 type="button"
                 onClick={handlePostJob}
-                className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 hover:bg-emerald-700 active:scale-95 transition-all mt-4 relative z-10"
+                disabled={isPosting || isUploadingImage || isAnalyzingImage || isEstimating || isEnhancing}
+                className={`w-full bg-emerald-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 hover:bg-emerald-700 active:scale-95 transition-all mt-4 relative z-10 ${(isPosting || isUploadingImage || isAnalyzingImage || isEstimating || isEnhancing) ? 'opacity-70 cursor-not-allowed' : ''}`}
             >
-                {isEditing
-                    ? t.updateJob
-                    : t.postJobWithFee.replace('{fee}', postingFee.toString())
-                } <ChevronRight size={20} />
+                {isPosting || isUploadingImage || isAnalyzingImage || isEstimating || isEnhancing ? (
+                    <Loader2 size={24} className="animate-spin" />
+                ) : (
+                    <>
+                        {isEditing
+                            ? t.updateJob
+                            : t.postJobWithFee.replace('{fee}', postingFee.toString())
+                        } <ChevronRight size={20} />
+                    </>
+                )}
             </button>
             {!isEditing && (user.walletBalance || 0) >= postingFee && (
                 <p className="text-center text-sm text-emerald-600 mt-2 flex items-center justify-center gap-1">

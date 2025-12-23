@@ -21,13 +21,12 @@ if (!rootElement) {
 
 const root = ReactDOM.createRoot(rootElement);
 root.render(
-  <React.StrictMode>
-    <HelmetProvider>
-      <ErrorBoundary>
-        <ThemeProvider>
-          <App />
-        </ThemeProvider>
-      </ErrorBoundary>
-    </HelmetProvider>
-  </React.StrictMode>
+  // NOTE: StrictMode disabled to avoid 'removeChild' errors from browser extensions
+  <HelmetProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>
+    </ErrorBoundary>
+  </HelmetProvider>
 );

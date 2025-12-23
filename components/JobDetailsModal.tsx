@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { XCircle, MapPin, Star, AlertCircle, Pencil, ExternalLink, IndianRupee, UserCircle, Users, ChevronRight } from 'lucide-react';
+import { XCircle, MapPin, Star, AlertCircle, Pencil, ExternalLink, IndianRupee, UserCircle, Users, ChevronRight, Loader2 } from 'lucide-react';
 import { Job, UserRole, JobStatus } from '../types';
 import { useUser } from '../contexts/UserContextDB';
 import { useJobs } from '../contexts/JobContextDB';
@@ -22,14 +22,15 @@ interface JobDetailsModalProps {
 export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
     job, onClose, onBid, onViewBids, onChat, onEdit, onDelete, onCancel, onReplyToCounter, onViewProfile, showAlert
 }) => {
-    const { user, role, t, language } = useUser();
+    const { user, role, t, language, isAuthLoading } = useUser();
     const { getJobWithFullDetails, jobs } = useJobs();
     const [showCounterInput, setShowCounterInput] = React.useState(false);
     const [counterAmount, setCounterAmount] = React.useState('');
+    const [isProcessing, setIsProcessing] = React.useState(false);
 
     useEffect(() => {
         if (job?.id) {
-            getJobWithFullDetails(job.id);
+            getJobWithFullDetails(job.id, true);
         }
     }, [job?.id]);
 
@@ -38,9 +39,19 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
 
     if (!liveJob) return null;
 
-    const myBid = liveJob.bids.find(b => b.workerId === user.id);
-    const lastNegotiation = myBid?.negotiationHistory?.[myBid.negotiationHistory.length - 1];
-    const isWorkerTurn = lastNegotiation?.by === UserRole.POSTER && myBid?.status === 'PENDING';
+    // Use surgically fetched summary fields if full bids array is still loading
+    const myBid = liveJob.bids.find(b => b.workerId === user.id) ||
+        (liveJob.myBidId ? { id: liveJob.myBidId, status: liveJob.myBidStatus, amount: liveJob.myBidAmount } as any : null);
+
+    const lastNegotiation = myBid?.negotiationHistory && myBid.negotiationHistory.length > 0
+        ? myBid.negotiationHistory[myBid.negotiationHistory.length - 1]
+        : null;
+
+    // Fallback to optimized summary field if full bid object isn't loaded yet
+    const lastTurnBy = lastNegotiation?.by || liveJob.myBidLastNegotiationBy;
+    const currentStatus = myBid?.status || liveJob.myBidStatus;
+
+    const isWorkerTurn = lastTurnBy === UserRole.POSTER && currentStatus === 'PENDING';
 
     // Check if user is a participant (Poster or Accepted Worker)
     // Using both local bids array and the optimized myBidId/acceptedBidId fields for reliability (Surgical Loading)
@@ -53,8 +64,8 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
     ));
     const isParticipant = user.id === liveJob.posterId || isAcceptedWorker;
 
-    const handleSubmitCounter = () => {
-        if (!myBid || !onReplyToCounter || !counterAmount) return;
+    const handleSubmitCounter = async () => {
+        if (!myBid || !onReplyToCounter || !counterAmount || isProcessing) return;
 
         const amount = parseInt(counterAmount);
         if (isNaN(amount) || amount <= 0) {
@@ -62,9 +73,15 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
             return;
         }
 
-        onReplyToCounter(liveJob.id, myBid.id, 'COUNTER', amount);
-        setShowCounterInput(false);
-        onClose();
+        setIsProcessing(true);
+        try {
+            await onReplyToCounter(liveJob.id, myBid.id, 'COUNTER', amount);
+            setShowCounterInput(false);
+            setCounterAmount('');
+            onClose();
+        } finally {
+            setIsProcessing(false);
+        }
     };
 
     return (
@@ -83,7 +100,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                 </div>
 
                 {/* Negotiation Section (for Worker) */}
-                {role === UserRole.WORKER && isWorkerTurn && (
+                {!isAuthLoading && role === UserRole.WORKER && isWorkerTurn && (
                     <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-4 mb-5 shadow-sm">
                         <h4 className="flex items-center gap-2 text-amber-800 font-bold text-sm mb-3">
                             <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>
@@ -107,7 +124,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                         ) : (
                             <div className="grid grid-cols-2 gap-2">
                                 <button
-                                    onClick={() => { onReplyToCounter?.(liveJob.id, myBid!.id, 'ACCEPT'); onClose(); }}
+                                    onClick={() => { if (myBid) { onReplyToCounter?.(liveJob.id, myBid.id, 'ACCEPT'); onClose(); } }}
                                     className="bg-emerald-600 text-white py-2.5 rounded-xl font-bold shadow-sm hover:bg-emerald-700 transition-all"
                                 >
                                     {t.acceptCounter}
@@ -119,7 +136,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                                     {t.counterOffer}
                                 </button>
                                 <button
-                                    onClick={() => { onReplyToCounter?.(liveJob.id, myBid!.id, 'REJECT'); onClose(); }}
+                                    onClick={() => { if (myBid) { onReplyToCounter?.(liveJob.id, myBid.id, 'REJECT'); onClose(); } }}
                                     className="col-span-2 text-xs text-red-500 dark:text-red-400 font-bold hover:underline py-1"
                                 >
                                     {t.declineCounterPrompt}
@@ -294,7 +311,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                 {/* Actions */}
                 <div className="flex gap-3 flex-wrap">
                     {/* Worker: Bid button */}
-                    {role === UserRole.WORKER && liveJob.status === JobStatus.OPEN && liveJob.posterId !== user.id && !myBid && (
+                    {!isAuthLoading && role === UserRole.WORKER && liveJob.status === JobStatus.OPEN && liveJob.posterId !== user.id && !myBid && (
                         <button
                             onClick={() => onBid(liveJob.id)}
                             className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-emerald-700 active:scale-95 transition-all"
@@ -304,7 +321,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                     )}
 
                     {/* Worker: Pending Bid view if not turn */}
-                    {role === UserRole.WORKER && myBid && !isWorkerTurn && liveJob.status === JobStatus.OPEN && (
+                    {!isAuthLoading && role === UserRole.WORKER && myBid && !isWorkerTurn && liveJob.status === JobStatus.OPEN && (
                         <div className="flex-1 flex gap-2">
                             <div className="flex-1 text-center py-2 bg-blue-50 dark:bg-blue-900/30 rounded-xl border border-blue-200 dark:border-blue-800">
                                 <p className="text-xs font-bold text-blue-700 dark:text-blue-300">{t.pending}: ₹{myBid.amount}</p>
@@ -344,8 +361,16 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                         </div>
                     )}
 
+                    {/* ACTION AREA LOADING GUARD */}
+                    {isAuthLoading && (
+                        <div className="flex-1 flex items-center justify-center py-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                            <Loader2 size={20} className="animate-spin text-emerald-600 mr-2" />
+                            <span className="text-sm font-medium text-gray-500">Syncing...</span>
+                        </div>
+                    )}
+
                     {/* Poster: View Bids button if there are bids */}
-                    {role === UserRole.POSTER && liveJob.posterId === user.id && liveJob.status === JobStatus.OPEN && liveJob.bids.length > 0 && (
+                    {!isAuthLoading && role === UserRole.POSTER && liveJob.posterId === user.id && liveJob.status === JobStatus.OPEN && liveJob.bids.length > 0 && (
                         <button
                             onClick={() => onViewBids(liveJob)}
                             className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-emerald-700 active:scale-95 transition-all"
@@ -383,7 +408,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                     )}
 
                     {/* Poster: Cancel Job (with Refund) - only if IN_PROGRESS */}
-                    {liveJob.posterId === user.id && liveJob.status === JobStatus.IN_PROGRESS && onCancel && (
+                    {!isAuthLoading && liveJob.posterId === user.id && liveJob.status === JobStatus.IN_PROGRESS && onCancel && (
                         <button
                             onClick={() => {
                                 if (confirm(t.cancelJobRefundPrompt)) {
@@ -397,7 +422,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                     )}
 
                     {/* Poster: Edit button - only if OPEN and NO bids placed */}
-                    {liveJob.posterId === user.id && liveJob.status === JobStatus.OPEN && liveJob.bids.length === 0 && (
+                    {!isAuthLoading && liveJob.posterId === user.id && liveJob.status === JobStatus.OPEN && liveJob.bids.length === 0 && (
                         <button
                             onClick={() => onEdit(liveJob)}
                             className="flex-1 bg-blue-500 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-blue-600 active:scale-95 transition-all flex items-center justify-center gap-2"
@@ -407,7 +432,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                     )}
 
                     {/* Poster: Delete button - only if OPEN and no bid accepted */}
-                    {liveJob.posterId === user.id && liveJob.status === JobStatus.OPEN && !liveJob.acceptedBidId && (
+                    {!isAuthLoading && liveJob.posterId === user.id && liveJob.status === JobStatus.OPEN && !liveJob.acceptedBidId && (
                         <button
                             onClick={() => {
                                 if (confirm(t.deleteJobPrompt)) {

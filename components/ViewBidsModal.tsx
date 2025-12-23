@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { XCircle, UserCircle, Star, ExternalLink } from 'lucide-react';
+import { XCircle, UserCircle, Star, ExternalLink, Loader2 } from 'lucide-react';
 import { Job, UserRole } from '../types';
 import { useUser } from '../contexts/UserContextDB';
 import { supabase } from '../lib/supabase';
@@ -20,6 +20,25 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
     const [isAcceptingBid, setIsAcceptingBid] = useState(false);
     const [connectionFee, setConnectionFee] = useState(20);
     const [localJob, setLocalJob] = useState<Job | null>(job);
+
+    // Use live job data from context for syncing
+    const { getJobWithFullDetails } = useJobs();
+
+    const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+
+    useEffect(() => {
+        if (isOpen && job?.id) {
+            const fetchDetails = async () => {
+                // Only show loading if we don't already have bids
+                if (!job.bids || job.bids.length === 0) {
+                    setIsLoadingDetails(true);
+                }
+                await getJobWithFullDetails(job.id, true);
+                setIsLoadingDetails(false);
+            };
+            fetchDetails();
+        }
+    }, [isOpen, job?.id]);
 
     // Update local job when prop changes
     useEffect(() => {
@@ -395,7 +414,14 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                                 </div>
                             );
                         })
-                    ) : <p className="text-center text-gray-400 dark:text-gray-500 py-8">No bids yet.</p>}
+                    ) : isLoadingDetails && (localJob?.bidCount || 0) > 0 ? (
+                        <div className="flex flex-col items-center justify-center py-12">
+                            <Loader2 size={32} className="text-emerald-600 animate-spin mb-4" />
+                            <p className="text-gray-500 dark:text-gray-400 font-medium">Loading bids...</p>
+                        </div>
+                    ) : (
+                        <p className="text-center text-gray-400 dark:text-gray-500 py-8">No bids yet.</p>
+                    )}
                 </div>
             </div>
         </div>

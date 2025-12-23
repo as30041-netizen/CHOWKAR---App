@@ -35,7 +35,7 @@ const UserProfileModal = lazy(() => import('./components/UserProfileModal').then
 import { BottomNav } from './components/BottomNav';
 
 // Services
-import { signInWithGoogle, completeProfile } from './services/authService';
+import { signInWithGoogle, completeProfile, markWelcomeBonusAsSeen } from './services/authService';
 import { useDeepLinkHandler } from './hooks/useDeepLinkHandler';
 import { cancelJob } from './services/jobService';
 import { checkWalletBalance, deductFromWallet, getAppConfig } from './services/paymentService';
@@ -117,7 +117,11 @@ const AppContent: React.FC = () => {
 
   // Check onboarding status
   useEffect(() => {
-    if (isLoggedIn && !isAuthLoading && !user.name.includes('Mock')) { // Don't show for mock user if we want
+    // Wait for real DB data before nagging about profile
+    // We check user.joinDate to ensure we have a db-hydrated user (optimistic user creates joinDate from Date.now, but DB user has it too)
+    // Better: check if we have actually attempted to load the profile.
+
+    if (isLoggedIn && !isAuthLoading && !user.name.includes('Mock')) {
       // 1. Role Selection
       const hasCompletedOnboarding = localStorage.getItem('chowkar_onboarding_complete');
       if (hasCompletedOnboarding !== 'true') {
@@ -125,10 +129,24 @@ const AppContent: React.FC = () => {
         return; // Prioritize Role Selection
       }
 
-      // 2. Profile Completion (Phone/Location)
-      if (!user.phone || !user.location) {
-        setShowEditProfile(true);
+      // 2. Profile Completion (Phone/Location) - ONLY pop up if we are sure (user object has been synced)
+      // The optimistic user from auth change might lack phone/location.
+      // We'll assume if walletBalance is defined, we have fetched from DB (since optimistic doesn't usually set exact wallet from DB without fetch)
+      // Actually, let's just use a simpler heuristic: don't auto-show unless we are sure they are missing.
+      // But we need them to fill it. 
+
+      // 2. Profile Completion (Name/Phone/Location)
+      if (user.id) {
+        const isNameMissing = !user.name || user.name.trim() === '';
+        const isPhoneMissing = !user.phone || user.phone.trim() === '';
+        const isLocationMissing = !user.location || user.location === 'Not set' || user.location.trim() === '';
+
+        if (isNameMissing || isPhoneMissing || isLocationMissing) {
+          console.log('[App] Profile incomplete, prompting update:', { name: !isNameMissing, phone: !isPhoneMissing, location: !isLocationMissing });
+          setShowEditProfile(true);
+        }
       }
+
     }
   }, [isLoggedIn, isAuthLoading, user]);
 
@@ -198,13 +216,16 @@ const AppContent: React.FC = () => {
       switch (type) {
         case 'viewBids':
           setViewBidsModal({ isOpen: true, job });
+          getJobWithFullDetails(id, true);
           break;
         case 'chat':
           setChatOpen({ isOpen: true, job });
           setActiveChatId(id);
+          getJobWithFullDetails(id, true);
           break;
         case 'jobDetails':
           setSelectedJob(job);
+          getJobWithFullDetails(id, true);
           break;
       }
     };
@@ -232,21 +253,22 @@ const AppContent: React.FC = () => {
   // --- Realtime Sync ---
   // When 'jobs' update in background, update the open Modal view
   useEffect(() => {
+    // Sync View Bids Modal if open
     if (viewBidsModal.isOpen && viewBidsModal.job) {
       const liveJob = jobs.find(j => j.id === viewBidsModal.job!.id);
-      if (liveJob && JSON.stringify(liveJob.bids) !== JSON.stringify(viewBidsModal.job.bids)) {
+      // Update if the job reference changed (which happens when getJobWithFullDetails completes)
+      if (liveJob && liveJob !== viewBidsModal.job) {
         setViewBidsModal(prev => ({ ...prev, job: liveJob }));
       }
     }
-    // Also sync Selected Job if open
+    // Sync Selected Job if open
     if (selectedJob) {
       const liveJob = jobs.find(j => j.id === selectedJob.id);
-      // Update if the job reference changed (e.g. updated from partial to full details)
       if (liveJob && liveJob !== selectedJob) {
         setSelectedJob(liveJob);
       }
     }
-  }, [jobs, viewBidsModal.isOpen, viewBidsModal.job, selectedJob]);
+  }, [jobs, viewBidsModal.isOpen, viewBidsModal.job?.id, selectedJob?.id]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -254,19 +276,24 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     if (isLoggedIn && transactions.length > 0) {
       const bonusTx = transactions.find(t => t.description === 'Welcome Bonus ₹100');
-      if (bonusTx) {
-        const hasShownBonus = localStorage.getItem(`chowkar_bonus_shown_${user.id}`);
-        if (hasShownBonus !== 'true') {
-          showAlert(language === 'en'
-            ? "Congratulations! You've received a ₹100 Welcome Bonus! 🎁"
-            : "बधाई हो! आपको ₹100 का स्वागत बोनस मिला है! 🎁", 'success');
-          setShowConfetti(true);
-          setTimeout(() => setShowConfetti(false), 5000);
-          localStorage.setItem(`chowkar_bonus_shown_${user.id}`, 'true');
-        }
+      if (bonusTx && user.hasSeenWelcomeBonus === false) {
+        // Show celebration
+        showAlert(language === 'en'
+          ? "Congratulations! You've received a ₹100 Welcome Bonus! 🎁"
+          : "बधाई हो! आपको ₹100 का स्वागत बोनस मिला है! 🎁", 'success');
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 5000);
+
+        // Mark as seen in DB
+        markWelcomeBonusAsSeen(user.id);
+
+        // Optimistic update local state to prevent multiple shows while DB updates
+        setUser(prev => ({ ...prev, hasSeenWelcomeBonus: true }));
+        // Legacy fallback
+        localStorage.setItem(`chowkar_bonus_shown_${user.id}`, 'true');
       }
     }
-  }, [isLoggedIn, transactions, user.id]);
+  }, [isLoggedIn, transactions, user.id, user.hasSeenWelcomeBonus]);
 
   // Count chats with unread messages (only for IN_PROGRESS or COMPLETED jobs)
   const unreadChatCount = notifications.filter(n =>
@@ -525,9 +552,39 @@ const AppContent: React.FC = () => {
   };
 
   const handleWorkerReplyToCounter = async (jobId: string, bidId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', amount?: number) => {
-    const job = jobs.find(j => j.id === jobId); if (!job) return;
+    let job = jobs.find(j => j.id === jobId);
+
+    // Robost Fetch: If job not loaded, fetch it
+    if (!job) {
+      try {
+        const fetched = await getJobWithFullDetails(jobId, true);
+        if (fetched) job = fetched;
+      } catch (e) {
+        console.error("Failed to fetch job for reply", e);
+      }
+    }
+
+    if (!job) {
+      showAlert(t.jobNotFound || "Job not found", 'error');
+      return;
+    }
+
     try {
-      const bid = job.bids.find(b => b.id === bidId); if (!bid) return;
+      let bid = job.bids.find(b => b.id === bidId);
+
+      // Robust Fetch: If bid not loaded (e.g. valid job but unloaded bids), reload job
+      if (!bid) {
+        const fetched = await getJobWithFullDetails(jobId, true);
+        if (fetched) {
+          job = fetched;
+          bid = fetched.bids.find(b => b.id === bidId);
+        }
+      }
+
+      if (!bid) {
+        showAlert(t.bidNotFound || "Bid not found", 'error');
+        return;
+      }
 
       if (action === 'ACCEPT') {
         // WORKER ACCEPTS COUNTER = JOB FINALIZED (but worker needs to pay to unlock chat)
@@ -858,10 +915,16 @@ const AppContent: React.FC = () => {
             <Routes>
               <Route path="/" element={<Home
                 onBid={(id) => setBidModalOpen({ isOpen: true, jobId: id })}
-                onViewBids={(j) => setViewBidsModal({ isOpen: true, job: j })}
+                onViewBids={(j) => {
+                  setViewBidsModal({ isOpen: true, job: j });
+                  getJobWithFullDetails(j.id, true); // Proactively fetch latest
+                }}
                 onChat={handleChatOpen}
                 onEdit={handleEditJobLink}
-                onClick={(j) => setSelectedJob(j)} // Open job details
+                onClick={(j) => {
+                  setSelectedJob(j);
+                  getJobWithFullDetails(j.id, true); // Proactively fetch latest
+                }}
                 onReplyToCounter={handleWorkerReplyToCounter}
                 onWithdrawBid={handleWithdrawBid}
                 setShowFilterModal={setShowFilterModal}
@@ -948,7 +1011,12 @@ const AppContent: React.FC = () => {
             // Optimized feeds don't include bids, but we need them for chat/review logic
 
             let fullJob = job;
-            if (job.status !== 'OPEN' && job.bids.length === 0) {
+            // Always fetch full details if bids are missing (common for optimized high-performance feeds)
+            if (fullJob.bids.length === 0 && (fullJob.bidCount || 0) > 0) {
+              const fetched = await getJobWithFullDetails(job.id);
+              if (fetched) fullJob = fetched;
+            } else if (job.status !== 'OPEN' && job.bids.length === 0) {
+              // Legacy fallback
               const fetched = await getJobWithFullDetails(job.id);
               if (fetched) fullJob = fetched;
             }

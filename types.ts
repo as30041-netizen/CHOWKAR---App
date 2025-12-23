@@ -46,6 +46,7 @@ export interface User {
   referralCode?: string;
   referredBy?: string;
   verified?: boolean;
+  hasSeenWelcomeBonus?: boolean;
   reviews?: Review[];
 }
 
@@ -102,6 +103,9 @@ export interface Job {
   myBidId?: string;       // Current user's bid ID if exists
   myBidStatus?: 'PENDING' | 'ACCEPTED' | 'REJECTED';  // Current user's bid status
   myBidAmount?: number;   // Current user's bid amount
+  myBidLastNegotiationBy?: UserRole; // Last turn in negotiation (for card UI)
+  hasNewBid?: boolean;    // Transient: Poster has unread new bid
+  hasNewCounter?: boolean; // Transient: Poster has unread new counter
 }
 
 export interface ChatMessage {

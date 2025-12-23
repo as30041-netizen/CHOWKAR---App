@@ -28,6 +28,10 @@ export const Profile: React.FC<ProfileProps> = ({ onEditProfile, setShowSubscrip
 
     React.useEffect(() => {
         const fetchJobCount = async () => {
+            // Guard against invalid UUIDs (e.g. 'u1' mock user)
+            const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id);
+            if (!isValidUUID) return;
+
             const { count, error } = await supabase
                 .from('jobs')
                 .select('*', { count: 'exact', head: true })
@@ -37,7 +41,7 @@ export const Profile: React.FC<ProfileProps> = ({ onEditProfile, setShowSubscrip
                 setPostedJobsCount(count);
             }
         };
-        fetchJobCount();
+        if (user.id) fetchJobCount();
     }, [user.id]);
 
     return (

@@ -373,7 +373,7 @@ export const Home: React.FC<HomeProps> = ({
                                 hasUnreadBids={notifications.some(n =>
                                     n.relatedJobId === job.id &&
                                     !n.read &&
-                                    n.title === 'New Bid'
+                                    (n.title.toLowerCase().includes('bid') || n.title.toLowerCase().includes('counter'))
                                 )}
                                 onBid={(id) => onBid(id)}
                                 onViewBids={(j) => onViewBids(j)}

@@ -13,6 +13,8 @@
 -- Returns job summary data with pre-computed bid counts and current user's bid info
 -- This eliminates the need to fetch ALL bids for ALL jobs on the home screen
 
+-- DROP existing to avoid return type conflicts
+DROP FUNCTION IF EXISTS get_home_feed(uuid, int, int, text, boolean);
 CREATE OR REPLACE FUNCTION get_home_feed(
     p_user_id UUID,
     p_limit INT DEFAULT 20,
@@ -42,7 +44,8 @@ RETURNS TABLE (
     bid_count BIGINT,
     my_bid_id UUID,
     my_bid_status TEXT,
-    my_bid_amount NUMERIC
+    my_bid_amount NUMERIC,
+    my_bid_last_negotiation_by TEXT
 )
 LANGUAGE sql STABLE SECURITY DEFINER
 AS $$
@@ -69,7 +72,8 @@ AS $$
         -- My bid info (if exists) - avoids fetching all bids
         (SELECT b.id FROM bids b WHERE b.job_id = j.id AND b.worker_id = p_user_id LIMIT 1) as my_bid_id,
         (SELECT b.status FROM bids b WHERE b.job_id = j.id AND b.worker_id = p_user_id LIMIT 1) as my_bid_status,
-        (SELECT b.amount FROM bids b WHERE b.job_id = j.id AND b.worker_id = p_user_id LIMIT 1) as my_bid_amount
+        (SELECT b.amount FROM bids b WHERE b.job_id = j.id AND b.worker_id = p_user_id LIMIT 1) as my_bid_amount,
+        (SELECT b.negotiation_history->-1->>'by' FROM bids b WHERE b.job_id = j.id AND b.worker_id = p_user_id LIMIT 1) as my_bid_last_negotiation_by
     FROM jobs j
     WHERE 
         (p_status IS NULL OR j.status = p_status)
@@ -88,12 +92,13 @@ GRANT EXECUTE ON FUNCTION get_home_feed TO authenticated;
 -- Fetches complete job data + all bids when user clicks to view details
 -- Only called when drilling into a specific job
 
+DROP FUNCTION IF EXISTS get_job_full_details(uuid);
 CREATE OR REPLACE FUNCTION get_job_full_details(p_job_id UUID)
-RETURNS JSON
+RETURNS JSONB
 LANGUAGE plpgsql STABLE SECURITY DEFINER
 AS $$
 DECLARE
-    result JSON;
+    result JSONB;
     job_row RECORD;
 BEGIN
     -- Fetch the job
@@ -123,7 +128,9 @@ BEGIN
             'status', job_row.status,
             'created_at', job_row.created_at,
             'accepted_bid_id', job_row.accepted_bid_id,
-            'image', job_row.image
+            'image', job_row.image,
+            'is_boosted', job_row.is_boosted,
+            'boost_expiry', job_row.boost_expiry
         ),
         'bids', (
             SELECT COALESCE(json_agg(
@@ -179,6 +186,8 @@ GRANT EXECUTE ON FUNCTION get_job_full_details TO authenticated;
 -- ============================================================================
 -- Optimized query for poster's job management view
 
+-- DROP existing to avoid return type conflicts
+DROP FUNCTION IF EXISTS get_my_jobs_feed(uuid, int, int);
 CREATE OR REPLACE FUNCTION get_my_jobs_feed(
     p_user_id UUID,
     p_limit INT DEFAULT 20,
@@ -189,6 +198,7 @@ RETURNS TABLE (
     poster_id UUID,
     poster_name TEXT,
     title TEXT,
+    description TEXT,
     category TEXT,
     location TEXT,
     budget NUMERIC,
@@ -198,7 +208,8 @@ RETURNS TABLE (
     bid_count BIGINT,
     pending_bid_count BIGINT,
     accepted_worker_name TEXT,
-    accepted_worker_photo TEXT
+    accepted_worker_photo TEXT,
+    last_bid_negotiation_by TEXT
 )
 LANGUAGE sql STABLE SECURITY DEFINER
 AS $$
@@ -207,6 +218,7 @@ AS $$
         j.poster_id,
         j.poster_name,
         j.title,
+        j.description,
         j.category,
         j.location,
         j.budget,
@@ -216,7 +228,8 @@ AS $$
         (SELECT COUNT(*) FROM bids b WHERE b.job_id = j.id)::BIGINT as bid_count,
         (SELECT COUNT(*) FROM bids b WHERE b.job_id = j.id AND b.status = 'PENDING')::BIGINT as pending_bid_count,
         (SELECT b.worker_name FROM bids b WHERE b.id = j.accepted_bid_id LIMIT 1) as accepted_worker_name,
-        (SELECT b.worker_photo FROM bids b WHERE b.id = j.accepted_bid_id LIMIT 1) as accepted_worker_photo
+        (SELECT b.worker_photo FROM bids b WHERE b.id = j.accepted_bid_id LIMIT 1) as accepted_worker_photo,
+        (SELECT b.negotiation_history->-1->>'by' FROM bids b WHERE b.job_id = j.id AND b.status = 'PENDING' ORDER BY b.created_at DESC LIMIT 1) as last_bid_negotiation_by
     FROM jobs j
     WHERE j.poster_id = p_user_id
     ORDER BY 
@@ -238,6 +251,8 @@ GRANT EXECUTE ON FUNCTION get_my_jobs_feed TO authenticated;
 -- ============================================================================
 -- Optimized query for worker's "My Applications" view
 
+-- DROP existing to avoid return type conflicts
+DROP FUNCTION IF EXISTS get_my_applications_feed(uuid, int, int);
 CREATE OR REPLACE FUNCTION get_my_applications_feed(
     p_user_id UUID,
     p_limit INT DEFAULT 20,
@@ -249,18 +264,27 @@ RETURNS TABLE (
     poster_name TEXT,
     poster_photo TEXT,
     title TEXT,
+    description TEXT,
     category TEXT,
     location TEXT,
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
+    job_date TEXT,
+    duration TEXT,
     budget NUMERIC,
-    job_status TEXT,
+    status TEXT,
     created_at TIMESTAMPTZ,
     accepted_bid_id UUID,
+    image TEXT,
+    -- Aggregated
+    bid_count BIGINT,
     -- My bid specific info
     my_bid_id UUID,
     my_bid_amount NUMERIC,
     my_bid_status TEXT,
     my_bid_created_at TIMESTAMPTZ,
-    is_my_bid_accepted BOOLEAN
+    is_my_bid_accepted BOOLEAN,
+    my_bid_last_negotiation_by TEXT
 )
 LANGUAGE sql STABLE SECURITY DEFINER
 AS $$
@@ -270,17 +294,25 @@ AS $$
         j.poster_name,
         j.poster_photo,
         j.title,
+        j.description,
         j.category,
         j.location,
+        j.latitude,
+        j.longitude,
+        j.job_date,
+        j.duration,
         j.budget,
-        j.status as job_status,
+        j.status,
         j.created_at,
         j.accepted_bid_id,
+        j.image,
+        (SELECT COUNT(*) FROM bids b2 WHERE b2.job_id = j.id)::BIGINT as bid_count,
         b.id as my_bid_id,
         b.amount as my_bid_amount,
         b.status as my_bid_status,
         b.created_at as my_bid_created_at,
-        (j.accepted_bid_id = b.id) as is_my_bid_accepted
+        (j.accepted_bid_id = b.id) as is_my_bid_accepted,
+        (b.negotiation_history->-1->>'by') as my_bid_last_negotiation_by
     FROM bids b
     JOIN jobs j ON j.id = b.job_id
     WHERE b.worker_id = p_user_id

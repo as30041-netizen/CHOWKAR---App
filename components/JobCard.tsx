@@ -55,8 +55,7 @@ export const JobCard: React.FC<JobCardProps> = ({
     workerId: currentUserId,
     status: job.myBidStatus,
     amount: job.myBidAmount,
-    // Negotiation check: if we have pre-computed fields, we might need more but 
-    // basic pending status is usually enough for the card.
+    negotiationHistory: job.myBidLastNegotiationBy ? [{ amount: job.myBidAmount || 0, by: job.myBidLastNegotiationBy, timestamp: Date.now() }] : []
   } : undefined);
 
   const acceptedBidId = job.acceptedBidId;
@@ -136,8 +135,26 @@ export const JobCard: React.FC<JobCardProps> = ({
     setShowCounterInput(false);
   };
 
-  // Determine Worker Status UI
-  const getWorkerStatusUI = () => {
+  // Determine Status UI (Worker or Poster)
+  const getStatusUI = () => {
+    // 1. Poster specific status (whose turn is it in general for this job's bids)
+    if (userRole === UserRole.POSTER && isPoster && job.status === JobStatus.OPEN) {
+      if (job.myBidLastNegotiationBy === UserRole.WORKER || job.hasNewCounter) {
+        return (
+          <div className="bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 text-[10px] font-bold px-2 py-1 rounded-lg flex items-center border border-amber-200 dark:border-amber-800 animate-pulse-slow">
+            <Handshake size={12} className="mr-1" /> {language === 'en' ? 'Worker countered - Your turn' : 'मज़दूर ने काउंटर किया - आपकी बारी'}
+          </div>
+        );
+      }
+      if (job.hasNewBid) {
+        return (
+          <div className="bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200 text-[10px] font-bold px-2 py-1 rounded-lg flex items-center border border-emerald-200 dark:border-emerald-800">
+            <AlertCircle size={12} className="mr-1" /> {language === 'en' ? 'New Bid Received!' : 'नई बोली प्राप्त हुई!'}
+          </div>
+        );
+      }
+    }
+
     if (!myBid) return null;
 
     if (myBid.status === 'ACCEPTED') {
@@ -165,11 +182,12 @@ export const JobCard: React.FC<JobCardProps> = ({
     // Negotiation Logic - requires full bid history
     // If we only have pre-computed info, and it says PENDING, we display as Pending.
     // Full counter-offer UI will appear in JobDetailsModal where we lazy-load full details.
-    const lastNegotiation = myBid instanceof Object && 'negotiationHistory' in myBid
-      ? (myBid.negotiationHistory as any[])?.[(myBid.negotiationHistory as any[]).length - 1]
-      : null;
-    const isPosterTurn = lastNegotiation?.by === UserRole.WORKER;
-    const isWorkerTurn = lastNegotiation?.by === UserRole.POSTER;
+    const lastTurn = job.myBidLastNegotiationBy || (myBid instanceof Object && 'negotiationHistory' in myBid
+      ? (myBid.negotiationHistory as any[])?.[(myBid.negotiationHistory as any[]).length - 1]?.by
+      : null);
+
+    const isWorkerTurn = lastTurn === UserRole.POSTER;
+    const isPosterTurn = lastTurn === UserRole.WORKER;
 
     if (isWorkerTurn) {
       return (
@@ -352,13 +370,13 @@ export const JobCard: React.FC<JobCardProps> = ({
                 {t.bidNow} <ChevronRight size={16} className="ml-1" />
               </button>
             ) : (
-              getWorkerStatusUI()
+              getStatusUI()
             )
           )}
 
           {/* Poster Actions */}
           {userRole === UserRole.POSTER && isPoster && job.status === JobStatus.OPEN && (
-            job.bids.length === 0 ? (
+            (job.bidCount ?? job.bids.length) === 0 ? (
               <button
                 onClick={() => onEdit(job)}
                 className="bg-white dark:bg-gray-800 border-2 border-emerald-100 dark:border-emerald-900/50 text-emerald-800 dark:text-emerald-400 px-4 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:border-emerald-200 dark:hover:border-emerald-800 transition-colors flex items-center gap-1.5"
@@ -367,20 +385,23 @@ export const JobCard: React.FC<JobCardProps> = ({
                 {t.editJob}
               </button>
             ) : (
-              <button
-                onClick={() => onViewBids(job)}
-                className="relative bg-white dark:bg-gray-800 border-2 border-emerald-100 dark:border-emerald-900/50 text-emerald-800 dark:text-emerald-400 px-4 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:border-emerald-200 dark:hover:border-emerald-800 transition-colors"
-              >
-                {t.viewBids}
-                {job.bids.length > 0 && (
-                  <span className={`absolute -top-2 -right-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm min-w-[20px] text-center border-2 border-white dark:border-gray-800 ${hasUnreadBids
-                    ? 'bg-red-500 text-white animate-pulse'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
-                    }`}>
-                    {job.bidCount !== undefined ? job.bidCount : job.bids.length}
-                  </span>
-                )}
-              </button>
+              <div className="flex flex-col items-end gap-2">
+                {getStatusUI()}
+                <button
+                  onClick={() => onViewBids(job)}
+                  className="relative bg-white dark:bg-gray-800 border-2 border-emerald-100 dark:border-emerald-900/50 text-emerald-800 dark:text-emerald-400 px-4 py-2 rounded-xl text-sm font-bold hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:border-emerald-200 dark:hover:border-emerald-800 transition-colors"
+                >
+                  {t.viewBids}
+                  {(job.bidCount ?? job.bids.length) > 0 && (
+                    <span className={`absolute -top-2 -right-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm min-w-[20px] text-center border-2 border-white dark:border-gray-800 ${hasUnreadBids || job.hasNewBid || job.hasNewCounter
+                      ? 'bg-red-500 text-white animate-pulse'
+                      : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                      }`}>
+                      {job.bidCount !== undefined ? job.bidCount : job.bids.length}
+                    </span>
+                  )}
+                </button>
+              </div>
             )
           )}
 
