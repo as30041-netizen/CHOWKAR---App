@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback } from 'react';
 import { Job, Bid, JobStatus } from '../types';
-import { fetchJobs, createJob as createJobDB, updateJob as updateJobDB, deleteJob as deleteJobDB, createBid as createBidDB, updateBid as updateBidDB, checkExpiredBidDeadlines } from '../services/jobService';
+import { fetchJobs, fetchHomeFeed, fetchMyJobsFeed, fetchMyApplicationsFeed, fetchJobFullDetails, createJob as createJobDB, updateJob as updateJobDB, deleteJob as deleteJobDB, createBid as createBidDB, updateBid as updateBidDB, checkExpiredBidDeadlines } from '../services/jobService';
 import { supabase } from '../lib/supabase';
 
 interface JobContextType {
@@ -13,6 +13,8 @@ interface JobContextType {
   updateBid: (bid: Bid) => Promise<void>;
   refreshJobs: () => Promise<void>;
   fetchMoreJobs: () => Promise<void>;
+  getJobWithFullDetails: (jobId: string) => Promise<Job | null>; // NEW: Lazy load full details
+  loadFeed: (type: 'HOME' | 'POSTER' | 'WORKER_APPS', offset?: number) => Promise<void>; // NEW: Optimized feeds
   loading: boolean;
   isLoadingMore: boolean;
   hasMore: boolean;
@@ -41,6 +43,11 @@ const dbJobToAppJob = (dbJob: any): Omit<Job, 'bids'> => ({
   acceptedBidId: dbJob.accepted_bid_id || undefined,
   image: dbJob.image || undefined,
   createdAt: new Date(dbJob.created_at).getTime(),
+  // optimization fields
+  bidCount: dbJob.bid_count,
+  myBidId: dbJob.my_bid_id,
+  myBidStatus: dbJob.my_bid_status,
+  myBidAmount: dbJob.my_bid_amount,
 });
 
 // Convert a DB bid row to our App Bid type
@@ -67,6 +74,8 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
   // Fetch jobs only when user is logged in
   useEffect(() => {
     // Check if user is authenticated before fetching jobs
@@ -74,9 +83,11 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         console.log('[JobContext] User logged in, fetching jobs...');
+        setCurrentUserId(session.user.id);
         refreshJobs();
       } else {
         console.log('[JobContext] User not logged in, skipping job fetch');
+        setCurrentUserId(null);
         setLoading(false);
       }
     };
@@ -93,7 +104,21 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     } else if (eventType === 'UPDATE' && payload.new) {
       setJobs(prev => prev.map(j => {
         if (j.id === payload.new.id) {
-          return { ...dbJobToAppJob(payload.new), bids: j.bids }; // Keep existing bids
+          const converted = dbJobToAppJob(payload.new);
+          // Carefully merge: don't overwrite with undefined/empty defaults from partial broadcast
+          return {
+            ...j,
+            ...converted,
+            bids: j.bids,
+            posterName: converted.posterName || j.posterName,
+            posterPhoto: converted.posterPhoto || j.posterPhoto,
+            createdAt: converted.createdAt || j.createdAt,
+            // Preserve user-specific optimization fields that aren't in broadcasts
+            bidCount: converted.bidCount ?? j.bidCount,
+            myBidId: converted.myBidId || j.myBidId,
+            myBidStatus: converted.myBidStatus || j.myBidStatus,
+            myBidAmount: converted.myBidAmount || j.myBidAmount,
+          };
         }
         return j;
       }));
@@ -107,37 +132,63 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     if (eventType === 'INSERT' && payload.new) {
       const newBid = dbBidToAppBid(payload.new);
+
       setJobs(prev => prev.map(j => {
         if (j.id === newBid.jobId) {
-          // Remove optimistic bids from this worker (ids starting with 'b') to avoid duplicates
-          // And ensure the new bid isn't already there
+          // Remove optimistic bids
           const cleanBids = j.bids.filter(b =>
             !(b.workerId === newBid.workerId && b.id.toString().startsWith('b')) &&
             b.id !== newBid.id
           );
-          return { ...j, bids: [newBid, ...cleanBids] }; // Newest first
+
+          const isMyBid = currentUserId && newBid.workerId === currentUserId;
+
+          return {
+            ...j,
+            bids: [newBid, ...cleanBids],
+            myBidId: isMyBid ? newBid.id : j.myBidId,
+            myBidStatus: isMyBid ? newBid.status : j.myBidStatus,
+            myBidAmount: isMyBid ? newBid.amount : j.myBidAmount
+          };
         }
         return j;
       }));
     } else if (eventType === 'UPDATE' && payload.new) {
       const updatedBid = dbBidToAppBid(payload.new);
+
       setJobs(prev => prev.map(j => {
         if (j.id === updatedBid.jobId) {
-          return { ...j, bids: j.bids.map(b => b.id === updatedBid.id ? updatedBid : b) };
+          const isMyBid = currentUserId && updatedBid.workerId === currentUserId;
+
+          return {
+            ...j,
+            bids: j.bids.map(b => b.id === updatedBid.id ? updatedBid : b),
+            myBidStatus: isMyBid ? updatedBid.status : j.myBidStatus,
+            myBidAmount: isMyBid ? updatedBid.amount : j.myBidAmount
+          };
         }
         return j;
       }));
     } else if (eventType === 'DELETE' && payload.old) {
       setJobs(prev => prev.map(j => {
-        // Iterate through all jobs since we might not have job_id in DELETE payload
+        // 1. Remove from bids array
         const hasBid = j.bids.some(b => b.id === payload.old.id);
-        if (hasBid) {
-          return { ...j, bids: j.bids.filter(b => b.id !== payload.old.id) };
+
+        // 2. Check if this was the accepted bid
+        const wasAccepted = j.acceptedBidId === payload.old.id;
+
+        if (hasBid || wasAccepted) {
+          return {
+            ...j,
+            bids: j.bids.filter(b => b.id !== payload.old.id),
+            acceptedBidId: wasAccepted ? undefined : j.acceptedBidId,
+            status: wasAccepted ? JobStatus.OPEN : j.status
+          };
         }
         return j;
       }));
     }
-  }, []);
+  }, [currentUserId]);
 
   // Real-time subscription for jobs and bids (HYBRID: Broadcast + postgres_changes)
   // Only subscribe when user is logged in
@@ -202,59 +253,67 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  const refreshJobs = async () => {
+  const [currentFeedType, setCurrentFeedType] = useState<'HOME' | 'POSTER' | 'WORKER_APPS'>('HOME');
+
+  const loadFeed = async (type: 'HOME' | 'POSTER' | 'WORKER_APPS', offset: number = 0) => {
+    const isInitial = offset === 0;
     try {
-      setLoading(true);
-      setHasMore(true);
-
-      // Check for expired 24-hour bid deadlines first
-      await checkExpiredBidDeadlines();
-
-      // Fetch first page (default limit 100, offset 0)
-      const { jobs: fetchedJobs, error: fetchError, hasMore: moreAvailable } = await fetchJobs(20, 0);
-
-      if (fetchError) {
-        setError(fetchError);
-        console.error('Error loading jobs:', fetchError);
+      if (isInitial) {
+        setLoading(true);
+        setCurrentFeedType(type);
       } else {
-        setJobs(fetchedJobs);
-        setHasMore(moreAvailable || false);
-        setError(null);
+        setIsLoadingMore(true);
       }
-    } catch (err) {
-      console.error('Error loading jobs:', err);
-      setError('Failed to load jobs');
+
+      setError(null);
+
+      // Get current user ID
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (!userId) throw new Error("Not authenticated");
+
+      let result: { jobs: Job[], hasMore?: boolean };
+
+      switch (type) {
+        case 'POSTER':
+          result = await fetchMyJobsFeed(userId, 20, offset);
+          break;
+        case 'WORKER_APPS':
+          result = await fetchMyApplicationsFeed(userId, 20, offset);
+          break;
+        case 'HOME':
+        default:
+          result = await fetchHomeFeed(userId, 20, offset);
+          break;
+      }
+
+      if (isInitial) {
+        setJobs(result.jobs);
+      } else {
+        setJobs(prev => {
+          const existingIds = new Set(prev.map(j => j.id));
+          const uniqueNewJobs = result.jobs.filter(j => !existingIds.has(j.id));
+          return [...prev, ...uniqueNewJobs];
+        });
+      }
+      setHasMore(result.hasMore || false);
+    } catch (err: any) {
+      console.error(`[JobContext] Error loading ${type} feed:`, err);
+      setError(`Failed to load ${type.toLowerCase()} feed`);
     } finally {
       setLoading(false);
+      setIsLoadingMore(false);
     }
+  };
+
+  const refreshJobs = async () => {
+    // Legacy refreshJobs now delegates to loadFeed based on current type
+    await loadFeed(currentFeedType, 0);
   };
 
   const fetchMoreJobs = async () => {
     if (isLoadingMore || !hasMore) return;
-
-    try {
-      setIsLoadingMore(true);
-      const currentOffset = jobs.length;
-      const { jobs: newJobs, error: fetchError, hasMore: moreAvailable } = await fetchJobs(20, currentOffset);
-
-      if (fetchError) {
-        console.error('Error loading more jobs:', fetchError);
-      } else if (newJobs.length > 0) {
-        // Use a Set to ensure we don't add duplicate jobs that might have arrived via Realtime
-        setJobs(prev => {
-          const existingIds = new Set(prev.map(j => j.id));
-          const uniqueNewJobs = newJobs.filter(j => !existingIds.has(j.id));
-          return [...prev, ...uniqueNewJobs];
-        });
-        setHasMore(moreAvailable || false);
-      } else {
-        setHasMore(false);
-      }
-    } catch (err) {
-      console.error('Error in fetchMoreJobs:', err);
-    } finally {
-      setIsLoadingMore(false);
-    }
+    await loadFeed(currentFeedType, jobs.length);
   };
 
   const addJob = async (job: Job) => {
@@ -415,7 +474,6 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           payload: broadcastPayload
         });
         console.log('[Bid] Broadcast sent for bid update:', bid.id);
-        // Don't remove channel - it's the shared sync channel
       } catch (broadcastErr) {
         console.warn('[Bid] Broadcast failed (DB update succeeded):', broadcastErr);
       }
@@ -425,8 +483,33 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
+  const getJobWithFullDetails = async (jobId: string): Promise<Job | null> => {
+    try {
+      // 1. Check if we already have the job in state
+      const existingJob = jobs.find(j => j.id === jobId);
+
+      // 2. Fetch full details (bids, images, etc.)
+      const { job: fullJob, error } = await fetchJobFullDetails(jobId);
+
+      if (fullJob) {
+        // Update local state with the fully loaded job
+        setJobs(prev => prev.map(j => j.id === jobId ? fullJob : j));
+        return fullJob;
+      }
+
+      if (error) {
+        console.warn('[JobContext] Failed to load full details:', error);
+      }
+
+      return existingJob || null;
+    } catch (err) {
+      console.error('Error fetching full job details:', err);
+      return null;
+    }
+  };
+
   return (
-    <JobContext.Provider value={{ jobs, setJobs, addJob, updateJob, deleteJob, addBid, updateBid, refreshJobs, fetchMoreJobs, loading, isLoadingMore, hasMore, error }}>
+    <JobContext.Provider value={{ jobs, setJobs, addJob, updateJob, deleteJob, addBid, updateBid, refreshJobs, fetchMoreJobs, getJobWithFullDetails, loadFeed, loading, isLoadingMore, hasMore, error }}>
       {children}
     </JobContext.Provider>
   );

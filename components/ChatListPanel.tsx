@@ -71,10 +71,13 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
             if (j.status === 'OPEN') return false;
 
             const isPoster = j.posterId === user.id;
-            const isBidder = j.bids.some(b => b.workerId === user.id);
-            // Also include jobs with live messages
-            const hasLiveMsg = liveMessages.some(m => m.jobId === j.id);
-            return isPoster || isBidder || hasLiveMsg;
+
+            // SECURITY: Worker only sees chat if their bid was accepted
+            // Using BOTH surgical optimization fields and local bids array for maximum reliability
+            const myBidId = j.myBidId || j.bids.find(b => b.workerId === user.id)?.id;
+            const isAcceptedWorker = j.acceptedBidId && myBidId && j.acceptedBidId === myBidId;
+
+            return isPoster || isAcceptedWorker;
         });
     }, [jobs, user.id, liveMessages.length, isOpen]);
 
@@ -325,7 +328,7 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
 
                             const otherPerson = isPoster
                                 ? (acceptedBid?.workerName || 'Worker')
-                                : job.posterName;
+                                : (job.posterName || 'Employer');
 
                             const otherPersonPhoto = isPoster
                                 ? acceptedBid?.workerPhoto

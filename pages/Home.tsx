@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useUser } from '../contexts/UserContextDB';
 import { useJobs } from '../contexts/JobContextDB';
 import { JobCard } from '../components/JobCard';
@@ -30,11 +30,22 @@ export const Home: React.FC<HomeProps> = ({
     setShowFilterModal: _setShowFilterModal, showAlert
 }) => {
     const { user, role, setRole, t, language, notifications } = useUser();
-    const { jobs, loading, error, refreshJobs, fetchMoreJobs, hasMore, isLoadingMore } = useJobs();
-
-    // Dashboard State (Unified for Poster/Worker)
+    const { jobs, loading, error, refreshJobs, fetchMoreJobs, hasMore, isLoadingMore, loadFeed } = useJobs();
     const [dashboardTab, setDashboardTab] = useState<'ALL' | 'OPEN' | 'IN_PROGRESS' | 'COMPLETED'>('ALL');
     const [workerTab, setWorkerTab] = useState<'FIND' | 'ACTIVE' | 'HISTORY'>('FIND');
+
+    // Optimized Feed Loading based on tabs
+    useEffect(() => {
+        if (role === UserRole.POSTER) {
+            loadFeed('POSTER');
+        } else {
+            if (workerTab === 'FIND') {
+                loadFeed('HOME');
+            } else {
+                loadFeed('WORKER_APPS');
+            }
+        }
+    }, [role, workerTab, loadFeed]);
 
     // Local state for search/filter within Home
     const [searchQuery, setSearchQuery] = useState('');
@@ -284,25 +295,38 @@ export const Home: React.FC<HomeProps> = ({
 
                         // WORKER MODE: Show Nearby Jobs / Applications
                         const isMyJob = j.posterId === user.id;
-                        const myBid = j.bids.find(b => b.workerId === user.id);
+
+                        // Extract my bid info using both pre-computed fields and local bids array
+                        const myBidId = j.myBidId || j.bids.find(b => b.workerId === user.id)?.id;
+                        const myBidStatus = j.myBidStatus || j.bids.find(b => b.workerId === user.id)?.status;
 
                         if (isMyJob) return false; // Don't show own jobs in finder
 
                         // Filter based on Worker Tabs
                         if (workerTab === 'FIND') {
-                            // Show Open jobs wheren I haven't bid
+                            // Show Open jobs where I haven't bid
                             if (j.status !== JobStatus.OPEN) return false;
-                            // Optional: Hide jobs I've already bid on? 
-                            // Yes, move them to Active
-                            if (myBid) return false;
+                            if (myBidId) return false;
                         } else if (workerTab === 'ACTIVE') {
                             // Show jobs I've bid on (Pending/Accepted)
-                            if (!myBid) return false;
+                            if (!myBidId) return false;
+
+                            // DETERMINISTIC REJECTION: If for any reason I wasn't picked for an in-progress job
+                            const isEffectivelyRejected = j.status !== JobStatus.OPEN && j.acceptedBidId !== myBidId;
+
+                            // Exclude completed jobs, rejected bids, and jobs where someone else was picked
                             if (j.status === JobStatus.COMPLETED) return false;
+                            if (myBidStatus === 'REJECTED') return false;
+                            if (isEffectivelyRejected) return false;
                         } else if (workerTab === 'HISTORY') {
-                            // Show completed jobs I worked on
-                            if (!myBid) return false;
-                            if (j.status !== JobStatus.COMPLETED) return false;
+                            // Show jobs completed OR where I was rejected
+                            if (!myBidId) return false;
+
+                            const isRejected = myBidStatus === 'REJECTED';
+                            const isCompleted = j.status === JobStatus.COMPLETED;
+                            const isEffectivelyRejected = j.status !== JobStatus.OPEN && j.acceptedBidId !== myBidId;
+
+                            if (!isRejected && !isCompleted && !isEffectivelyRejected) return false;
                         }
 
                         // Apply Filters

@@ -162,7 +162,10 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                     description: job.description,
                     category: job.category,
                     budget: job.budget,
-                    location: job.location
+                    location: job.location,
+                    poster_name: job.posterName,
+                    poster_photo: job.posterPhoto,
+                    created_at: new Date(job.createdAt).toISOString()
                 };
                 const channel = supabase.channel('job_system_hybrid_sync');
                 await channel.subscribe();

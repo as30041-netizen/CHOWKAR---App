@@ -46,10 +46,24 @@ export const JobCard: React.FC<JobCardProps> = ({
   onWithdrawBid
 }) => {
   const isPoster = job.posterId === currentUserId;
-  const myBid = job.bids.find(b => b.workerId === currentUserId);
-  const acceptedBid = job.acceptedBidId ? job.bids.find(b => b.id === job.acceptedBidId) : null;
+
+  // OPTIMIZATION: Use pre-computed bid info if available (from optimized feeds)
+  // Fallback to searching the bids array if they were eager-loaded
+  const myBidFromList = job.bids.find(b => b.workerId === currentUserId);
+  const myBid: Partial<Bid> | undefined = myBidFromList || (job.myBidId ? {
+    id: job.myBidId,
+    workerId: currentUserId,
+    status: job.myBidStatus,
+    amount: job.myBidAmount,
+    // Negotiation check: if we have pre-computed fields, we might need more but 
+    // basic pending status is usually enough for the card.
+  } : undefined);
+
+  const acceptedBidId = job.acceptedBidId;
+  const acceptedBid = acceptedBidId ? (job.bids.find(b => b.id === acceptedBidId) || (job.myBidId === acceptedBidId ? myBid : null)) : null;
   const t = TRANSLATIONS[language];
-  const catT = CATEGORY_TRANSLATIONS[job.category] ? CATEGORY_TRANSLATIONS[job.category][language] : job.category;
+  const posterName = job.posterName || 'User';
+  const catT = job.category ? (CATEGORY_TRANSLATIONS[job.category] ? CATEGORY_TRANSLATIONS[job.category][language] : job.category) : '';
 
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [showCounterInput, setShowCounterInput] = useState(false);
@@ -148,8 +162,12 @@ export const JobCard: React.FC<JobCardProps> = ({
       );
     }
 
-    // Negotiation Logic
-    const lastNegotiation = myBid.negotiationHistory?.[myBid.negotiationHistory.length - 1];
+    // Negotiation Logic - requires full bid history
+    // If we only have pre-computed info, and it says PENDING, we display as Pending.
+    // Full counter-offer UI will appear in JobDetailsModal where we lazy-load full details.
+    const lastNegotiation = myBid instanceof Object && 'negotiationHistory' in myBid
+      ? (myBid.negotiationHistory as any[])?.[(myBid.negotiationHistory as any[]).length - 1]
+      : null;
     const isPosterTurn = lastNegotiation?.by === UserRole.WORKER;
     const isWorkerTurn = lastNegotiation?.by === UserRole.POSTER;
 
@@ -220,15 +238,15 @@ export const JobCard: React.FC<JobCardProps> = ({
           {/* Poster Avatar */}
           <div className="w-10 h-10 rounded-full bg-gray-50 dark:bg-gray-800 flex items-center justify-center text-gray-500 dark:text-gray-400 font-bold text-lg border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
             {job.posterPhoto ? (
-              <img src={job.posterPhoto} alt={job.posterName} className="w-full h-full object-cover" />
+              <img src={job.posterPhoto} alt={posterName} className="w-full h-full object-cover" />
             ) : (
-              job.posterName.charAt(0)
+              posterName.charAt(0)
             )}
           </div>
           <div>
             <h3 className="font-bold text-gray-900 dark:text-white leading-tight text-lg group-hover:text-emerald-800 dark:group-hover:text-emerald-400 transition-colors">{job.title}</h3>
             <p className="text-xs text-gray-400 dark:text-gray-500 font-medium mt-0.5 flex items-center gap-1">
-              {job.posterName}
+              {posterName}
               {isPoster && <span className="ml-1 bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 text-[9px] px-1.5 py-0.5 rounded font-bold">YOU</span>}
               <span className="mx-1 w-0.5 h-0.5 bg-gray-300 dark:bg-gray-600 rounded-full"></span>
               {getTimeAgo(job.createdAt)}
@@ -349,7 +367,7 @@ export const JobCard: React.FC<JobCardProps> = ({
                     ? 'bg-red-500 text-white animate-pulse'
                     : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
                     }`}>
-                    {job.bids.length}
+                    {job.bidCount !== undefined ? job.bidCount : job.bids.length}
                   </span>
                 )}
               </button>

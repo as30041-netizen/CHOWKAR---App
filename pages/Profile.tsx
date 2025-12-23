@@ -59,7 +59,7 @@ export const Profile: React.FC<ProfileProps> = ({ onEditProfile, setShowSubscrip
                             <img src={user.profilePhoto} className="w-full h-full object-cover rounded-full" />
                         ) : (
                             <div className="w-full h-full bg-emerald-100 dark:bg-emerald-900/50 rounded-full flex items-center justify-center text-3xl font-bold text-emerald-700 dark:text-emerald-400">
-                                {user.name.charAt(0)}
+                                {(user.name || '?').charAt(0)}
                             </div>
                         )}
                     </div>

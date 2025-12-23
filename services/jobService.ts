@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { Job, Bid, JobStatus } from '../types';
+import { Job, Bid, JobStatus, Review } from '../types';
 
 // Helper to convert database job to app Job type
 const dbJobToApp = (dbJob: any, bids: Bid[] = []): Job => {
@@ -80,6 +80,254 @@ export const fetchJobContact = async (jobId: string) => {
   if (error) throw error;
   return data;
 };
+
+// ============================================================================
+// OPTIMIZED DATA FETCHING (NEW - Uses RPCs for better performance)
+// ============================================================================
+
+/**
+ * [OPTIMIZED] Fetch home feed with pre-computed bid counts
+ * This is the PRIMARY method for loading jobs - much lighter than fetchJobs
+ */
+export const fetchHomeFeed = async (
+  userId: string,
+  limit: number = 20,
+  offset: number = 0,
+  excludeCompleted: boolean = false
+): Promise<{ jobs: Job[]; error?: string; hasMore?: boolean }> => {
+  try {
+    console.log(`[JobService] Fetching optimized home feed (limit: ${limit}, offset: ${offset})...`);
+
+    const { data, error } = await supabase.rpc('get_home_feed', {
+      p_user_id: userId,
+      p_limit: limit,
+      p_offset: offset,
+      p_exclude_completed: excludeCompleted
+    });
+
+    if (error) {
+      console.error('[JobService] get_home_feed RPC error:', error);
+      throw error;
+    }
+
+    const jobs: Job[] = (data || []).map((row: any) => ({
+      id: row.id,
+      posterId: row.poster_id,
+      posterName: row.poster_name,
+      posterPhone: '', // Not included in feed for privacy - loaded on demand
+      posterPhoto: row.poster_photo || undefined,
+      title: row.title,
+      description: row.description,
+      category: row.category,
+      location: row.location,
+      coordinates: row.latitude && row.longitude
+        ? { lat: Number(row.latitude), lng: Number(row.longitude) }
+        : undefined,
+      jobDate: row.job_date,
+      duration: row.duration,
+      budget: Number(row.budget),
+      status: row.status as JobStatus,
+      createdAt: new Date(row.created_at).getTime(),
+      acceptedBidId: row.accepted_bid_id || undefined,
+      image: row.image || undefined,
+      // FEED OPTIMIZATION: Pre-computed values (no need to load all bids!)
+      bids: [], // Empty - will be lazy loaded when needed
+      bidCount: Number(row.bid_count),
+      myBidId: row.my_bid_id || undefined,
+      myBidStatus: row.my_bid_status || undefined,
+      myBidAmount: row.my_bid_amount ? Number(row.my_bid_amount) : undefined
+    }));
+
+    console.log(`[JobService] Fetched ${jobs.length} jobs via optimized feed`);
+    return { jobs, hasMore: jobs.length === limit };
+  } catch (error: any) {
+    console.error('[JobService] fetchHomeFeed error:', error);
+    // FALLBACK: If RPC fails (e.g., not deployed yet), use legacy method
+    console.warn('[JobService] Falling back to legacy fetchJobs...');
+    return fetchJobs(limit, offset);
+  }
+};
+
+/**
+ * [OPTIMIZED] Fetch feed of jobs posted by the current user
+ */
+export const fetchMyJobsFeed = async (
+  userId: string,
+  limit: number = 20,
+  offset: number = 0
+): Promise<{ jobs: Job[]; hasMore: boolean }> => {
+  try {
+    const { data, error } = await supabase.rpc('get_my_jobs_feed', {
+      p_user_id: userId,
+      p_limit: limit,
+      p_offset: offset
+    });
+
+    if (error) throw error;
+
+    const jobs: Job[] = (data || []).map((row: any) => ({
+      ...row,
+      id: row.id,
+      posterId: row.poster_id,
+      posterName: row.poster_name,
+      title: row.title,
+      description: row.description,
+      category: row.category,
+      location: row.location,
+      coordinates: row.latitude && row.longitude
+        ? { lat: Number(row.latitude), lng: Number(row.longitude) }
+        : undefined,
+      jobDate: row.job_date,
+      duration: row.duration,
+      budget: Number(row.budget),
+      status: row.status as JobStatus,
+      createdAt: new Date(row.created_at).getTime(),
+      acceptedBidId: row.accepted_bid_id || undefined,
+      image: row.image || undefined,
+      bids: [],
+      bidCount: Number(row.bid_count),
+      myBidId: undefined, // Posters don't have their own bids on their jobs
+    }));
+
+    return { jobs, hasMore: jobs.length === limit };
+  } catch (error: any) {
+    console.error('[JobService] fetchMyJobsFeed error:', error);
+    // Legacy mapping fallback
+    const { jobs: allJobs } = await fetchJobs(100, 0);
+    const filtered = allJobs.filter(j => j.posterId === userId).slice(offset, offset + limit);
+    return { jobs: filtered, hasMore: filtered.length === limit };
+  }
+};
+
+/**
+ * [OPTIMIZED] Fetch feed of jobs the current user has applied for
+ */
+export const fetchMyApplicationsFeed = async (
+  userId: string,
+  limit: number = 20,
+  offset: number = 0
+): Promise<{ jobs: Job[]; hasMore: boolean }> => {
+  try {
+    const { data, error } = await supabase.rpc('get_my_applications_feed', {
+      p_user_id: userId,
+      p_limit: limit,
+      p_offset: offset
+    });
+
+    if (error) throw error;
+
+    const jobs: Job[] = (data || []).map((row: any) => ({
+      ...row,
+      id: row.id,
+      posterId: row.poster_id,
+      posterName: row.poster_name,
+      title: row.title,
+      description: row.description,
+      category: row.category,
+      location: row.location,
+      coordinates: row.latitude && row.longitude
+        ? { lat: Number(row.latitude), lng: Number(row.longitude) }
+        : undefined,
+      jobDate: row.job_date,
+      duration: row.duration,
+      budget: Number(row.budget),
+      status: row.status as JobStatus,
+      createdAt: new Date(row.created_at).getTime(),
+      acceptedBidId: row.accepted_bid_id || undefined,
+      image: row.image || undefined,
+      bids: [],
+      bidCount: Number(row.bid_count),
+      myBidId: row.my_bid_id || undefined,
+      myBidStatus: row.my_bid_status || undefined,
+      myBidAmount: row.my_bid_amount ? Number(row.my_bid_amount) : undefined
+    }));
+
+    return { jobs, hasMore: jobs.length === limit };
+  } catch (error: any) {
+    console.error('[JobService] fetchMyApplicationsFeed error:', error);
+    // Legacy fallback
+    const { jobs: allJobs } = await fetchJobs(100, 0);
+    const filtered = allJobs.filter(j => j.bids.some(b => b.workerId === userId)).slice(offset, offset + limit);
+    return { jobs: filtered, hasMore: filtered.length === limit };
+  }
+};
+
+/**
+ * [OPTIMIZED] Fetch full job details including all bids
+ * Called when user clicks on a job to view details/bids
+ */
+export const fetchJobFullDetails = async (jobId: string): Promise<{ job: Job | null; error?: string }> => {
+  try {
+    console.log(`[JobService] Fetching full details for job: ${jobId}`);
+
+    const { data, error } = await supabase.rpc('get_job_full_details', { p_job_id: jobId });
+
+    if (error) {
+      console.error('[JobService] get_job_full_details RPC error:', error);
+      throw error;
+    }
+
+    if (!data?.job) {
+      return { job: null, error: 'Job not found' };
+    }
+
+    // Map database format to app format
+    const bids: Bid[] = (data.bids || []).map((dbBid: any) => dbBidToApp(dbBid));
+    const job: Job = {
+      ...dbJobToApp(data.job, bids),
+      reviews: data.reviews || [],
+      bidCount: bids.length,
+      myBidId: undefined, // Would need userId to compute
+      myBidStatus: undefined,
+      myBidAmount: undefined
+    };
+
+    console.log(`[JobService] Loaded full details: ${job.title} with ${bids.length} bids and ${job.reviews?.length || 0} reviews`);
+    return { job };
+  } catch (error: any) {
+    console.error('[JobService] fetchJobFullDetails error:', error);
+    // FALLBACK: Direct query if RPC not available
+    try {
+      const { data: jobData, error: jobError } = await supabase
+        .from('jobs')
+        .select('*')
+        .eq('id', jobId)
+        .single();
+
+      if (jobError) throw jobError;
+
+      const { data: bidsData } = await supabase
+        .from('bids')
+        .select('*')
+        .eq('job_id', jobId)
+        .order('created_at', { ascending: false });
+
+      const { data: reviewsData } = await supabase
+        .from('reviews')
+        .select('*, profiles!reviewer_id(name)')
+        .eq('job_id', jobId);
+
+      const bids = (bidsData || []).map(dbBidToApp);
+      const reviews: Review[] = (reviewsData || []).map((r: any) => ({
+        id: r.id,
+        reviewerId: r.reviewer_id,
+        reviewerName: r.profiles?.name || 'Unknown',
+        revieweeId: r.reviewee_id,
+        rating: r.rating,
+        comment: r.comment,
+        date: new Date(r.created_at).getTime()
+      }));
+
+      return { job: { ...dbJobToApp(jobData, bids), reviews } };
+    } catch (fallbackError: any) {
+      return { job: null, error: fallbackError.message };
+    }
+  }
+};
+
+// ============================================================================
+// LEGACY FETCH (Kept for backward compatibility)
+// ============================================================================
 
 // Fetch jobs with pagination (optimized for scale)
 export const fetchJobs = async (limit: number = 100, offset: number = 0): Promise<{ jobs: Job[]; error?: string; hasMore?: boolean }> => {

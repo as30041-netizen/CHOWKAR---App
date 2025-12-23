@@ -234,12 +234,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   if (isPoster) {
     otherPersonName = acceptedBid?.workerName || 'Worker';
-    // Use secure phone if available, otherwise fallback (though fallback might be empty now)
+    // Use secure phone if available
     otherPersonPhone = securePhone || (isPhoneVisible ? (acceptedBid?.workerPhone || '') : '');
     otherPersonPhoto = acceptedBid?.workerPhoto || '';
   } else {
-    otherPersonName = job.posterName;
-    otherPersonPhone = securePhone || (isPhoneVisible ? job.posterPhone : '');
+    otherPersonName = job.posterName || 'Employer';
+    otherPersonPhone = securePhone || (isPhoneVisible ? (job.posterPhone || '') : '');
     otherPersonPhoto = job.posterPhoto || '';
   }
 

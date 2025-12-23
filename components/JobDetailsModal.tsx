@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { XCircle, MapPin, Star, AlertCircle, Pencil, ExternalLink, IndianRupee, UserCircle, Users, ChevronRight } from 'lucide-react';
 import { Job, UserRole, JobStatus } from '../types';
 import { useUser } from '../contexts/UserContextDB';
+import { useJobs } from '../contexts/JobContextDB';
 import { LeafletMap } from './LeafletMap';
 
 interface JobDetailsModalProps {
@@ -21,14 +22,35 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
     job, onClose, onBid, onViewBids, onChat, onEdit, onDelete, onCancel, onReplyToCounter, showAlert
 }) => {
     const { user, role, t, language } = useUser();
+    const { getJobWithFullDetails, jobs } = useJobs();
     const [showCounterInput, setShowCounterInput] = React.useState(false);
     const [counterAmount, setCounterAmount] = React.useState('');
 
-    if (!job) return null;
+    useEffect(() => {
+        if (job?.id) {
+            getJobWithFullDetails(job.id);
+        }
+    }, [job?.id]);
 
-    const myBid = job.bids.find(b => b.workerId === user.id);
+    // Use live job data from context if available to handle real-time updates
+    const liveJob = jobs.find(j => j.id === job?.id) || job;
+
+    if (!liveJob) return null;
+
+    const myBid = liveJob.bids.find(b => b.workerId === user.id);
     const lastNegotiation = myBid?.negotiationHistory?.[myBid.negotiationHistory.length - 1];
     const isWorkerTurn = lastNegotiation?.by === UserRole.POSTER && myBid?.status === 'PENDING';
+
+    // Check if user is a participant (Poster or Accepted Worker)
+    // Using both local bids array and the optimized myBidId/acceptedBidId fields for reliability (Surgical Loading)
+    const acceptedBid = liveJob.acceptedBidId ? liveJob.bids.find(b => b.id === liveJob.acceptedBidId) : null;
+    const myBidStatus = liveJob.myBidStatus || myBid?.status;
+
+    const isAcceptedWorker = (liveJob.acceptedBidId && myBidStatus !== 'REJECTED' && (
+        (acceptedBid && user.id === acceptedBid.workerId) ||
+        (liveJob.myBidId && liveJob.myBidId === liveJob.acceptedBidId)
+    ));
+    const isParticipant = user.id === liveJob.posterId || isAcceptedWorker;
 
     const handleSubmitCounter = () => {
         if (!myBid || !onReplyToCounter || !counterAmount) return;
@@ -39,7 +61,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
             return;
         }
 
-        onReplyToCounter(job.id, myBid.id, 'COUNTER', amount);
+        onReplyToCounter(liveJob.id, myBid.id, 'COUNTER', amount);
         setShowCounterInput(false);
         onClose();
     };
@@ -52,11 +74,11 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
 
                 {/* Job Header */}
                 <div className="mb-4">
-                    <span className={`text-xs font-bold uppercase px-2 py-1 rounded-full ${job.status === 'OPEN' ? 'bg-green-100 text-green-700' : job.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
-                        {job.status.replace('_', ' ')}
+                    <span className={`text-xs font-bold uppercase px-2 py-1 rounded-full ${liveJob.status === 'OPEN' ? 'bg-green-100 text-green-700' : liveJob.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+                        {liveJob.status.replace('_', ' ')}
                     </span>
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mt-2">{job.title}</h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{job.category}</p>
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mt-2">{liveJob.title}</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{liveJob.category}</p>
                 </div>
 
                 {/* Negotiation Section (for Worker) */}
@@ -84,7 +106,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                         ) : (
                             <div className="grid grid-cols-2 gap-2">
                                 <button
-                                    onClick={() => { onReplyToCounter?.(job.id, myBid!.id, 'ACCEPT'); onClose(); }}
+                                    onClick={() => { onReplyToCounter?.(liveJob.id, myBid!.id, 'ACCEPT'); onClose(); }}
                                     className="bg-emerald-600 text-white py-2.5 rounded-xl font-bold shadow-sm hover:bg-emerald-700 transition-all"
                                 >
                                     {t.acceptCounter}
@@ -96,7 +118,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                                     {t.counterOffer}
                                 </button>
                                 <button
-                                    onClick={() => { onReplyToCounter?.(job.id, myBid!.id, 'REJECT'); onClose(); }}
+                                    onClick={() => { onReplyToCounter?.(liveJob.id, myBid!.id, 'REJECT'); onClose(); }}
                                     className="col-span-2 text-xs text-red-500 dark:text-red-400 font-bold hover:underline py-1"
                                 >
                                     {t.declineCounterPrompt}
@@ -110,28 +132,57 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                 <div className="space-y-3 mb-4">
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                         <MapPin size={16} className="text-emerald-600" />
-                        <span>{job.location}</span>
+                        <span>{liveJob.location}</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
                         <IndianRupee size={16} className="text-amber-500" />
-                        <span className="font-bold text-gray-900 dark:text-white">₹{job.budget}</span>
+                        <span className="font-bold text-gray-900 dark:text-white">₹{liveJob.budget}</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
                         <AlertCircle size={16} className="text-blue-500" />
-                        <span>{new Date(job.jobDate).toLocaleDateString()} • {job.duration}</span>
+                        <span>{new Date(liveJob.jobDate).toLocaleDateString()} • {liveJob.duration}</span>
                     </div>
                 </div>
 
                 {/* Description */}
                 <div className="mb-4">
                     <h4 className="text-sm font-bold text-gray-800 dark:text-gray-200 mb-2">{t.description}</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap">{job.description}</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap">{liveJob.description}</p>
                 </div>
 
                 {/* Image */}
-                {job.image && (
+                {liveJob.image && (
                     <div className="mb-4 w-full h-40 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
-                        <img src={job.image} alt="Job" className="w-full h-full object-cover" />
+                        <img src={liveJob.image} alt="Job" className="w-full h-full object-cover" />
+                    </div>
+                )}
+
+                {/* Feedbacks/Reviews Section for Completed Jobs */}
+                {liveJob.status === JobStatus.COMPLETED && liveJob.reviews && liveJob.reviews.length > 0 && (
+                    <div className="mb-5">
+                        <h4 className="flex items-center gap-2 text-sm font-bold text-gray-800 dark:text-gray-200 mb-3">
+                            <Star size={16} className="text-amber-500 fill-amber-500" />
+                            {language === 'en' ? 'Reviews & Feedback' : 'समीक्षा और फीडबैक'}
+                        </h4>
+                        <div className="space-y-3">
+                            {liveJob.reviews.map((review, idx) => (
+                                <div key={review.id || idx} className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 border border-gray-100 dark:border-gray-700">
+                                    <div className="flex justify-between items-start mb-1">
+                                        <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{review.reviewerName}</p>
+                                        <div className="flex gap-0.5">
+                                            {[...Array(5)].map((_, i) => (
+                                                <Star
+                                                    key={i}
+                                                    size={10}
+                                                    className={i < review.rating ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <p className="text-sm text-gray-700 dark:text-gray-300 italic">"{review.comment}"</p>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 )}
 
@@ -139,27 +190,27 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                 <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 mb-4">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-700 dark:text-emerald-400 font-bold overflow-hidden">
-                            {job.posterPhoto ? (
-                                <img src={job.posterPhoto} alt={job.posterName} className="w-full h-full object-cover" />
+                            {liveJob.posterPhoto ? (
+                                <img src={liveJob.posterPhoto} alt={liveJob.posterName || 'User'} className="w-full h-full object-cover" />
                             ) : (
-                                job.posterName.charAt(0)
+                                (liveJob.posterName || 'User').charAt(0)
                             )}
                         </div>
                         <div>
-                            <p className="font-bold text-gray-900 dark:text-white">{job.posterName}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Posted {new Date(job.createdAt).toLocaleDateString()}</p>
+                            <p className="font-bold text-gray-900 dark:text-white">{liveJob.posterName || 'User'}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Posted {new Date(liveJob.createdAt).toLocaleDateString()}</p>
                         </div>
                     </div>
                 </div>
 
                 {/* Map Location Preview */}
                 {
-                    job.coordinates && (
+                    liveJob.coordinates && (
                         <div className="mb-4 rounded-xl overflow-hidden border border-gray-100 h-48 relative group z-0">
-                            <LeafletMap lat={job.coordinates.lat} lng={job.coordinates.lng} popupText={job.location} />
+                            <LeafletMap lat={liveJob.coordinates.lat} lng={liveJob.coordinates.lng} popupText={liveJob.location} />
 
                             <a
-                                href={`https://www.google.com/maps/dir/?api=1&destination=${job.coordinates.lat},${job.coordinates.lng}`}
+                                href={`https://www.google.com/maps/dir/?api=1&destination=${liveJob.coordinates.lat},${liveJob.coordinates.lng}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="absolute bottom-3 right-3 bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm text-emerald-700 dark:text-emerald-400 text-xs font-bold px-3 py-2 rounded-lg shadow-md flex items-center gap-1 hover:bg-emerald-50 dark:hover:bg-gray-800 transition-colors z-[400]"
@@ -170,27 +221,27 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                     )
                 }
 
-                {/* Bids Preview (for Poster viewing their OPEN job with bids) */}
+                {/* Bids Preview (for Poster viewing their OPEN liveJob with bids) */}
                 {
-                    role === UserRole.POSTER && job.posterId === user.id && job.status === JobStatus.OPEN && job.bids.length > 0 && (
+                    role === UserRole.POSTER && liveJob.posterId === user.id && liveJob.status === JobStatus.OPEN && liveJob.bids.length > 0 && (
                         <div className="mb-4">
                             <div className="flex items-center justify-between mb-3">
                                 <h4 className="text-sm font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2">
                                     <Users size={16} className="text-emerald-600" />
-                                    {t.bidsReceived} ({job.bids.length})
+                                    {t.bidsReceived} ({liveJob.bids.length})
                                 </h4>
                                 <button
-                                    onClick={() => onViewBids(job)}
+                                    onClick={() => onViewBids(liveJob)}
                                     className="text-xs text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1 hover:underline"
                                 >
                                     {t.viewAll} <ChevronRight size={14} />
                                 </button>
                             </div>
                             <div className="space-y-2">
-                                {job.bids.slice(0, 3).map(bid => (
+                                {liveJob.bids.slice(0, 3).map(bid => (
                                     <div
                                         key={bid.id}
-                                        onClick={() => onViewBids(job)}
+                                        onClick={() => onViewBids(liveJob)}
                                         className="bg-gray-50 dark:bg-gray-800 rounded-xl p-3 flex items-center gap-3 border border-gray-100 dark:border-gray-700 cursor-pointer hover:bg-emerald-50 dark:hover:bg-gray-700/80 hover:border-emerald-200 dark:hover:border-emerald-800/50 transition-colors"
                                     >
                                         <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex-shrink-0">
@@ -219,12 +270,12 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                                         </div>
                                     </div>
                                 ))}
-                                {job.bids.length > 3 && (
+                                {liveJob.bids.length > 3 && (
                                     <button
-                                        onClick={() => onViewBids(job)}
+                                        onClick={() => onViewBids(liveJob)}
                                         className="w-full py-2 text-center text-sm text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-900/20 rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
                                     >
-                                        +{job.bids.length - 3} {t.moreBids}
+                                        +{liveJob.bids.length - 3} {t.moreBids}
                                     </button>
                                 )}
                             </div>
@@ -235,9 +286,9 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                 {/* Actions */}
                 <div className="flex gap-3 flex-wrap">
                     {/* Worker: Bid button */}
-                    {role === UserRole.WORKER && job.status === JobStatus.OPEN && job.posterId !== user.id && !myBid && (
+                    {role === UserRole.WORKER && liveJob.status === JobStatus.OPEN && liveJob.posterId !== user.id && !myBid && (
                         <button
-                            onClick={() => onBid(job.id)}
+                            onClick={() => onBid(liveJob.id)}
                             className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-emerald-700 active:scale-95 transition-all"
                         >
                             {t.bidNow}
@@ -245,46 +296,43 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                     )}
 
                     {/* Worker: Pending Bid view if not turn */}
-                    {role === UserRole.WORKER && myBid && !isWorkerTurn && job.status === JobStatus.OPEN && (
+                    {role === UserRole.WORKER && myBid && !isWorkerTurn && liveJob.status === JobStatus.OPEN && (
                         <div className="flex-1 text-center py-2 bg-blue-50 rounded-xl border border-blue-200">
                             <p className="text-xs font-bold text-blue-700">{t.pending}: ₹{myBid.amount}</p>
                         </div>
                     )}
 
                     {/* Poster: View Bids button if there are bids */}
-                    {role === UserRole.POSTER && job.posterId === user.id && job.status === JobStatus.OPEN && job.bids.length > 0 && (
+                    {role === UserRole.POSTER && liveJob.posterId === user.id && liveJob.status === JobStatus.OPEN && liveJob.bids.length > 0 && (
                         <button
-                            onClick={() => onViewBids(job)}
+                            onClick={() => onViewBids(liveJob)}
                             className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-emerald-700 active:scale-95 transition-all"
                         >
-                            {t.viewBids} ({job.bids.length})
+                            {t.viewBids} ({liveJob.bids.length})
                         </button>
                     )}
 
-                    {/* Chat button for in-progress jobs */}
-                    {job.status === JobStatus.IN_PROGRESS && (
+                    {/* Chat button for in-progress liveJobs (With isParticipant check) */}
+                    {liveJob.status === JobStatus.IN_PROGRESS && isParticipant && (
                         <button
-                            onClick={() => onChat(job)}
+                            onClick={() => onChat(liveJob)}
                             className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-emerald-700 active:scale-95 transition-all"
                         >
                             {t.chat}
                         </button>
                     )}
 
-                    {/* Actions for COMPLETED jobs */}
-                    {job.status === JobStatus.COMPLETED && (
+                    {/* Actions for COMPLETED liveJobs - Participant Only */}
+                    {liveJob.status === JobStatus.COMPLETED && isParticipant && (
                         <div className="flex w-full gap-3">
                             <button
                                 onClick={() => showAlert('Please open Chat to rate user.', 'info')}
-                                // Ideally open review modal directly, but logic resides in App.tsx or we need a prop.
-                                // For now, let's just point to Chat where we added the button, OR add a callback.
-                                // Actually, better to just let them open Chat, as we added the Review button there.
                                 className="flex-1 bg-amber-500 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-amber-600 active:scale-95 transition-all flex items-center justify-center gap-2"
                             >
                                 <Star size={18} fill="currentColor" /> {t.rateExperience}
                             </button>
                             <button
-                                onClick={() => onChat(job)}
+                                onClick={() => onChat(liveJob)}
                                 className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 py-3 rounded-xl font-bold hover:bg-gray-200 active:scale-95 transition-all"
                             >
                                 {t.chat} (Archived)
@@ -293,11 +341,11 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                     )}
 
                     {/* Poster: Cancel Job (with Refund) - only if IN_PROGRESS */}
-                    {job.posterId === user.id && job.status === JobStatus.IN_PROGRESS && onCancel && (
+                    {liveJob.posterId === user.id && liveJob.status === JobStatus.IN_PROGRESS && onCancel && (
                         <button
                             onClick={() => {
                                 if (confirm(t.cancelJobRefundPrompt)) {
-                                    onCancel(job.id);
+                                    onCancel(liveJob.id);
                                 }
                             }}
                             className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 py-3 rounded-xl font-bold hover:bg-gray-200 dark:hover:bg-gray-700 active:scale-95 transition-all flex items-center justify-center gap-2"
@@ -307,9 +355,9 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                     )}
 
                     {/* Poster: Edit button - only if OPEN and NO bids placed */}
-                    {job.posterId === user.id && job.status === JobStatus.OPEN && job.bids.length === 0 && (
+                    {liveJob.posterId === user.id && liveJob.status === JobStatus.OPEN && liveJob.bids.length === 0 && (
                         <button
-                            onClick={() => onEdit(job)}
+                            onClick={() => onEdit(liveJob)}
                             className="flex-1 bg-blue-500 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-blue-600 active:scale-95 transition-all flex items-center justify-center gap-2"
                         >
                             <Pencil size={16} /> {t.editJob}
@@ -317,11 +365,11 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                     )}
 
                     {/* Poster: Delete button - only if OPEN and no bid accepted */}
-                    {job.posterId === user.id && job.status === JobStatus.OPEN && !job.acceptedBidId && (
+                    {liveJob.posterId === user.id && liveJob.status === JobStatus.OPEN && !liveJob.acceptedBidId && (
                         <button
                             onClick={() => {
                                 if (confirm(t.deleteJobPrompt)) {
-                                    onDelete(job.id);
+                                    onDelete(liveJob.id);
                                 }
                             }}
                             className="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-red-600 active:scale-95 transition-all flex items-center justify-center gap-2"

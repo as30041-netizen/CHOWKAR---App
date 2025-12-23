@@ -12,7 +12,7 @@ interface NotificationsPanelProps {
 
 export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ isOpen, onClose, onJobClick }) => {
     const { user, notifications, setNotifications, t, language } = useUser();
-    const { jobs } = useJobs();
+    const { jobs, getJobWithFullDetails } = useJobs();
 
     const handleMarkAllRead = async () => {
         try {
@@ -93,10 +93,19 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ isOpen, 
                                         setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
                                     }
                                     if (notif.relatedJobId) {
-                                        const job = jobs.find(j => j.id === notif.relatedJobId);
+                                        onClose();
+                                        // Attempt to find in local state first
+                                        let job = jobs.find(j => j.id === notif.relatedJobId);
+
                                         if (job) {
-                                            onClose();
                                             onJobClick(job, notif);
+                                        } else {
+                                            // Fetch from DB if not in local feed (Surgical Loading)
+                                            getJobWithFullDetails(notif.relatedJobId).then(fetchedJob => {
+                                                if (fetchedJob) {
+                                                    onJobClick(fetchedJob, notif);
+                                                }
+                                            });
                                         }
                                     }
                                 }}

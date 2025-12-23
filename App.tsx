@@ -53,7 +53,7 @@ const AppContent: React.FC = () => {
     markNotificationsAsReadForJob, setActiveJobId, deleteNotification, clearNotificationsForJob
   } = useUser();
 
-  const { jobs, updateJob, deleteJob, updateBid } = useJobs();
+  const { jobs, updateJob, deleteJob, updateBid, getJobWithFullDetails } = useJobs();
 
   // Handle deep links for OAuth callback
   useDeepLinkHandler(() => {
@@ -233,7 +233,8 @@ const AppContent: React.FC = () => {
     // Also sync Selected Job if open
     if (selectedJob) {
       const liveJob = jobs.find(j => j.id === selectedJob.id);
-      if (liveJob && liveJob.status !== selectedJob.status) {
+      // Update if the job reference changed (e.g. updated from partial to full details)
+      if (liveJob && liveJob !== selectedJob) {
         setSelectedJob(liveJob);
       }
     }
@@ -297,23 +298,35 @@ const AppContent: React.FC = () => {
   const handleLogout = async () => { await logout(); };
 
   const handleChatOpen = async (job: Job, receiverId?: string) => {
-    // VALIDATE: Chat only for IN_PROGRESS jobs
-    if (job.status !== JobStatus.IN_PROGRESS) {
+    // VALIDATE: Chat only for IN_PROGRESS or COMPLETED jobs
+    if (job.status !== JobStatus.IN_PROGRESS && job.status !== JobStatus.COMPLETED) {
       showAlert(language === 'en'
         ? 'Chat is only available after job is accepted'
         : 'चैट केवल जॉब स्वीकार होने के बाद उपलब्ध है', 'info');
       return;
     }
 
+    // SURGICAL LOADING: If this job came from a lightweight feed (no bids), fetch full details
+    // This is critical for COMPLETED/IN_PROGRESS jobs where we need the bids to identify participants
+    let jobWithBids = job;
+    if (job.bids.length === 0 || (job.acceptedBidId && !job.bids.find(b => b.id === job.acceptedBidId))) {
+      const fetched = await getJobWithFullDetails(job.id);
+      if (fetched) jobWithBids = fetched;
+    }
+
     // VALIDATE: Only poster or accepted worker can chat
-    const acceptedBid = job.bids.find(b => b.id === job.acceptedBidId);
-    const isParticipant = user.id === job.posterId || user.id === acceptedBid?.workerId;
+    const acceptedBid = jobWithBids.bids.find(b => b.id === jobWithBids.acceptedBidId);
+    const isParticipant = user.id === jobWithBids.posterId || user.id === acceptedBid?.workerId;
+
     if (!isParticipant) {
       showAlert(language === 'en'
         ? 'You are not a participant in this job'
         : 'आप इस जॉब में भागीदार नहीं हैं', 'error');
       return;
     }
+
+    // Use the enriched job object for the rest of the function
+    const currentJob = jobWithBids;
 
     // WORKER PAYMENT CHECK: If user is the accepted worker, check if they've paid
     if (user.id === acceptedBid?.workerId && acceptedBid) {
@@ -332,37 +345,37 @@ const AppContent: React.FC = () => {
 
         if (sufficient) {
           // Deduct from wallet and mark as paid
-          const { success } = await deductFromWallet(user.id, connectionFee, 'Connection Fee', 'CONNECTION', job.id);
+          const { success } = await deductFromWallet(user.id, connectionFee, 'Connection Fee', 'CONNECTION', currentJob.id);
           if (success) {
             // Update bid payment status
             await supabase.from('bids').update({ connection_payment_status: 'PAID' }).eq('id', acceptedBid.id);
 
             // Notify poster
             // DB trigger will handle notification to poster
-            // await addNotification(job.posterId, "Chat is now active", `Chat unlocked for "${job.title}"!`, "SUCCESS", job.id);
+            // await addNotification(currentJob.posterId, "Chat is now active", `Chat unlocked for "${currentJob.title}"!`, "SUCCESS", currentJob.id);
             showAlert(language === 'en' ? `Chat unlocked! ₹${connectionFee} deducted from wallet.` : `चैट अनलॉक! वॉलेट से ₹${connectionFee} काटे गए।`, 'success');
 
             // Open chat
-            setChatOpen({ isOpen: true, job, receiverId: job.posterId });
-            setActiveChatId(job.id);
-            setActiveJobId(job.id);
-            markNotificationsAsReadForJob(job.id);
+            setChatOpen({ isOpen: true, job: currentJob, receiverId: currentJob.posterId });
+            setActiveChatId(currentJob.id);
+            setActiveJobId(currentJob.id);
+            markNotificationsAsReadForJob(currentJob.id);
             setShowChatList(false);
             return;
           }
         }
 
         // Wallet insufficient - show payment modal
-        setWorkerPaymentModal({ isOpen: true, job, bidId: acceptedBid.id });
+        setWorkerPaymentModal({ isOpen: true, job: currentJob, bidId: acceptedBid.id });
         return;
       }
     }
 
     // Either poster or paid worker - open chat
-    setChatOpen({ isOpen: true, job, receiverId });
-    setActiveChatId(job.id);
-    setActiveJobId(job.id);
-    markNotificationsAsReadForJob(job.id);
+    setChatOpen({ isOpen: true, job: currentJob, receiverId });
+    setActiveChatId(currentJob.id);
+    setActiveJobId(currentJob.id);
+    markNotificationsAsReadForJob(currentJob.id);
     setShowChatList(false);
   };
 
@@ -516,7 +529,10 @@ const AppContent: React.FC = () => {
             budget: job.budget,
             location: job.location,
             latitude: job.coordinates?.lat,
-            longitude: job.coordinates?.lng
+            longitude: job.coordinates?.lng,
+            poster_name: job.posterName,
+            poster_photo: job.posterPhoto,
+            created_at: new Date(job.createdAt).toISOString()
           };
           const channel = supabase.channel('job_system_hybrid_sync');
           await channel.subscribe();
@@ -848,49 +864,72 @@ const AppContent: React.FC = () => {
         <NotificationsPanel
           isOpen={showNotifications}
           onClose={() => setShowNotifications(false)}
-          onJobClick={(job, notif) => {
+          onJobClick={async (job, notif) => {
             setShowNotifications(false);
             deleteNotification(notif.id);
-            setActiveJobId(job.id);
 
+            // SECURITY: Ensure we have full details (bids, etc.) for non-open jobs
+            // Optimized feeds don't include bids, but we need them for chat/review logic
+
+            let fullJob = job;
+            if (job.status !== 'OPEN' && job.bids.length === 0) {
+              const fetched = await getJobWithFullDetails(job.id);
+              if (fetched) fullJob = fetched;
+            }
+
+            setActiveJobId(fullJob.id);
             const title = (notif.title || "").toLowerCase();
 
             // Match SQL Trigger Titles: 
             // 'New Bid Received! 🔔', 'You Got the Job! 🎉', 'Counter Offer', 'Job Completed! 💰', 'Job Cancelled ⚠️'
 
-            if (title.includes("new bid") || title.includes("bid received")) {
-              setViewBidsModal({ isOpen: true, job });
+            if (title.includes("worker ready") || title.includes("joined the chat")) {
+              if (role === 'POSTER' && fullJob.posterId === user.id) {
+                handleChatOpen(fullJob);
+              } else {
+                setSelectedJob(fullJob);
+              }
+            }
+            else if (title.includes("new bid") || title.includes("bid received")) {
+              if (role === 'POSTER' && fullJob.posterId === user.id) {
+                setViewBidsModal({ isOpen: true, job: fullJob });
+              } else {
+                setSelectedJob(fullJob);
+              }
             }
             else if (title.includes("counter")) {
-              setViewBidsModal({ isOpen: true, job });
+              if (role === 'POSTER' && fullJob.posterId === user.id) {
+                setViewBidsModal({ isOpen: true, job: fullJob });
+              } else {
+                setSelectedJob(fullJob);
+              }
             }
             else if (title.includes("you got the job") || title.includes("accepted")) {
-              if (job.status === JobStatus.IN_PROGRESS) {
-                handleChatOpen(job);
+              if (fullJob.status === JobStatus.IN_PROGRESS) {
+                handleChatOpen(fullJob);
               } else {
-                setSelectedJob(job);
+                setSelectedJob(fullJob);
               }
             }
             else if (title.includes("job completed") || title.includes("complete")) {
-              // Both Poster and Worker should review each other
-              // Previously this was poster-only. Now we check if user is a participant.
-              const acceptedBid = job.bids.find(b => b.id === job.acceptedBidId);
+              const acceptedBid = fullJob.bids.find(b => b.id === fullJob.acceptedBidId);
               if (acceptedBid) {
                 const isWorker = user.id === acceptedBid.workerId;
-                const isPoster = user.id === job.posterId;
+                const isPoster = user.id === fullJob.posterId;
 
                 if (isWorker || isPoster) {
                   setReviewModalData({
                     isOpen: true,
-                    revieweeId: isWorker ? job.posterId : acceptedBid.workerId, // Review the OTHER person
-                    revieweeName: isWorker ? job.posterName : acceptedBid.workerName,
-                    jobId: job.id
+                    revieweeId: isWorker ? fullJob.posterId : acceptedBid.workerId,
+                    revieweeName: isWorker ? fullJob.posterName : acceptedBid.workerName,
+                    jobId: fullJob.id
                   });
                 }
               } else {
-                handleChatOpen(job);
+                handleChatOpen(fullJob);
               }
             }
+            // ... apply fullJob to other blocks if needed, but let's do COMPLETED first
             else if (title.includes("review")) {
               navigate('/profile');
             }

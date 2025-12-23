@@ -90,6 +90,12 @@ export interface Job {
   bids: Bid[];
   acceptedBidId?: string;
   image?: string; // Base64 or URL of job image
+  reviews?: Review[];
+  // === FEED OPTIMIZATION FIELDS (populated by get_home_feed RPC) ===
+  bidCount?: number;      // Pre-computed bid count (avoids fetching all bids)
+  myBidId?: string;       // Current user's bid ID if exists
+  myBidStatus?: 'PENDING' | 'ACCEPTED' | 'REJECTED';  // Current user's bid status
+  myBidAmount?: number;   // Current user's bid amount
 }
 
 export interface ChatMessage {
