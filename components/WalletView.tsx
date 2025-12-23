@@ -55,7 +55,7 @@ export const WalletView: React.FC<WalletViewProps> = ({ onShowBidHistory, onAddM
                   ? `Hey! Join CHOWKAR and get ₹100 instantly in your wallet to find work or hire workers! Use my code: ${user.referralCode}\n\nDownload now: `
                   : `हेल्लो! CHOWKAR जॉइन करें और पाएँ ₹100 तुरंत! मेरा कोड उपयोग करें: ${user.referralCode}\n\nअभी डाउनलोड करें: `;
 
-                const shareUrl = `${window.location.origin}/?ref=${user.referralCode}`;
+                const shareUrl = `https://chowkar.in/?ref=${user.referralCode}`;
 
                 if (navigator.share) {
                   try {
