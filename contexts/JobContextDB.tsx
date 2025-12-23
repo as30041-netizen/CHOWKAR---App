@@ -255,7 +255,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const [currentFeedType, setCurrentFeedType] = useState<'HOME' | 'POSTER' | 'WORKER_APPS'>('HOME');
 
-  const loadFeed = async (type: 'HOME' | 'POSTER' | 'WORKER_APPS', offset: number = 0) => {
+  const loadFeed = useCallback(async (type: 'HOME' | 'POSTER' | 'WORKER_APPS', offset: number = 0) => {
     const isInitial = offset === 0;
     try {
       if (isInitial) {
@@ -304,17 +304,17 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setLoading(false);
       setIsLoadingMore(false);
     }
-  };
+  }, []); // Empty deps - loadFeed doesn't depend on any changing state
 
-  const refreshJobs = async () => {
+  const refreshJobs = useCallback(async () => {
     // Legacy refreshJobs now delegates to loadFeed based on current type
     await loadFeed(currentFeedType, 0);
-  };
+  }, [loadFeed, currentFeedType]);
 
-  const fetchMoreJobs = async () => {
+  const fetchMoreJobs = useCallback(async () => {
     if (isLoadingMore || !hasMore) return;
     await loadFeed(currentFeedType, jobs.length);
-  };
+  }, [loadFeed, currentFeedType, isLoadingMore, hasMore, jobs.length]);
 
   const addJob = async (job: Job) => {
     const tempId = job.id; // Store temp ID
