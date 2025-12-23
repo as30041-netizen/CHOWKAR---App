@@ -30,3 +30,6 @@ dist-ssr
 ios/
 .capacitor/
 
+
+# Local Netlify folder
+.netlify

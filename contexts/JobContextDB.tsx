@@ -484,17 +484,37 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  const getJobWithFullDetails = async (jobId: string): Promise<Job | null> => {
-    try {
-      // 1. Check if we already have the job in state
-      const existingJob = jobs.find(j => j.id === jobId);
+  const fetchCache = React.useRef<Map<string, number>>(new Map());
 
-      // 2. Fetch full details (bids, images, etc.)
+  const getJobWithFullDetails = async (jobId: string): Promise<Job | null> => {
+    const now = Date.now();
+    const lastFetch = fetchCache.current.get(jobId);
+
+    // Return current state version if fetched recently (< 10 seconds)
+    if (lastFetch && (now - lastFetch < 10000)) {
+      const existing = jobs.find(j => j.id === jobId);
+      if (existing && existing.bids && existing.bids.length > 0) {
+        console.log('[JobContext] Returning cached detailed job:', jobId);
+        return existing;
+      }
+    }
+
+    try {
+      // 1. Fetch full details (bids, images, etc.)
       const { job: fullJob, error } = await fetchJobFullDetails(jobId);
 
       if (fullJob) {
+        fetchCache.current.set(jobId, now);
         // Update local state with the fully loaded job
-        setJobs(prev => prev.map(j => j.id === jobId ? fullJob : j));
+        setJobs(prev => {
+          const index = prev.findIndex(j => j.id === jobId);
+          if (index !== -1) {
+            const newJobs = [...prev];
+            newJobs[index] = fullJob;
+            return newJobs;
+          }
+          return [fullJob, ...prev];
+        });
         return fullJob;
       }
 
@@ -502,7 +522,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         console.warn('[JobContext] Failed to load full details:', error);
       }
 
-      return existingJob || null;
+      return null;
     } catch (err) {
       console.error('Error fetching full job details:', err);
       return null;

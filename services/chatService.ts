@@ -72,6 +72,60 @@ export const fetchLastMessage = async (jobId: string) => {
     }
 };
 
+/**
+ * [OPTIMIZED] Fetch all inbox chats in a single request.
+ * Replaces the N+1 pattern of fetching jobs then fetching last messages.
+ */
+export interface InboxChatSummary {
+    jobId: string;
+    jobTitle: string;
+    jobStatus: string;
+    posterId: string;
+    acceptedBidderId: string;
+    counterpartId: string;
+    counterpartName: string;
+    counterpartPhoto?: string;
+    lastMessage?: {
+        text: string;
+        timestamp: number;
+        senderId: string;
+        isRead: boolean;
+    };
+    unreadCount: number;
+}
+
+export const fetchInboxSummaries = async (userId: string): Promise<{ chats: InboxChatSummary[], error?: any }> => {
+    try {
+        console.log('[ChatService] Fetching inbox summaries...');
+        const { data, error } = await supabase.rpc('get_inbox_summaries', { p_user_id: userId });
+
+        if (error) throw error;
+
+        const chats: InboxChatSummary[] = (data || []).map((row: any) => ({
+            jobId: row.job_id,
+            jobTitle: row.job_title,
+            jobStatus: row.job_status,
+            posterId: row.poster_id,
+            acceptedBidderId: row.accepted_bidder_id,
+            counterpartId: row.counterpart_id,
+            counterpartName: row.counterpart_name || 'User',
+            counterpartPhoto: row.counterpart_photo || undefined,
+            lastMessage: row.last_message_text ? {
+                text: row.last_message_text,
+                timestamp: new Date(row.last_message_time).getTime(),
+                senderId: row.last_message_sender_id,
+                isRead: row.last_message_is_read
+            } : undefined,
+            unreadCount: Number(row.unread_count || 0)
+        }));
+
+        return { chats, error: null };
+    } catch (error) {
+        console.error('[ChatService] Error fetching inbox summaries:', error);
+        return { chats: [], error };
+    }
+};
+
 export const editMessage = async (messageId: string, newText: string): Promise<{ success: boolean; error?: any }> => {
     try {
         const { error } = await supabase

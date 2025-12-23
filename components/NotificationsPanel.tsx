@@ -48,9 +48,9 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ isOpen, 
     const myNotifications = notifications.filter(n => n.userId === user.id);
 
     return (
-        <div className="fixed inset-0 z-50 flex items-start justify-end pointer-events-none">
-            <div className="absolute inset-0 bg-black/40 pointer-events-auto backdrop-blur-sm" onClick={onClose}></div>
-            <div className="relative w-full max-w-sm bg-white dark:bg-gray-900 h-full shadow-xl animate-slide-in-right flex flex-col pointer-events-auto pt-safe pb-safe transition-colors">
+        <div className="fixed inset-0 z-50 flex items-start justify-end">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}></div>
+            <div className="relative w-full max-w-sm bg-white dark:bg-gray-900 h-full shadow-xl animate-slide-in-right flex flex-col pt-safe pb-safe transition-colors">
                 <div className="shrink-0 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 z-10">
                     <div className="p-4 flex justify-between items-center pb-2">
                         <h2 className="text-lg font-bold text-gray-900 dark:text-white">{t.notifications}</h2>
