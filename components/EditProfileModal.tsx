@@ -63,6 +63,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
 
         setIsSaving(true);
         try {
+            console.log('Starting profile save...');
             // Upload photo to Supabase Storage if it's base64
             let finalPhotoUrl = editProfilePhoto;
             if (editProfilePhoto && isBase64Image(editProfilePhoto)) {
@@ -117,8 +118,15 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                 experience: editProfileExp.trim(),
                 skills: editProfileSkills.split(',').map(s => s.trim()).filter(s => s),
                 profilePhoto: finalPhotoUrl,
-                coordinates: newCoordinates // Include new GPS coords if captured
+                coordinates: newCoordinates
             };
+
+            const payloadSize = JSON.stringify(updates).length;
+            if (payloadSize > 250000) {
+                showAlert('Photo is too large. Please use a smaller image or skip the photo for now.', 'error');
+                setIsSaving(false);
+                return;
+            }
 
             if (referrerId) {
                 updates.referredBy = referrerId;
@@ -128,15 +136,17 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
 
             // Send specific notification for referral success
             if (referrerId) {
-                await addNotification(user.id, "Referral Applied!", language === 'en' ? "Welcome bonus applied." : "वेलकम बोनस लागू किया गया।", "SUCCESS");
+                addNotification(user.id, "Referral Applied!", language === 'en' ? "Welcome bonus applied." : "वेलकम बोनस लागू किया गया।", "SUCCESS");
             }
 
 
             onClose();
-            await addNotification(user.id, t.notifProfileUpdated, t.notifProfileUpdatedBody, "SUCCESS");
+            // Fire and forget notification so UI doesn't hang on network
+            addNotification(user.id, t.notifProfileUpdated, t.notifProfileUpdatedBody, "SUCCESS");
             showAlert(t.notifProfileUpdated, 'success');
-        } catch {
-            showAlert('Failed to update profile.', 'error');
+        } catch (error: any) {
+            console.error('Profile update error:', error);
+            showAlert(error.message || 'Failed to update profile.', 'error');
         } finally {
             setIsSaving(false);
         }

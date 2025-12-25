@@ -108,8 +108,6 @@ const AppContent: React.FC = () => {
   // Actually, I'll just keep the Navigate to Post for editing if I can.
   // For now, I'll implement `handleEditJobLink` to Navigate to ` / post` with the job state to pre-fill it (requires PostJob update, but I can't touch it easily).
   // So I will just keep the legacy state for now in case I missed where it renders.
-  // For now, I'll implement `handleEditJobLink` to Navigate to ` / post` with the job state to pre-fill it (requires PostJob update, but I can't touch it easily).
-  // So I will just keep the legacy state for now in case I missed where it renders.
   // Update: I will just use `useNavigate` to go to ` / post` with state.
   const navigate = useNavigate();
   const location = useLocation();
@@ -136,16 +134,19 @@ const AppContent: React.FC = () => {
       // But we need them to fill it. 
 
       // 2. Profile Completion (Name/Phone/Location)
-      if (user.id) {
-        const isNameMissing = !user.name || user.name.trim() === '';
-        const isPhoneMissing = !user.phone || user.phone.trim() === '';
-        const isLocationMissing = !user.location || user.location === 'Not set' || user.location.trim() === '';
+      // DISABLED: Profile completion requirement temporarily disabled
+      // if (user.id) {
+      //   const isNameMissing = !user.name || user.name.trim() === '';
+      //   const isPhoneMissing = !user.phone || user.phone.trim() === '';
+      //   const isLocationMissing = !user.location || user.location === 'Not set' || user.location.trim() === '';
 
-        if (isNameMissing || isPhoneMissing || isLocationMissing) {
-          console.log('[App] Profile incomplete, prompting update:', { name: !isNameMissing, phone: !isPhoneMissing, location: !isLocationMissing });
-          setShowEditProfile(true);
-        }
-      }
+      //   if (isNameMissing || isPhoneMissing || isLocationMissing) {
+      //     console.log('[App] Profile incomplete, redirecting to /profile:', { name: !isNameMissing, phone: !isPhoneMissing, location: !isLocationMissing });
+      //     if (location.pathname !== '/profile') {
+      //       navigate('/profile');
+      //     }
+      //   }
+      // }
 
     }
   }, [isLoggedIn, isAuthLoading, user]);

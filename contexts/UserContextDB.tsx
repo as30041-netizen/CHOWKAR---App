@@ -905,11 +905,26 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const updateUserInDB = async (updates: Partial<User>) => {
     try {
-      // Update local state
+      console.log('[Data] Updating user profile:', updates);
+
+      // Update local state optimistically
       setUser(prev => ({ ...prev, ...updates }));
 
-      // Update in database
-      await updateUserProfile(user.id, updates);
+      console.log(`[Data] Update payload size: ${JSON.stringify(updates).length} characters`);
+
+      const updatePromise = updateUserProfile(user.id, updates);
+      const timeoutPromise = new Promise<{ success: boolean; error?: string }>((_, reject) =>
+        setTimeout(() => reject(new Error('The database is responding very slowly. This usually happens when the 9GB bandwidth limit is exceeded. Please wait 30 seconds...')), 30000)
+      );
+
+      const result = await Promise.race([updatePromise, timeoutPromise]);
+
+      if (!result.success) {
+        console.error('[Data] DB Update Failed:', result.error);
+        throw new Error(result.error);
+      }
+
+      console.log('[Data] DB Update Success');
 
       // Update wallet balance separately if needed
       if (updates.walletBalance !== undefined) {
@@ -917,7 +932,8 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     } catch (error) {
       console.error('Error updating user:', error);
-      showAlert('Failed to update profile', 'error');
+      // Revert optimistic update if needed? For now, we rely on refresh.
+      throw error; // Re-throw so the caller (EditProfileModal) knows it failed!
     }
   };
 
