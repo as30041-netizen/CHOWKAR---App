@@ -840,12 +840,22 @@ const AppContent: React.FC = () => {
 
   if (!isLoggedIn) {
     return (
-      <LandingPage
-        onGetStarted={handleGoogleSignIn}
-        language={language}
-        onLanguageToggle={() => setLanguage(l => l === 'en' ? 'hi' : 'en')}
-        isSigningIn={isSigningIn}
-      />
+      <Suspense fallback={
+        <div className="h-[100dvh] w-full flex flex-col items-center justify-center bg-green-50 dark:bg-gray-950 transition-colors duration-300">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-emerald-100 dark:border-emerald-900/30 border-t-emerald-600 rounded-full animate-spin"></div>
+            <MapPin className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-emerald-600 animate-pulse" size={24} />
+          </div>
+          <p className="mt-4 text-emerald-800 dark:text-emerald-400 font-bold animate-pulse">{t.loading}</p>
+        </div>
+      }>
+        <LandingPage
+          onGetStarted={handleGoogleSignIn}
+          language={language}
+          onLanguageToggle={() => setLanguage(l => l === 'en' ? 'hi' : 'en')}
+          isSigningIn={isSigningIn}
+        />
+      </Suspense>
     );
   }
 

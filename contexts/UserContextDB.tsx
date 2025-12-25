@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, ReactNode, useEffect, useRef } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useEffect, useRef, startTransition } from 'react';
 import { User, UserRole, Transaction, Notification, ChatMessage } from '../types';
 import { MOCK_USER, TRANSLATIONS, FREE_AI_USAGE_LIMIT } from '../constants';
 import { supabase } from '../lib/supabase';
@@ -76,9 +76,18 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [role, setRole] = useState<UserRole>(() => getInitialState('chowkar_role', UserRole.WORKER));
   const [language, setLanguage] = useState<'en' | 'hi'>(() => getInitialState('chowkar_language', 'en'));
 
-  // STREAMLINED AUTH: Check localStorage flag for instant login
+  // Check if we are currently in an OAuth callback (to prevent flickering)
+  const isAuthCallback = typeof window !== 'undefined' && (
+    window.location.href.includes('access_token=') ||
+    window.location.href.includes('code=') ||
+    window.location.href.includes('error=') ||
+    window.location.href.includes('refresh_token=')
+  );
+
+  // STREAMLINED AUTH: Check localStorage flag for instant login OR check if we are in a callback
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
+      if (isAuthCallback) return true;
       return localStorage.getItem('chowkar_isLoggedIn') === 'true';
     }
     return false;
@@ -110,9 +119,11 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [currentAlert, setCurrentAlert] = useState<{ message: string, type: 'success' | 'error' | 'info' } | null>(null);
 
-  // If we have the persistent flag, we are NOT loading initially (Optimistic Success)
+  // If we have the persistent flag OR are in a callback, we are NOT loading initially (Optimistic Success)
+  // BUT we show a special loading state while processing the callback token
   const [isAuthLoading, setIsAuthLoading] = useState(() => {
     if (typeof window !== 'undefined') {
+      if (isAuthCallback) return true; // Show spinner while parsing token
       return localStorage.getItem('chowkar_isLoggedIn') !== 'true';
     }
     return true;
@@ -164,14 +175,31 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (event === 'INITIAL_SESSION' && !session?.user) {
         // Handle case where we thought we were logged in but aren't
-        // CRITICAL FIX: Don't wipe if we see a hash in the URL (it means we are about to be SIGNED_IN)
-        const hasAuthData = window.location.hash.includes('access_token=') ||
-          window.location.search.includes('code=') ||
-          window.location.hash.includes('error=');
+        // CRITICAL FIX: Don't wipe if we see auth data in URL or if we're on a native platform starting up
+        // (Native platforms handle OAuth via DeepLink hooks which fire slightly AFTER INITIAL_SESSION)
+        const currentUrl = window.location.href;
+        const hasAuthData = currentUrl.includes('access_token=') ||
+          currentUrl.includes('code=') ||
+          currentUrl.includes('error=') ||
+          currentUrl.includes('refresh_token=');
 
         if (hasAuthData) {
-          console.log('[Auth] INITIAL_SESSION null but hash detected, skipping wipe...');
+          console.log('[Auth] INITIAL_SESSION null but auth data detected, waiting for next event...');
           return;
+        }
+
+        if (Capacitor.isNativePlatform()) {
+          console.log('[Auth] Native platform detected. Deferring session wipe to allow deep links to process.');
+          // Give deep links 2 seconds to fire before we assume session death
+          const nativeTimeout = setTimeout(() => {
+            if (mounted && !isLoggedIn && localStorage.getItem('chowkar_isLoggedIn') === 'true') {
+              console.log('[Auth] Native grace period over, session still null. Wiping.');
+              localStorage.removeItem('chowkar_isLoggedIn');
+              setIsAuthLoading(false);
+              setHasInitialized(true);
+            }
+          }, 2000);
+          return; // Wait for that timeout or a SIGNED_IN event
         }
 
         if (localStorage.getItem('chowkar_isLoggedIn') === 'true') {
@@ -207,6 +235,18 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setUser(optimisticUser);
           currentUserIdRef.current = session.user.id;
 
+          // CLEAR URL SENSITIVE DATA AFTER SUCCESSFUL CONSUMPTION
+          // This prevents "Refresh re-login" issues after logout
+          if (typeof window !== 'undefined' && (window.location.hash || window.location.search)) {
+            const hasAuthData = window.location.href.includes('access_token=') ||
+              window.location.href.includes('code=') ||
+              window.location.href.includes('refresh_token=');
+            if (hasAuthData) {
+              console.log('[Auth] Cleaning sensitive data from URL...');
+              window.history.replaceState({}, document.title, window.location.pathname);
+            }
+          }
+
           // CRITICAL FIX: Fetch FULL profile (with phone/location) BEFORE releasing loading state
           // This prevents App.tsx from seeing an incomplete user and popping up the edit modal
           try {
@@ -223,17 +263,20 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setHasInitialized(true);
         }
       } else if (event === 'SIGNED_OUT') {
+        console.log('[Auth] SIGNED_OUT event received');
         if (isLoggedIn || currentUserIdRef.current) {
-          console.log('[Auth] Signed out. Cleaning up strings...');
+          console.log('[Auth] Cleaning up state after SIGNED_OUT');
           localStorage.removeItem('chowkar_isLoggedIn');
-          setUser(INITIAL_USER);
-          setIsLoggedIn(false);
+          startTransition(() => {
+            setUser(INITIAL_USER);
+            setIsLoggedIn(false);
+            setTransactions([]);
+            setNotifications([]);
+            setMessages([]);
+            setIsAuthLoading(false);
+            setHasInitialized(true);
+          });
           currentUserIdRef.current = null;
-          setTransactions([]);
-          setNotifications([]);
-          setMessages([]);
-          setIsAuthLoading(false);
-          setHasInitialized(true);
         }
       } else if (event === 'USER_UPDATED' && session?.user) {
         currentUserIdRef.current = session.user.id;
@@ -949,29 +992,56 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = async () => {
     try {
-      console.log('[Auth] Logging out...');
-      const result = await signOut();
-      if (result.error) {
-        console.error('[Auth] Sign out error (forcing local logout):', result.error);
-        // We continue to clear local state even if server logout fails
-      }
-      console.log('[Auth] Sign out successful');
+      console.log('[Auth] Initiating logout...');
 
-      // PRIVACY FIX: Clear ALL persistent user data from localStorage
+      // 1. CLEAR LOCAL STATE FIRST (Immediate UI response)
       localStorage.removeItem('chowkar_isLoggedIn');
       localStorage.removeItem('chowkar_user');
-      localStorage.removeItem('chowkar_role');
-      localStorage.removeItem('chowkar_language');
       localStorage.removeItem('chowkar_onboarding_complete');
+      localStorage.removeItem('chowkar_role'); // Clear role to force reset
 
-      setIsLoggedIn(false);
-      setUser(MOCK_USER);
-      setTransactions([]);
-      setNotifications([]);
-      setMessages([]);
+      // 2. CLEAR URL TO PREVENT RE-LOGIN ON REFRESH
+      // This removes access_token, code, etc. from the address bar
+      if (typeof window !== 'undefined') {
+        window.history.replaceState({}, document.title, window.location.pathname);
+
+        // 3. HARD CLEAR SUPABASE STORAGE (Safety for refresh issues)
+        // This targets the internal storage keys Supabase uses
+        Object.keys(localStorage).forEach(key => {
+          if (key.includes('supabase.auth.token') || key.startsWith('sb-') || key.includes('auth-token')) {
+            console.log('[Auth] Hard clearing storage key:', key);
+            localStorage.removeItem(key);
+          }
+        });
+      }
+
+      startTransition(() => {
+        setIsLoggedIn(false);
+        setIsAuthLoading(false);
+        setHasInitialized(true);
+        setUser(INITIAL_USER);
+        setTransactions([]);
+        setNotifications([]);
+        setMessages([]);
+      });
+      currentUserIdRef.current = null;
+
+      // 4. CALL SERVER SIGN OUT (In background)
+      console.log('[Auth] Calling server sign out...');
+      signOut().then(result => {
+        if (result.success) {
+          console.log('[Auth] Server sign out successful');
+        } else {
+          console.warn('[Auth] Server sign out failed (already cleared locally):', result.error);
+        }
+      }).catch(err => {
+        console.error('[Auth] Server sign out exception:', err);
+      });
+
     } catch (error) {
-      console.error('[Auth] Exception during logout:', error);
-      showAlert('An error occurred during sign out', 'error');
+      console.error('[Auth] Exception during logout state cleanup:', error);
+      // Fallback: force location reload to clear memory
+      window.location.href = '/';
     }
   };
 

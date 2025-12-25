@@ -6,12 +6,18 @@ import { Browser } from '@capacitor/browser';
 export const signInWithGoogle = async (): Promise<{ success: boolean; error?: string }> => {
   try {
     // Use Capacitor callback URL for native apps, web URL for browser
+    // Ensure we capture the exact origin for local development (e.g. http://localhost:3000)
+    const origin = window.location.origin;
     const redirectTo = Capacitor.isNativePlatform()
       ? 'in.chowkar.app://callback'
-      : window.location.origin;
+      : origin.endsWith('/') ? origin : `${origin}/`;
 
-    console.log('[Auth] Initiating Google OAuth, redirect URL:', redirectTo);
-    console.log('[Auth] Platform:', Capacitor.getPlatform());
+    console.log('[Auth] Redirect Details:', {
+      platform: Capacitor.getPlatform(),
+      origin: origin,
+      finalRedirectTo: redirectTo,
+      isNative: Capacitor.isNativePlatform()
+    });
 
     // Set optimistic flag so we expect a session on return
     localStorage.setItem('chowkar_isLoggedIn', 'true');
