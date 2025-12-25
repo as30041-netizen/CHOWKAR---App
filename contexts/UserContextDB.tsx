@@ -164,6 +164,16 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (event === 'INITIAL_SESSION' && !session?.user) {
         // Handle case where we thought we were logged in but aren't
+        // CRITICAL FIX: Don't wipe if we see a hash in the URL (it means we are about to be SIGNED_IN)
+        const hasAuthData = window.location.hash.includes('access_token=') ||
+          window.location.search.includes('code=') ||
+          window.location.hash.includes('error=');
+
+        if (hasAuthData) {
+          console.log('[Auth] INITIAL_SESSION null but hash detected, skipping wipe...');
+          return;
+        }
+
         if (localStorage.getItem('chowkar_isLoggedIn') === 'true') {
           console.log('[Auth] Optimistic login invalidated by INITIAL_SESSION null');
           localStorage.removeItem('chowkar_isLoggedIn');
