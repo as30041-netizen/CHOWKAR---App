@@ -4,7 +4,7 @@ import { fetchJobMessages } from '../services/chatService';
 import { fetchJobContact } from '../services/jobService';
 import { Job, ChatMessage, User } from '../types';
 import { Send, Phone, CheckCircle, ArrowLeft, LockKeyhole, Paperclip, MoreVertical, Check, CheckCheck, Languages, Mic, MicOff, Loader2, Sparkles, Lock, Volume2, Square, Trash2, ShieldAlert, FileText, Flag, ChevronRight, Pencil } from 'lucide-react';
-import { SafetyTipsModal } from './SafetyTipsModal';
+import { SafetyTipsModal, CommunityGuidelinesModal, TermsModal } from './InfoModals';
 import { ReportUserModal } from './ReportUserModal';
 import { UserProfileModal } from './UserProfileModal';
 

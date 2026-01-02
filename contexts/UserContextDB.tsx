@@ -133,20 +133,49 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [hasInitialized, setHasInitialized] = useState(false);
   const currentUserIdRef = useRef<string | null>(null);
 
+  // CRITICAL: Track if we are currently handling an OAuth callback to prevent state wipes
+  const isAuthCallbackRef = useRef<boolean>(false);
+  if (typeof window !== 'undefined' && !hasInitialized) {
+    isAuthCallbackRef.current =
+      window.location.href.includes('access_token=') ||
+      window.location.href.includes('code=') ||
+      window.location.href.includes('error=') ||
+      window.location.href.includes('refresh_token=');
+  }
+
   // Persistence Effects (only for preferences, NOT auth state)
   useEffect(() => localStorage.setItem('chowkar_role', JSON.stringify(role)), [role]);
   useEffect(() => localStorage.setItem('chowkar_language', JSON.stringify(language)), [language]);
-  // Persist User Object
-  useEffect(() => localStorage.setItem('chowkar_user', JSON.stringify(user)), [user]);
+
+  // Persist User Object with safety check
+  useEffect(() => {
+    // Never persist mock data to local storage
+    if (user.id && !user.id.startsWith('u') && !user.name.includes('Mock')) {
+      localStorage.setItem('chowkar_user', JSON.stringify(user));
+    }
+  }, [user]);
+
+  // Cleanup: If we start and find mock data in storage, clear it
+  useEffect(() => {
+    const savedUser = localStorage.getItem('chowkar_user');
+    if (savedUser) {
+      try {
+        const parsed = JSON.parse(savedUser);
+        if (parsed.id === 'u1' || parsed.name?.includes('Mock')) {
+          console.log('[Auth] Found mock user in storage, clearing...');
+          localStorage.removeItem('chowkar_user');
+          setUser(INITIAL_USER);
+        }
+      } catch (e) { }
+    }
+  }, []);
 
   // Initialize app state tracking (for push notification logic)
   useEffect(() => {
     initializeAppStateTracking();
     console.log('[AppState] Initialized app state tracking');
-
     return () => {
       cleanupAppStateTracking();
-      console.log('[AppState] Cleaned up app state tracking');
     };
   }, []);
 
@@ -176,14 +205,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (event === 'INITIAL_SESSION' && !session?.user) {
         // Handle case where we thought we were logged in but aren't
         // CRITICAL FIX: Don't wipe if we see auth data in URL or if we're on a native platform starting up
-        // (Native platforms handle OAuth via DeepLink hooks which fire slightly AFTER INITIAL_SESSION)
-        const currentUrl = window.location.href;
-        const hasAuthData = currentUrl.includes('access_token=') ||
-          currentUrl.includes('code=') ||
-          currentUrl.includes('error=') ||
-          currentUrl.includes('refresh_token=');
-
-        if (hasAuthData) {
+        if (isAuthCallbackRef.current) {
           console.log('[Auth] INITIAL_SESSION null but auth data detected, waiting for next event...');
           return;
         }
@@ -236,15 +258,10 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           currentUserIdRef.current = session.user.id;
 
           // CLEAR URL SENSITIVE DATA AFTER SUCCESSFUL CONSUMPTION
-          // This prevents "Refresh re-login" issues after logout
-          if (typeof window !== 'undefined' && (window.location.hash || window.location.search)) {
-            const hasAuthData = window.location.href.includes('access_token=') ||
-              window.location.href.includes('code=') ||
-              window.location.href.includes('refresh_token=');
-            if (hasAuthData) {
-              console.log('[Auth] Cleaning sensitive data from URL...');
-              window.history.replaceState({}, document.title, window.location.pathname);
-            }
+          if (isAuthCallbackRef.current && typeof window !== 'undefined') {
+            console.log('[Auth] Cleaning sensitive data from URL...');
+            window.history.replaceState({}, document.title, window.location.pathname);
+            isAuthCallbackRef.current = false; // Reset to prevent repeated cleanings
           }
 
           // CRITICAL FIX: Fetch FULL profile (with phone/location) BEFORE releasing loading state
@@ -264,6 +281,13 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
       } else if (event === 'SIGNED_OUT') {
         console.log('[Auth] SIGNED_OUT event received');
+
+        // CRITICAL FIX: Don't handle SIGNED_OUT if we started with auth data in URL
+        if (isAuthCallbackRef.current) {
+          console.log('[Auth] SIGNED_OUT received but auth data detected at start, ignoring...');
+          return;
+        }
+
         if (isLoggedIn || currentUserIdRef.current) {
           console.log('[Auth] Cleaning up state after SIGNED_OUT');
           localStorage.removeItem('chowkar_isLoggedIn');

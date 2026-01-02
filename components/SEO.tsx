@@ -1,5 +1,7 @@
 import React from 'react';
-import { Helmet } from 'react-helmet-async';
+
+// Helmet is temporarily disabled - this component will be inactive in dev
+// import { Helmet } from 'react-helmet-async';
 
 interface SEOProps {
     title: string;
@@ -18,28 +20,33 @@ export const SEO: React.FC<SEOProps> = ({
 }) => {
     const siteTitle = `${title} | CHOWKAR`;
 
+    // NOTE: Helmet is temporarily disabled to fix DOM manipulation errors in dev
+    // This component will be inactive until HelmetProvider is re-enabled
+    // For production builds, uncomment the Helmet import and this return statement
+
+    /* 
     return (
         <Helmet>
-            {/* Standard Metrics */}
+            {/* Standard Metrics *\/}
             <title>{siteTitle}</title>
             <meta name="description" content={description} />
             <link rel="canonical" href={url} />
 
-            {/* Open Graph / Facebook */}
+            {/* Open Graph / Facebook *\/}
             <meta property="og:type" content={type} />
             <meta property="og:url" content={url} />
             <meta property="og:title" content={siteTitle} />
             <meta property="og:description" content={description} />
             <meta property="og:image" content={image} />
 
-            {/* Twitter */}
+            {/* Twitter *\/}
             <meta property="twitter:card" content="summary_large_image" />
             <meta property="twitter:url" content={url} />
             <meta property="twitter:title" content={siteTitle} />
             <meta property="twitter:description" content={description} />
             <meta property="twitter:image" content={image} />
 
-            {/* JSON-LD Structured Data for Local Business/Organization */}
+            {/* JSON-LD Structured Data for Local Business/Organization *\/}
             <script type="application/ld+json">
                 {JSON.stringify({
                     "@context": "https://schema.org",
@@ -56,4 +63,8 @@ export const SEO: React.FC<SEOProps> = ({
             </script>
         </Helmet>
     );
+    */
+
+    return null; // Component disabled for dev
 };
+

@@ -109,9 +109,16 @@ export const fetchHomeFeed = async (
     });
 
     if (error) {
-      console.error('[JobService] get_home_feed RPC error:', error);
+      console.error('[JobService] get_home_feed RPC error detail:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      });
       throw error;
     }
+
+    console.log(`[JobService] get_home_feed raw data length:`, data?.length || 0);
 
     const jobs: Job[] = (data || []).map((row: any) => ({
       id: row.id,
@@ -150,7 +157,9 @@ export const fetchHomeFeed = async (
     console.error('[JobService] fetchHomeFeed error:', error);
     // FALLBACK: If RPC fails (e.g., not deployed yet), use legacy method
     console.warn('[JobService] Falling back to legacy fetchJobs...');
-    return fetchJobs(limit, offset);
+    const fallbackResult = await fetchJobs(limit, offset);
+    console.log(`[JobService] Fallback fetchJobs returned ${fallbackResult.jobs.length} jobs`);
+    return fallbackResult;
   }
 };
 

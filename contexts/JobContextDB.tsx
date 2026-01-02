@@ -270,10 +270,11 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const loadFeed = useCallback(async (type: 'HOME' | 'POSTER' | 'WORKER_APPS', offset: number = 0) => {
     const isInitial = offset === 0;
     try {
-      // Prevention of duplicate concurrent loads (within 500ms for same type)
+      // Prevention of duplicate concurrent loads (within 1 second for same type)
       const now = Date.now();
-      if (isInitial && lastLoadAttemptRef.current.type === type && (now - lastLoadAttemptRef.current.time < 500)) {
-        console.log(`[JobContext] Duplicate load skipped for ${type}`);
+      const timeSinceLastLoad = now - lastLoadAttemptRef.current.time;
+      if (isInitial && lastLoadAttemptRef.current.type === type && timeSinceLastLoad < 1000) {
+        console.log(`[JobContext] Duplicate load skipped for ${type} (${timeSinceLastLoad}ms since last)`);
         return;
       }
       lastLoadAttemptRef.current = { type, time: now };
@@ -291,10 +292,14 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
       if (!userId) {
+        console.warn(`[JobContext] Cannot load ${type} feed - no authenticated session`);
         setLoading(false);
         setIsLoadingMore(false);
+        // Don't set error here - might just be waiting for auth to complete
         return;
       }
+
+      console.log(`[JobContext] Loading ${type} feed for user ${userId} (offset: ${offset})`);
 
       let result: { jobs: Job[], hasMore?: boolean };
 
@@ -344,9 +349,11 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       } else if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
         const newUserId = session?.user?.id || null;
         if (newUserId && newUserId !== currentUserId) {
-          console.log('[JobContext] User changed/session initialized, refreshing jobs...');
+          console.log('[JobContext] User changed/session initialized, triggering job refresh...');
           setJobs([]); // Clear stale data from previous user
           setCurrentUserId(newUserId);
+          // Actually trigger the refresh (not just log about it!)
+          refreshJobs();
         }
       }
     });

@@ -34,26 +34,52 @@ const InfoBaseModal: React.FC<ModalProps> = ({ isOpen, onClose, title, children,
 
 export const SafetyTipsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = (props) => (
     <InfoBaseModal {...props} title="Safety Guidelines" icon={Shield}>
-        <div className="space-y-4">
-            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800">
+        <div className="space-y-6">
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800 animate-pulse-subtle">
                 <h4 className="font-bold text-blue-800 dark:text-blue-300 mb-2 flex items-center gap-2"><AlertTriangle size={18} /> Vital Rule</h4>
                 <p className="text-sm text-blue-700 dark:text-blue-200">Never share OTPs or passwords with anyone. CHOWKAR support will never ask for them.</p>
             </div>
 
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mt-4">For Workers</h3>
-            <ul className="list-disc pl-5 space-y-2">
-                <li><strong>Verify Location:</strong> Always check the job location on the map before accepting.</li>
-                <li><strong>Public Places:</strong> For the first meeting, prefer public or well-known locations.</li>
-                <li><strong>Payment Agreement:</strong> Clarify payment terms (hourly/daily) <em>before</em> starting work.</li>
-                <li><strong>Emergency Contact:</strong> Keep a family member informed about your work location.</li>
-            </ul>
+            <div className="grid gap-4">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Core Safety Rules</h3>
+                <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
+                        <h4 className="font-bold text-sm text-gray-900 dark:text-white mb-1">💰 Keep Payments in App</h4>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Always use our secure wallet for job payments to stay protected.</p>
+                    </div>
+                    <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
+                        <h4 className="font-bold text-sm text-gray-900 dark:text-white mb-1">👤 Verify Identity</h4>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Ensure the person matches their profile. Ask for ID if needed.</p>
+                    </div>
+                    <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
+                        <h4 className="font-bold text-sm text-gray-900 dark:text-white mb-1">💬 In-App Chat Only</h4>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Don't move conversation to other apps. Our chat is recorded for your safety.</p>
+                    </div>
+                    <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
+                        <h4 className="font-bold text-sm text-gray-900 dark:text-white mb-1">🚩 Report Suspicious Activity</h4>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">If anyone asks for upfront fees or OTPs, report them instantly.</p>
+                    </div>
+                </div>
+            </div>
 
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mt-4">For Employers</h3>
-            <ul className="list-disc pl-5 space-y-2">
-                <li><strong>ID Check:</strong> You have the right to ask for a government ID (Aadhaar/Voter ID) for verification.</li>
-                <li><strong>Clear Instructions:</strong> Be precise about the work to avoid disputes later.</li>
-                <li><strong>Fair Treatment:</strong> Provide water and basic amenities if the work is long-duration.</li>
-            </ul>
+            <div className="grid md:grid-cols-2 gap-6 pt-2">
+                <div>
+                    <h3 className="text-md font-bold text-emerald-600 dark:text-emerald-400 mb-2">For Workers</h3>
+                    <ul className="space-y-2 text-sm">
+                        <li className="flex gap-2"><span>•</span> <strong>Verify Location:</strong> Check the map before accepting.</li>
+                        <li className="flex gap-2"><span>•</span> <strong>Public Places:</strong> Meet in well-known areas first.</li>
+                        <li className="flex gap-2"><span>•</span> <strong>Clear Terms:</strong> Agree on rates before starting.</li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 className="text-md font-bold text-blue-600 dark:text-blue-400 mb-2">For Employers</h3>
+                    <ul className="space-y-2 text-sm">
+                        <li className="flex gap-2"><span>•</span> <strong>ID Check:</strong> You can ask for Aadhaar/Voter ID.</li>
+                        <li className="flex gap-2"><span>•</span> <strong>Clear Instructions:</strong> Be precise about the task.</li>
+                        <li className="flex gap-2"><span>•</span> <strong>Treat Fairly:</strong> Provide water for long-duration jobs.</li>
+                    </ul>
+                </div>
+            </div>
         </div>
     </InfoBaseModal>
 );

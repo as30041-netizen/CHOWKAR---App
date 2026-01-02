@@ -5,7 +5,8 @@ import { App } from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ThemeProvider } from './contexts/ThemeContext';
 
-import { HelmetProvider } from 'react-helmet-async';
+// NOTE: HelmetProvider temporarily disabled to fix DOM manipulation errors in dev
+// import { HelmetProvider } from 'react-helmet-async';
 
 console.log('[App] Initializing Chowkar application...');
 console.log('[App] Environment check:', {
@@ -21,12 +22,10 @@ if (!rootElement) {
 
 const root = ReactDOM.createRoot(rootElement);
 root.render(
-  // NOTE: StrictMode disabled to avoid 'removeChild' errors from browser extensions
-  <HelmetProvider>
-    <ErrorBoundary>
-      <ThemeProvider>
-        <App />
-      </ThemeProvider>
-    </ErrorBoundary>
-  </HelmetProvider>
+  // NOTE: StrictMode and HelmetProvider disabled to avoid 'removeChild' errors
+  <ErrorBoundary>
+    <ThemeProvider>
+      <App />
+    </ThemeProvider>
+  </ErrorBoundary>
 );

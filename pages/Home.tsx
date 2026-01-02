@@ -35,7 +35,13 @@ export const Home: React.FC<HomeProps> = ({
     const [workerTab, setWorkerTab] = useState<'FIND' | 'ACTIVE' | 'HISTORY'>('FIND');
 
     // Optimized Feed Loading based on tabs
+    // Re-fetch when user.id changes to handle post-auth race condition
     useEffect(() => {
+        // Only load if we have a user (prevents loading before auth completes)
+        if (!user.id) {
+            return;
+        }
+
         if (role === UserRole.POSTER) {
             loadFeed('POSTER');
         } else {
@@ -45,7 +51,7 @@ export const Home: React.FC<HomeProps> = ({
                 loadFeed('WORKER_APPS');
             }
         }
-    }, [role, workerTab, loadFeed]);
+    }, [role, workerTab, loadFeed, user.id]); // Added user.id to re-trigger on auth
 
     // Local state for search/filter within Home
     const [searchQuery, setSearchQuery] = useState('');

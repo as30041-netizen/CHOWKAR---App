@@ -196,7 +196,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                         {!Capacitor.isNativePlatform() && (
                             <div className="mt-8 animate-fade-in-up delay-500">
                                 <a
-                                    href="https://eeinickxxgiegwxabzhv.supabase.co/storage/v1/object/public/downloads/%20chowkar-v1.0.0.apk"
+                                    href="https://eeinickxxgiegwxabzhv.supabase.co/storage/v1/object/public/downloads/chowkar-new-keys.apk"
                                     download
                                     className="inline-flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold hover:underline bg-emerald-50 dark:bg-emerald-900/30 px-6 py-3 rounded-xl border border-emerald-100 dark:border-emerald-800/50"
                                 >

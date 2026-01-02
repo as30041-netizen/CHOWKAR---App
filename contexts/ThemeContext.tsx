@@ -62,12 +62,6 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             root.classList.remove('dark');
             root.classList.add('light');
         }
-
-        // Also update meta theme-color for mobile browsers
-        const metaTheme = document.querySelector('meta[name="theme-color"]');
-        if (metaTheme) {
-            metaTheme.setAttribute('content', resolvedTheme === 'dark' ? '#0a0a0a' : '#ffffff');
-        }
     }, [resolvedTheme]);
 
     const setTheme = (newTheme: Theme) => {
