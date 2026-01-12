@@ -1,7 +1,11 @@
-import { supabase } from '../lib/supabase';
+import { supabase, waitForSupabase } from '../lib/supabase';
 import { User, Coordinates } from '../types';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
+import { safeFetch } from './fetchUtils';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const signInWithGoogle = async (): Promise<{ success: boolean; error?: string }> => {
   try {
@@ -70,283 +74,269 @@ export const signOut = async (): Promise<{ success: boolean; error?: string }> =
   }
 };
 
-export const getCurrentUser = async (existingAuthUser?: any): Promise<{ user: User | null; error?: string }> => {
+const mapDbProfileToUser = (profile: any, authEmail?: string, reviews: any[] = []): User => {
+  return {
+    id: profile.id,
+    name: profile.name,
+    phone: profile.phone || '',
+    email: profile.email || authEmail || '',
+    location: profile.location || '',
+    coordinates: profile.latitude && profile.longitude
+      ? { lat: Number(profile.latitude), lng: Number(profile.longitude) }
+      : undefined,
+    rating: Number(profile.rating || 0),
+    profilePhoto: profile.profile_photo || undefined,
+    isPremium: profile.is_premium,
+    aiUsageCount: profile.ai_usage_count || 0,
+    bio: profile.bio || '',
+    skills: profile.skills || [],
+    experience: profile.experience || '',
+    jobsCompleted: profile.jobs_completed || 0,
+    joinDate: profile.join_date ? new Date(profile.join_date).getTime() : Date.now(),
+    verified: profile.verified,
+    reviews: reviews
+  };
+};
+
+export const getCurrentUser = async (
+  existingAuthUser?: any,
+  explicitToken?: string
+): Promise<{ user: User | null; error?: string }> => {
   try {
     let authUser = existingAuthUser;
-
     if (!authUser) {
-      console.log('[AuthService] Fetching auth user from Supabase...');
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError) throw authError;
       authUser = user;
-    } else {
-      console.log('[AuthService] Using provided auth user');
     }
 
     if (!authUser) return { user: null };
 
-    console.log('[AuthService] Fetching profile from DB for:', authUser.id);
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', authUser.id)
-      .maybeSingle();
+    let finalProfile: any = null;
 
-    if (profileError) {
-      console.error('[AuthService] Profile fetch error:', profileError);
-      throw profileError;
-    }
+    // 1. Fetch Source of Truth from DB using SAFE fetch with timeout
+    try {
+      const { safeFetch } = await import('./fetchUtils');
+      console.log('[AuthService] Fetching profile with safety timeout...');
 
-    if (!profile) {
-      console.log('[Auth] Profile not found, creating one for auth user:', authUser.id);
+      // Note: safeFetch automatically handles the token if not provided in headers,
+      // but since we might have an explicitToken passed in, we can optimize by using it if present,
+      // or letting safeFetch handle it. To keep it simple and leverage safeFetch's auto-auth:
+      // We will just pass the URL. If explicitToken is needed for edge cases (like signup where session isn't fully set globally yet), 
+      // we can pass it in headers.
 
-      const userName = authUser.user_metadata?.full_name ||
-        authUser.user_metadata?.name ||
-        authUser.email?.split('@')[0] ||
-        'User';
-
-      // Handle Referral Lookup
-      let referredBy = null;
-      const refCode = localStorage.getItem('chowkar_referred_by_code');
-      if (refCode) {
-        const { data: refUser } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('referral_code', refCode)
-          .maybeSingle();
-        if (refUser) referredBy = refUser.id;
-      }
-
-      const { data: newProfile, error: createError } = await supabase
-        .from('profiles')
-        .insert({
-          id: authUser.id,
-          auth_user_id: authUser.id,
-          name: userName,
-          email: authUser.email || '',
-          phone: '',
-          location: 'Not set',
-          wallet_balance: 0,
-          rating: 5.0,
-          profile_photo: authUser.user_metadata?.avatar_url || null,
-          is_premium: false,
-          ai_usage_count: 0,
-          jobs_completed: 0,
-          join_date: new Date().toISOString(),
-          skills: [],
-          referred_by: referredBy,
-          has_seen_welcome_bonus: false
-        })
-        .select()
-        .single();
-
-      if (createError) {
-        console.error('[Auth] Error creating profile:', createError);
-        return { user: null, error: 'Failed to create user profile' };
-      }
-
-      // Clear referral after use
-      localStorage.removeItem('chowkar_referred_by_code');
-
-      const user: User = {
-        id: newProfile.id,
-        name: newProfile.name,
-        phone: newProfile.phone || '',
-        email: newProfile.email || authUser.email || '',
-        location: newProfile.location,
-        coordinates: undefined,
-        walletBalance: newProfile.wallet_balance,
-        rating: Number(newProfile.rating),
-        profilePhoto: newProfile.profile_photo || undefined,
-        isPremium: newProfile.is_premium,
-        aiUsageCount: newProfile.ai_usage_count,
-        bio: newProfile.bio || undefined,
-        skills: newProfile.skills || [],
-        experience: newProfile.experience || undefined,
-        jobsCompleted: newProfile.jobs_completed,
-        joinDate: new Date(newProfile.join_date).getTime(),
-        referralCode: newProfile.referral_code,
-        referredBy: newProfile.referred_by,
-        verified: newProfile.verified,
-        hasSeenWelcomeBonus: newProfile.has_seen_welcome_bonus,
-        reviews: []
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
       };
 
-      return { user };
+      if (explicitToken) {
+        headers['Authorization'] = `Bearer ${explicitToken}`;
+      }
+
+      // safeFetch defaults to 10s, but for profile we might want to be snappier or just stick to standard.
+      // Let's stick to the standard 10s to avoid "Safety timeout" race conditions in UserContext.
+
+      const response = await safeFetch(
+        `${supabaseUrl}/rest/v1/profiles?id=eq.${authUser.id}`,
+        {
+          method: 'GET',
+          headers,
+          cache: 'no-store'
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Profile fetch failed: ${response.status}`);
+      }
+
+      const profiles = await response.json();
+      let profile = profiles && profiles.length > 0 ? profiles[0] : null;
+
+      // 2. Auto-create if missing
+      if (!profile) {
+        console.log('[AuthService] No profile found. Creating source of truth...');
+        const rawName = authUser.user_metadata?.full_name || authUser.user_metadata?.name || '';
+        const userName = (rawName && rawName.length > 1) ? rawName : (authUser.email?.split('@')[0] || 'User');
+
+        const { data: newProfile, error: createError } = await supabase
+          .from('profiles')
+          .insert({
+            id: authUser.id,
+            auth_user_id: authUser.id,
+            name: userName,
+            email: authUser.email || '',
+            rating: 5.0,
+            join_date: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (createError) {
+          // Fallback for race conditions
+          const { data: existing } = await supabase.from('profiles').select('*').eq('id', authUser.id).single();
+          profile = existing;
+        } else {
+          profile = newProfile;
+        }
+      }
+
+      finalProfile = profile;
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        throw new Error('Profile request timed out. Please check your connection or restart the app.');
+      }
+      throw err;
     }
 
-    console.log('[AuthService] Profile found, processing...');
-    // Fetch Reviews for Self
-    const { data: reviewsData, error: reviewsError } = await supabase
+    if (!finalProfile) return { user: null, error: 'Database sync failed' };
+
+    // 3. Fetch Reviews
+    const { data: reviewsData } = await supabase
       .from('reviews')
-      .select(`
-        id,
-        reviewer_id,
-        rating,
-        comment,
-        created_at,
-        reviewer:profiles!reviewer_id (name)
-      `)
+      .select('*, reviewer:profiles!reviewer_id(name)')
       .eq('reviewee_id', authUser.id)
       .order('created_at', { ascending: false });
 
     const reviews = (reviewsData || []).map((r: any) => ({
       id: r.id,
       reviewerId: r.reviewer_id,
-      reviewerName: r.reviewer?.name || 'Unknown User',
+      reviewerName: r.reviewer?.name || 'User',
       rating: r.rating,
       comment: r.comment,
       date: new Date(r.created_at).getTime(),
       tags: []
     }));
 
-    const user: User = {
-      id: profile.id,
-      name: profile.name,
-      phone: profile.phone || '',
-      email: profile.email || authUser.email || '',
-      location: profile.location,
-      coordinates: profile.latitude && profile.longitude
-        ? { lat: Number(profile.latitude), lng: Number(profile.longitude) }
-        : undefined,
-      walletBalance: profile.wallet_balance,
-      rating: Number(profile.rating),
-      profilePhoto: profile.profile_photo || undefined,
-      isPremium: profile.is_premium,
-      aiUsageCount: profile.ai_usage_count,
-      bio: profile.bio || undefined,
-      skills: profile.skills || [],
-      experience: profile.experience || undefined,
-      jobsCompleted: profile.jobs_completed,
-      joinDate: new Date(profile.join_date).getTime(),
-      referralCode: profile.referral_code,
-      referredBy: profile.referred_by,
-      verified: profile.verified,
-      hasSeenWelcomeBonus: profile.has_seen_welcome_bonus,
-      reviews: reviews
-    };
-
+    const user = mapDbProfileToUser(finalProfile, authUser.email, reviews);
+    console.log(`[AuthService] Source of Truth Synced: ${user.name} (Phone: ${user.phone})`);
     return { user };
+
   } catch (error) {
-    console.error('Error getting current user:', error);
-    return { user: null, error: 'Failed to get current user' };
+    console.error('[AuthService] Critical Sync Error:', error);
+    return { user: null, error: 'Profile synchronization failed' };
   }
 };
 
-export const completeProfile = async (
-  userId: string,
-  phone: string,
-  location: string,
-  coordinates?: Coordinates
-): Promise<{ success: boolean; error?: string }> => {
-  try {
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        phone,
-        location,
-        latitude: coordinates?.lat,
-        longitude: coordinates?.lng
-      })
-      .eq('id', userId);
-
-    if (error) throw error;
-
-    return { success: true };
-  } catch (error) {
-    console.error('Error completing profile:', error);
-    return { success: false, error: 'Failed to complete profile' };
-  }
-};
 
 export const updateUserProfile = async (
   userId: string,
   updates: Partial<User>
 ): Promise<{ success: boolean; error?: string }> => {
   try {
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        name: updates.name,
-        email: updates.email,
-        phone: updates.phone,
-        location: updates.location,
-        latitude: updates.coordinates?.lat,
-        longitude: updates.coordinates?.lng,
-        profile_photo: updates.profilePhoto,
-        bio: updates.bio,
-        skills: updates.skills,
-        experience: updates.experience,
-        referred_by: updates.referredBy
-      })
-      .eq('id', userId);
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
-    if (error) throw error;
+    // Map frontend User fields to DB Profile fields
+    const dbUpdates: any = {};
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.email !== undefined) dbUpdates.email = updates.email;
+    if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
+    if (updates.location !== undefined) dbUpdates.location = updates.location;
+    if (updates.coordinates?.lat !== undefined) dbUpdates.latitude = updates.coordinates.lat;
+    if (updates.coordinates?.lng !== undefined) dbUpdates.longitude = updates.coordinates.lng;
+    if (updates.profilePhoto !== undefined) dbUpdates.profile_photo = updates.profilePhoto;
+    if (updates.bio !== undefined) dbUpdates.bio = updates.bio;
+    if (updates.skills !== undefined) dbUpdates.skills = updates.skills;
+    if (updates.experience !== undefined) dbUpdates.experience = updates.experience;
 
+    console.log('[AuthService] Updating profile via safe fetch...', dbUpdates);
+
+    // Use safeFetch for standardized timeouts and auth injection
+    const response = await safeFetch(
+      `${supabaseUrl}/rest/v1/profiles?id=eq.${userId}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(dbUpdates)
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[AuthService] Profile PATCH failed:', response.status, errorText);
+      throw new Error(`Profile update failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data || data.length === 0) {
+      console.warn('[AuthService] Profile update affected 0 rows. Likely RLS block or invalid userId.');
+      throw new Error('Update failed: No permissions or user not found. Please try logging out and in again.');
+    }
+
+    console.log('[AuthService] Profile update verified in DB');
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating profile:', error);
-    return { success: false, error: 'Failed to update profile' };
+    return { success: false, error: error.message || 'Failed to update profile' };
   }
 };
 
-// Update wallet balance
-export const updateWalletBalance = async (
-  userId: string,
-  newBalance: number
-): Promise<{ success: boolean; error?: string }> => {
-  try {
-    const { error } = await supabase
-      .from('profiles')
-      .update({ wallet_balance: newBalance })
-      .eq('id', userId);
-
-    if (error) throw error;
-
-    return { success: true };
-  } catch (error) {
-    console.error('Error updating wallet:', error);
-    return { success: false, error: 'Failed to update wallet' };
-  }
-};
 
 // Direct profile fetch by ID (skips auth check)
 export const getUserProfile = async (userId: string): Promise<{ user: User | null; error?: string }> => {
   try {
+    // Use safeFetch for standardized timeouts (default 10s) and auth injection
     console.log('[AuthService] Fetching profile directly for:', userId);
-    const { data: profile, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle();
 
-    if (error) throw error;
+    // safeFetch handles the access token automatically if one exists in the session
+    const response = await safeFetch(
+      `${supabaseUrl}/rest/v1/profiles?id=eq.${userId}`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        cache: 'no-store'
+      }
+    );
 
-    if (!profile) return { user: null };
+    if (!response.ok) {
+      throw new Error(`Profile fetch failed: ${response.status}`);
+    }
 
-    // Fetch Reviews
-    const { data: reviewsData, error: reviewsError } = await supabase
-      .from('reviews')
-      .select(`
-        id,
-        reviewer_id,
-        rating,
-        comment,
-        created_at,
-        reviewer:profiles!reviewer_id (name)
-      `)
-      .eq('reviewee_id', userId)
-      .order('created_at', { ascending: false });
+    const profiles = await response.json();
+    console.log('[AuthService] Profile REST response:', profiles?.length || 0, 'profiles');
+    const profile = profiles && profiles.length > 0 ? profiles[0] : null;
 
-    const reviews = (reviewsData || []).map((r: any) => ({
-      id: r.id,
-      reviewerId: r.reviewer_id,
-      reviewerName: r.reviewer?.name || 'Unknown User',
-      rating: r.rating,
-      comment: r.comment,
-      date: new Date(r.created_at).getTime(),
-      tags: [] // Tags not yet implemented in DB
-    }));
+    if (!profile) {
+      console.log('[AuthService] No profile found for userId:', userId);
+      return { user: null };
+    }
+
+    console.log('[AuthService] Profile found:', profile.name, '- fetching reviews via REST...');
+
+    // Fetch reviews via REST API (same fix as profile - Supabase client hangs)
+    let reviews: any[] = [];
+    try {
+      const reviewsResponse = await safeFetch(
+        `${supabaseUrl}/rest/v1/reviews?reviewee_id=eq.${userId}&select=id,reviewer_id,rating,comment,created_at&order=created_at.desc`,
+        {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store'
+        }
+      );
+
+      if (reviewsResponse.ok) {
+        const reviewsData = await reviewsResponse.json();
+        reviews = (reviewsData || []).map((r: any) => ({
+          id: r.id,
+          reviewerId: r.reviewer_id,
+          reviewerName: 'User', // Simplified - no join needed for now
+          rating: r.rating,
+          comment: r.comment,
+          date: new Date(r.created_at).getTime(),
+          tags: []
+        }));
+        console.log('[AuthService] Reviews loaded via REST:', reviews.length);
+      }
+    } catch (reviewErr) {
+      console.warn('[AuthService] Reviews fetch failed (non-fatal):', reviewErr);
+    }
+
+    console.log('[AuthService] Building user object...');
 
     const user: User = {
       id: profile.id,
@@ -357,7 +347,6 @@ export const getUserProfile = async (userId: string): Promise<{ user: User | nul
       coordinates: profile.latitude && profile.longitude
         ? { lat: Number(profile.latitude), lng: Number(profile.longitude) }
         : undefined,
-      walletBalance: profile.wallet_balance,
       rating: Number(profile.rating),
       profilePhoto: profile.profile_photo || undefined,
       isPremium: profile.is_premium,
@@ -367,8 +356,6 @@ export const getUserProfile = async (userId: string): Promise<{ user: User | nul
       experience: profile.experience || undefined,
       jobsCompleted: profile.jobs_completed,
       joinDate: new Date(profile.join_date).getTime(),
-      referralCode: profile.referral_code,
-      referredBy: profile.referred_by,
       verified: profile.verified,
       reviews: reviews
     };
@@ -386,31 +373,26 @@ export const incrementAIUsage = async (
   currentCount: number
 ): Promise<{ success: boolean; error?: string }> => {
   try {
-    const { error } = await supabase
-      .from('profiles')
-      .update({ ai_usage_count: currentCount + 1 })
-      .eq('id', userId);
+    const response = await safeFetch(
+      `${supabaseUrl}/rest/v1/profiles?id=eq.${userId}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ ai_usage_count: currentCount + 1 })
+      }
+    );
 
-    if (error) throw error;
+    if (!response.ok) {
+      throw new Error(`AI Usage update failed: ${response.status}`);
+    }
 
-    return { success: true };
-  } catch (error) {
-    console.error('Error incrementing AI usage:', error);
-    return { success: false, error: 'Failed to update AI usage' };
-  }
-};
-
-export const markWelcomeBonusAsSeen = async (userId: string): Promise<{ success: boolean; error?: string }> => {
-  try {
-    const { error } = await supabase
-      .from('profiles')
-      .update({ has_seen_welcome_bonus: true })
-      .eq('id', userId);
-
-    if (error) throw error;
     return { success: true };
   } catch (error: any) {
-    console.error('Error marking welcome bonus as seen:', error);
-    return { success: false, error: error.message };
+    console.error('Error incrementing AI usage:', error);
+    return { success: false, error: error.message || 'Failed to update AI usage' };
   }
 };
+
+

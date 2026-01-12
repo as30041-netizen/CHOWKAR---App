@@ -4,6 +4,7 @@ import './index.css';
 import { App } from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { initSupabase } from './lib/supabase';
 
 // NOTE: HelmetProvider temporarily disabled to fix DOM manipulation errors in dev
 // import { HelmetProvider } from 'react-helmet-async';
@@ -14,6 +15,9 @@ console.log('[App] Environment check:', {
   hasSupabaseKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
   hasGeminiKey: !!import.meta.env.VITE_GEMINI_API_KEY
 });
+
+// Initialize Supabase client early to ensure auth state is resolved before queries
+initSupabase();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

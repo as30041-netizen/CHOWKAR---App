@@ -1,34 +1,22 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContextDB';
-import { Pencil, Crown, CheckCircle2, MapPin, Star, Award, Briefcase, LogOut } from 'lucide-react';
+import { Pencil, Crown, CheckCircle2, MapPin, Star, Award, Briefcase, LogOut, ChevronRight, Share2, ShieldCheck, Zap, ArrowLeft, TrendingUp } from 'lucide-react';
 import { REVIEW_TAGS_TRANSLATIONS } from '../constants';
+import { useNavigate } from 'react-router-dom';
 
 interface ProfileProps {
-    onEditProfile: () => void;
     setShowSubscriptionModal: (show: boolean) => void;
     onLogout: () => void;
 }
 
-export const Profile: React.FC<ProfileProps> = ({ onEditProfile, setShowSubscriptionModal, onLogout }) => {
-    const { user, t, language } = useUser();
-
-    // Note: jobContext might be needed if we want accurate "jobs posted" count. 
-    // For now using user.jobsCompleted as a proxy or if we have access to jobs context we can filter.
-    // Ideally, we should fetch this or pass it in. 
-    // App.tsx had: const postedJobsCount = jobs.filter(j => j.posterId === user.id).length;
-    // Let's assume we can get it from context or props. For now, I'll use a placeholder or context if available.
-
-    // We need to access jobs to count posted jobs correctly if not in user object.
-    // Since we are decoupling, let's use what's available or pass as prop.
-    // Let's pass it as prop? No, let's use the context here if we can.
-    // Actually, let's just use useJobs() here too.
-
+export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLogout }) => {
+    const navigate = useNavigate();
+    const { user, t, language, showAlert, setShowEditProfile } = useUser();
     const [postedJobsCount, setPostedJobsCount] = useState(0);
 
     React.useEffect(() => {
         const fetchJobCount = async () => {
-            // Guard against invalid UUIDs (e.g. 'u1' mock user)
             const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id);
             if (!isValidUUID) return;
 
@@ -44,159 +32,228 @@ export const Profile: React.FC<ProfileProps> = ({ onEditProfile, setShowSubscrip
         if (user.id) fetchJobCount();
     }, [user.id]);
 
+    const handleShareProfile = () => {
+        if (navigator.share) {
+            navigator.share({
+                title: `Check out ${user.name}'s profile on CHOWKAR`,
+                text: `Hire expert local services from ${user.name}!`,
+                url: window.location.href
+            }).catch(console.error);
+        } else {
+            navigator.clipboard.writeText(window.location.href);
+            showAlert(language === 'en' ? 'Profile link copied!' : 'प्रोफ़ाइल लिंक कॉपी किया गया!', 'success');
+        }
+    };
+
     return (
-        <div className="pb-24 md:pb-6 animate-fade-in">
-            <div className="bg-white dark:bg-gray-900 rounded-b-3xl shadow-sm border-b border-gray-100 dark:border-gray-800 overflow-hidden mb-4 transition-colors">
-                <div className="h-32 bg-gradient-to-r from-emerald-600 to-teal-500 relative">
-                    <button onClick={onEditProfile} className="absolute top-4 right-4 bg-white/20 hover:bg-white/30 p-2 rounded-full text-white transition-colors">
-                        <Pencil size={18} />
-                    </button>
+        <div className="pb-32 md:pb-10 animate-fade-in px-6 max-w-4xl mx-auto space-y-10 pt-8">
+            {/* Navigation Header */}
+            <div className="flex items-center gap-4">
+                <button
+                    onClick={() => window.history.back()}
+                    className="p-4 bg-white dark:bg-gray-900 rounded-3xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-all active:scale-90 shadow-glass border border-gray-100 dark:border-gray-800 group"
+                    title="Go Back"
+                >
+                    <ArrowLeft size={24} strokeWidth={2.5} className="group-hover:-translate-x-0.5 transition-transform" />
+                </button>
+                <div>
+                    <h3 className="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-[0.3em] leading-none mb-1">{t.myProfile || 'Profile'}</h3>
+                    <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight leading-none">{user.name}</h2>
+                </div>
+            </div>
+
+            {/* Header Profile Card */}
+            <div className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-glass border-4 border-white dark:border-gray-800 overflow-hidden transition-all group relative">
+                <div className="h-56 bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 relative overflow-hidden group-hover:scale-[1.02] transition-transform duration-1000">
+                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+
+                    <div className="absolute top-8 right-8 flex gap-3">
+                        <button onClick={handleShareProfile} className="bg-white/20 hover:bg-white/30 backdrop-blur-md p-3.5 rounded-2xl text-white transition-all active:scale-95 group/share border border-white/10 shadow-lg">
+                            <Share2 size={20} className="group-hover/share:scale-110 transition-transform" />
+                        </button>
+                        <button onClick={() => setShowEditProfile(true)} className="bg-white text-emerald-600 hover:bg-emerald-50 p-3.5 rounded-2xl transition-all active:scale-95 group/edit shadow-lg">
+                            <Pencil size={20} className="group-hover/edit:rotate-12 transition-transform" />
+                        </button>
+                    </div>
+
                     {user.isPremium && (
-                        <div className="absolute top-4 left-4 bg-amber-400 text-amber-900 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-sm">
-                            <Crown size={14} fill="currentColor" /> Premium
+                        <div className="absolute top-8 left-8 bg-amber-400 text-amber-950 px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-2xl border border-amber-300 animate-pulse-slow">
+                            <Crown size={14} fill="currentColor" /> Premium Member
                         </div>
                     )}
                 </div>
-                <div className="px-5 pb-6 -mt-12 flex flex-col items-center">
-                    <div className="w-24 h-24 bg-white dark:bg-gray-900 p-1.5 rounded-full shadow-lg mb-3 relative overflow-hidden animate-pop transition-colors">
-                        {user.profilePhoto ? (
-                            <img src={user.profilePhoto} className="w-full h-full object-cover rounded-full" />
-                        ) : (
-                            <div className="w-full h-full bg-emerald-100 dark:bg-emerald-900/50 rounded-full flex items-center justify-center text-3xl font-bold text-emerald-700 dark:text-emerald-400">
-                                {(user.name || '?').charAt(0)}
+
+                <div className="px-8 pb-10 -mt-20 flex flex-col items-center relative z-10">
+                    <div className="w-40 h-40 bg-white dark:bg-gray-900 p-2 rounded-[3rem] shadow-2xl mb-6 relative group/avatar">
+                        <div className="w-full h-full rounded-[2.5rem] overflow-hidden bg-gray-50 dark:bg-gray-800 flex items-center justify-center border-4 border-gray-100 dark:border-gray-800">
+                            {user.profilePhoto ? (
+                                <img src={user.profilePhoto} className="w-full h-full object-cover group-hover/avatar:scale-110 transition-transform duration-700" alt={user.name} />
+                            ) : (
+                                <span className="text-5xl font-black text-emerald-600 dark:text-emerald-400">{(user.name || '?').charAt(0)}</span>
+                            )}
+                        </div>
+                        {user.verified && (
+                            <div className="absolute bottom-2 right-2 bg-blue-500 text-white p-2 rounded-2xl shadow-xl border-4 border-white dark:border-gray-900">
+                                <ShieldCheck size={20} strokeWidth={3} />
                             </div>
                         )}
                     </div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                        {user.name}
-                        {user.verified && <CheckCircle2 size={20} className="text-blue-500 fill-blue-50 dark:fill-blue-900" />}
-                    </h2>
-                    <p className="text-gray-500 dark:text-gray-400 font-medium text-sm flex items-center gap-1">
-                        <MapPin size={14} /> {user.location}
-                    </p>
-                </div>
-            </div>
-            <div className="px-4 space-y-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="bg-white dark:bg-gray-900 p-3 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm text-center transition-colors">
-                        <div className="text-emerald-600 dark:text-emerald-500 mb-1 flex justify-center"><Star size={20} fill="currentColor" /></div>
-                        <div className="font-bold text-gray-900 dark:text-white text-lg">{user.rating}</div>
-                        <div className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">{t.rating}</div>
-                    </div>
-                    <div className="bg-white dark:bg-gray-900 p-3 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm text-center transition-colors">
-                        <div className="text-purple-600 dark:text-purple-500 mb-1 flex justify-center"><Award size={20} /></div>
-                        <div className="font-bold text-gray-900 dark:text-white text-lg">{user.experience || 'N/A'}</div>
-                        <div className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">{t.experience}</div>
-                    </div>
-                    <div className="bg-white dark:bg-gray-900 p-3 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm text-center transition-colors">
-                        <div className="text-blue-600 dark:text-blue-500 mb-1 flex justify-center"><CheckCircle2 size={20} /></div>
-                        <div className="font-bold text-gray-900 dark:text-white text-lg">{user.jobsCompleted || 0}</div>
-                        <div className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">{t.jobsDone}</div>
-                    </div>
-                    <div className="bg-white dark:bg-gray-900 p-3 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm text-center transition-colors">
-                        <div className="text-orange-600 dark:text-orange-500 mb-1 flex justify-center"><Briefcase size={20} /></div>
-                        <div className="font-bold text-gray-900 dark:text-white text-lg">{postedJobsCount}</div>
-                        <div className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase">{t.jobsPosted}</div>
+                    <h2 className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter mb-2">{user.name}</h2>
+                    <div className="flex items-center gap-2.5 text-gray-500 dark:text-gray-400 font-black text-[10px] uppercase tracking-[0.2em] bg-gray-50 dark:bg-gray-800/50 px-6 py-2.5 rounded-full border border-gray-100 dark:border-gray-800 shadow-sm">
+                        <MapPin size={14} className="text-emerald-500" strokeWidth={3} /> {user.location || 'Location not set'}
                     </div>
                 </div>
             </div>
 
-            {/* Referral Section */}
-            <div className="bg-gradient-to-br from-indigo-600 to-violet-600 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mt-10 -mr-10"></div>
-                <div className="relative z-10">
-                    <h3 className="font-bold text-lg mb-1 flex items-center gap-2">
-                        🎁 {language === 'en' ? 'Refer & Earn' : 'रेफर करें और कमाएं'}
-                    </h3>
-                    <p className="text-indigo-100 text-sm mb-4">
-                        {language === 'en'
-                            ? 'Invite friends and earn ₹50 each!'
-                            : 'दोस्तों को आमंत्रित करें और ₹50 कमाएं!'}
-                    </p>
-
-                    <div className="bg-white/20 backdrop-blur-sm border border-white/30 rounded-xl p-3 flex items-center justify-between">
-                        <div>
-                            <p className="text-[10px] text-indigo-200 uppercase font-bold tracking-wider">
-                                {language === 'en' ? 'YOUR CODE' : 'आपका कोड'}
-                            </p>
-                            <p className="text-xl font-mono font-black tracking-widest">
-                                {user.referralCode || '...'}
-                            </p>
+            {/* Market Insights Link (Preserved Data Value) - HIDDEN UNTIL CORE FINALIZED */}
+            {/* 
+            <div 
+                onClick={() => navigate('/analytics')}
+                className="bg-white dark:bg-gray-900 rounded-[3rem] p-8 border-4 border-emerald-500/20 dark:border-emerald-500/10 shadow-glass cursor-pointer hover:scale-[1.01] active:scale-95 transition-all group overflow-hidden relative"
+            >
+                <div className="absolute -right-4 -top-4 w-32 h-32 bg-emerald-50 dark:bg-emerald-900/10 rounded-full blur-3xl group-hover:bg-emerald-100 transition-colors" />
+                <div className="relative z-10 flex items-center justify-between">
+                    <div className="flex items-center gap-5">
+                        <div className="p-4 bg-emerald-50 dark:bg-emerald-900/30 rounded-2xl text-emerald-600 transition-transform group-hover:rotate-12">
+                            <TrendingUp size={28} strokeWidth={3} />
                         </div>
-                        <button
-                            onClick={() => {
-                                if (user.referralCode) {
-                                    navigator.clipboard.writeText(user.referralCode);
-                                    // Simple alert or toast replacement
-                                    // Since we don't have showAlert prop here, we can use a temporary state or just native alert if needed, 
-                                    // or better, rely on user feedback. 
-                                    // Actually, let's just make the button text change temporarily?
-                                    // For simplicity in this edit, I'll assume users know it copied or use a simple alert if environment permits.
-                                    alert(language === 'en' ? 'Code copied!' : 'कोड कॉपी किया गया!');
-                                }
-                            }}
-                            className="bg-white text-indigo-600 px-4 py-2 rounded-lg font-bold text-sm shadow-sm active:scale-95 transition-transform"
-                        >
-                            {language === 'en' ? 'Copy' : 'कॉपी'}
-                        </button>
+                        <div>
+                            <h3 className="text-lg font-black text-gray-900 dark:text-white leading-none mb-1">Market Insights</h3>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Real-time Job Trends & Stats</p>
+                        </div>
                     </div>
+                    <ChevronRight size={24} className="text-gray-300 group-hover:text-emerald-500 group-hover:translate-x-1 transition-all" />
                 </div>
             </div>
+            */}
 
-            <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
-                <h3 className="font-bold text-gray-900 dark:text-white mb-3">{t.aboutMe}</h3>
-                <p className="text-gray-600 dark:text-gray-300 text-sm">{user.bio || "No bio added yet."}</p>
+            {/* Main Stats Grid */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                {[
+                    { icon: Star, value: user.rating.toFixed(1), label: t.rating, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-900/10', border: 'border-amber-100 dark:border-amber-900/30' },
+                    { icon: Award, value: user.experience || 'New', label: t.experience, color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-900/10', border: 'border-purple-100 dark:border-purple-900/30' },
+                    { icon: CheckCircle2, value: user.jobsCompleted || 0, label: t.jobsDone, color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/10', border: 'border-blue-100 dark:border-blue-900/30' },
+                    { icon: Briefcase, value: postedJobsCount, label: t.jobsPosted, color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/10', border: 'border-orange-100 dark:border-orange-900/30' }
+                ].map((stat, i) => (
+                    <div key={i} className={`bg-white dark:bg-gray-900 p-8 rounded-[2.5rem] border-4 ${stat.border} shadow-glass text-center group hover:-translate-y-2 transition-all duration-300`}>
+                        <div className={`${stat.bg} ${stat.color} w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform`}>
+                            <stat.icon size={28} strokeWidth={3} />
+                        </div>
+                        <div className="font-black text-gray-900 dark:text-white text-2xl tracking-tight mb-1">{stat.value}</div>
+                        <div className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">{stat.label}</div>
+                    </div>
+                ))}
             </div>
-            <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
-                <h3 className="font-bold text-gray-900 dark:text-white mb-3">{t.skills}</h3>
-                <div className="flex flex-wrap gap-2">
-                    {user.skills?.map((s, i) => (
-                        <span key={i} className="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-3 py-1.5 rounded-lg text-sm font-semibold border border-emerald-100 dark:border-emerald-800">{s}</span>
-                    ))}
-                    {(!user.skills || user.skills.length === 0) && <span className="text-gray-400 dark:text-gray-500 text-sm italic">No skills added.</span>}
+
+            {/* Double Column Info Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* About Me */}
+                <div className="bg-white dark:bg-gray-900 rounded-[3rem] p-10 border-4 border-white dark:border-gray-800 shadow-glass space-y-6">
+                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.3em] flex items-center gap-3">
+                        <div className="w-1.5 h-4 bg-emerald-500 rounded-full" />
+                        {t.aboutMe}
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-300 text-lg leading-relaxed font-medium">
+                        {user.bio || "No bio added yet. Tell people more about your professional background and service quality."}
+                    </p>
+                </div>
+
+                {/* Skills */}
+                <div className="bg-white dark:bg-gray-900 rounded-[3rem] p-10 border-4 border-white dark:border-gray-800 shadow-glass space-y-6">
+                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.3em] flex items-center gap-3">
+                        <div className="w-1.5 h-4 bg-teal-500 rounded-full" />
+                        Professional Skills
+                    </h3>
+                    <div className="flex flex-wrap gap-3">
+                        {user.skills && user.skills.length > 0 ? user.skills.map((s, i) => (
+                            <span key={i} className="bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-widest px-6 py-3 rounded-2xl border-2 border-emerald-100 dark:border-emerald-800/50 shadow-sm flex items-center gap-2">
+                                <Zap size={12} fill="currentColor" /> {s}
+                            </span>
+                        )) : (
+                            <div className="py-2 px-1 text-gray-400 dark:text-gray-600 italic">No skills added yet. Skill up to get noticed!</div>
+                        )}
+                    </div>
                 </div>
             </div>
 
             {/* Reviews Section */}
-            <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-4 transition-colors">
-                <h3 className="font-bold text-gray-900 dark:text-white">{t.reviews || "Reviews"} ({user.reviews?.length || 0})</h3>
-                {user.reviews && user.reviews.length > 0 ? (
-                    user.reviews.map(review => (
-                        <div key={review.id} className="border-b border-gray-50 dark:border-gray-800 last:border-0 pb-4 last:pb-0">
-                            <div className="flex justify-between items-start mb-1">
-                                <span className="font-bold text-sm text-gray-800 dark:text-gray-200">{review.reviewerName}</span>
-                                <span className="text-[10px] text-gray-400 dark:text-gray-500">{new Date(review.date).toLocaleDateString()}</span>
-                            </div>
-                            <div className="flex items-center gap-1 mb-2">
-                                {[1, 2, 3, 4, 5].map(star => (
-                                    <Star key={star} size={12} fill={star <= review.rating ? "orange" : "transparent"} className={star <= review.rating ? "text-orange-400" : "text-gray-300 dark:text-gray-700"} />
-                                ))}
-                            </div>
-                            {review.tags && review.tags.length > 0 && (
-                                <div className="flex flex-wrap gap-1 mb-2">
-                                    {review.tags.map((tag, i) => (
-                                        <span key={i} className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-[9px] px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700">
-                                            {REVIEW_TAGS_TRANSLATIONS[tag]?.[language === 'hi' ? 'hi' : 'en'] || tag}
-                                        </span>
-                                    ))}
+            <div className="bg-white dark:bg-gray-900 rounded-[3rem] p-12 border-4 border-white dark:border-gray-800 shadow-glass space-y-10">
+                <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.3em] flex items-center gap-3">
+                        <div className="w-1.5 h-4 bg-amber-500 rounded-full" />
+                        Community Reviews
+                    </h3>
+                    <div className="bg-amber-50 dark:bg-amber-900/10 px-4 py-2 rounded-2xl border-2 border-amber-100 dark:border-amber-900/30 flex items-center gap-2">
+                        <Star size={16} fill="orange" className="text-orange-400" />
+                        <span className="text-xs font-black text-amber-700 dark:text-amber-400">{user.reviews?.length || 0} Total</span>
+                    </div>
+                </div>
+
+                <div className="grid gap-12">
+                    {user.reviews && user.reviews.length > 0 ? (
+                        user.reviews.map(review => (
+                            <div key={review.id} className="relative group/review">
+                                <div className="flex justify-between items-start mb-6">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-14 h-14 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center font-black text-emerald-600 text-xl">
+                                            {review.reviewerName?.charAt(0)}
+                                        </div>
+                                        <div>
+                                            <span className="font-black text-gray-900 dark:text-white block text-lg mb-1">{review.reviewerName}</span>
+                                            <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">{new Date(review.date).toLocaleDateString()}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-900/10 px-4 py-2 rounded-2xl border-2 border-amber-100 dark:border-amber-900/30">
+                                        <Star size={16} fill="orange" className="text-orange-400" />
+                                        <span className="text-sm font-black text-amber-600 dark:text-amber-400 ml-1">{review.rating}</span>
+                                    </div>
                                 </div>
-                            )}
-                            <p className="text-xs text-gray-600 dark:text-gray-400 italic">"{review.comment}"</p>
+
+                                {review.tags && review.tags.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 mb-4 ml-18 px-1">
+                                        {review.tags.map((tag, i) => (
+                                            <span key={i} className="text-[9px] font-black uppercase tracking-widest text-gray-400 bg-gray-50 dark:bg-gray-800/50 px-3 py-1.5 rounded-xl border border-gray-100 dark:border-gray-800">
+                                                {REVIEW_TAGS_TRANSLATIONS[tag]?.[language === 'hi' ? 'hi' : 'en'] || tag}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <blockquote className="text-xl text-gray-600 dark:text-gray-400 italic font-medium leading-relaxed pl-6 border-l-4 border-gray-50 dark:border-gray-800">
+                                    "{review.comment}"
+                                </blockquote>
+                            </div>
+                        ))
+                    ) : (
+                        <div className="text-center py-20 bg-gray-50/50 dark:bg-gray-800/20 rounded-[2.5rem] border-4 border-dashed border-gray-100 dark:border-gray-800">
+                            <h4 className="text-xl font-black text-gray-300 dark:text-gray-700 uppercase tracking-widest">No Feedback Yet</h4>
                         </div>
-                    ))
-                ) : (
-                    <p className="text-sm text-gray-400 dark:text-gray-500 italic">No reviews yet.</p>
-                )}
+                    )}
+                </div>
             </div>
 
-            {!user.isPremium && (
-                <button onClick={() => setShowSubscriptionModal(true)} className="w-full bg-gradient-to-r from-amber-400 to-yellow-500 text-amber-950 py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg hover:scale-[1.02] transition-transform">
-                    <Crown size={18} fill="currentColor" /> {t.upgradePremium}
+            {/* Action Buttons */}
+            <div className="grid gap-6">
+                {!user.isPremium && (
+                    <button
+                        onClick={() => setShowSubscriptionModal(true)}
+                        className="w-full flex items-center justify-between px-10 py-6 bg-gradient-to-r from-amber-400 to-yellow-500 text-amber-950 rounded-[2rem] font-black uppercase tracking-[0.2em] text-xs shadow-2xl shadow-amber-500/30 active:scale-95 transition-all group"
+                    >
+                        <div className="flex items-center gap-4">
+                            <Crown size={24} fill="currentColor" className="group-hover:rotate-12 transition-transform" />
+                            {t.upgradePremium}
+                        </div>
+                        <ChevronRight size={24} strokeWidth={3} />
+                    </button>
+                )}
+                <button
+                    onClick={onLogout}
+                    className="w-full flex items-center justify-center gap-4 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 py-6 rounded-[2.5rem] font-black uppercase tracking-[0.2em] text-xs border-4 border-red-100 dark:border-red-900/20 active:scale-95 transition-all hover:bg-red-600 hover:text-white hover:border-red-600"
+                >
+                    <LogOut size={22} strokeWidth={3} /> {t.signOut}
                 </button>
-            )}
-            <button onClick={onLogout} className="w-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 py-3 rounded-xl font-bold flex items-center justify-center gap-2 border border-red-100 dark:border-red-900/30 transition-colors">
-                <LogOut size={18} /> {t.signOut}
-            </button>
+            </div>
         </div>
     );
 };

@@ -13,11 +13,11 @@ export const Skeleton: React.FC<SkeletonProps> = ({
     width,
     height
 }) => {
-    const baseClasses = "animate-pulse bg-gray-200 rounded";
+    const baseClasses = "animate-pulse bg-gray-100 dark:bg-gray-800 rounded-3xl";
     const variantClasses = {
-        text: "h-4 w-full rounded",
+        text: "h-4 w-full",
         circular: "rounded-full",
-        rectangular: "rounded-md"
+        rectangular: "rounded-[2.5rem]"
     };
 
     const style = {
@@ -35,32 +35,36 @@ export const Skeleton: React.FC<SkeletonProps> = ({
 
 export const JobCardSkeleton: React.FC = () => {
     return (
-        <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm space-y-4">
+        <div className="bg-white dark:bg-gray-900 p-8 rounded-[3rem] border-4 border-white dark:border-gray-800 shadow-glass space-y-6">
             {/* Header */}
             <div className="flex justify-between items-start">
-                <div className="space-y-2 flex-1">
-                    <Skeleton variant="text" width="60%" className="h-6" />
-                    <Skeleton variant="text" width="40%" className="h-4" />
+                <div className="space-y-3 flex-1">
+                    <Skeleton variant="text" width="70%" className="h-8" />
+                    <Skeleton variant="text" width="40%" className="h-5" />
                 </div>
-                <Skeleton variant="circular" width={40} height={40} />
+                <Skeleton variant="rectangular" width={64} height={64} className="rounded-2xl" />
             </div>
 
             {/* Tags */}
-            <div className="flex gap-2">
-                <Skeleton variant="rectangular" width={60} height={24} className="rounded-full" />
-                <Skeleton variant="rectangular" width={80} height={24} className="rounded-full" />
+            <div className="flex gap-3">
+                <Skeleton variant="rectangular" width={100} height={32} className="rounded-full" />
+                <Skeleton variant="rectangular" width={120} height={32} className="rounded-full" />
             </div>
 
             {/* Description */}
-            <div className="space-y-2">
-                <Skeleton variant="text" />
-                <Skeleton variant="text" width="90%" />
+            <div className="space-y-3">
+                <Skeleton variant="text" className="h-4" />
+                <Skeleton variant="text" width="92%" className="h-4" />
+                <Skeleton variant="text" width="85%" className="h-4" />
             </div>
 
             {/* Footer */}
-            <div className="flex justify-between items-center pt-2">
-                <Skeleton variant="rectangular" width={80} height={32} className="rounded-lg" />
-                <Skeleton variant="rectangular" width={100} height={40} className="rounded-xl" />
+            <div className="flex justify-between items-center pt-4">
+                <div className="space-y-2">
+                    <Skeleton variant="text" width={60} className="h-4" />
+                    <Skeleton variant="text" width={100} className="h-8" />
+                </div>
+                <Skeleton variant="rectangular" width={140} height={56} className="rounded-[1.5rem]" />
             </div>
         </div>
     );

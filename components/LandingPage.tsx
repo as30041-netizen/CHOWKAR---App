@@ -75,15 +75,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
             <TermsModal isOpen={modalState.terms} onClose={() => closeModal('terms')} />
 
             {/* --- Promo Top Banner --- */}
-            <div className="bg-gradient-to-r from-orange-500 via-red-500 to-orange-500 py-2.5 relative z-50 text-center animate-pulse-subtle">
-                <p className="text-white text-sm font-bold flex items-center justify-center gap-2">
-                    <span className="bg-white text-orange-600 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-widest leading-none">Special Offer</span>
-                    {language === 'en'
-                        ? "Get ₹100 FREE in your wallet on joining! Offer valid till 17 June 2026."
-                        : "जुड़ने पर ₹100 मुफ्त पाएं! यह ऑफर 17 जून 2026 तक मान्य है।"
-                    }
-                </p>
-            </div>
+
 
             {/* --- Navigation --- */}
             <nav className="fixed top-0 left-0 right-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md z-40 border-b border-gray-100 dark:border-gray-800 transition-colors pt-safe">
@@ -134,12 +126,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
 
                 {/* Mobile Menu */}
                 {isMenuOpen && (
-                    <div className="md:hidden absolute top-16 left-0 right-0 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-dark-800 p-4 pt-safe space-y-4 shadow-xl animate-slide-down z-30">
-                        <button onClick={onGetStarted} disabled={isSigningIn} className="block w-full text-center py-3 bg-emerald-600 text-white rounded-xl font-bold disabled:opacity-70">
+                    <div className="md:hidden absolute top-16 left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800 p-4 pt-safe space-y-4 shadow-2xl animate-slide-down z-30">
+                        <button onClick={onGetStarted} disabled={isSigningIn} className="btn btn-primary w-full py-4 text-lg">
                             {isSigningIn ? t.loading : t.heroBtnPoster}
                         </button>
-                        <button onClick={() => setLanguage(language === 'en' ? 'hi' : 'en')} className="w-full py-3 flex items-center justify-center gap-2 border border-gray-200 dark:border-gray-700 rounded-xl font-bold text-gray-700 dark:text-gray-300">
-                            <Globe size={18} /> {language === 'en' ? 'Switch to Hindi' : 'अंग्रेजी में बदलें'}
+                        <button onClick={() => setLanguage(language === 'en' ? 'hi' : 'en')} className="btn btn-secondary w-full py-4 text-lg">
+                            <Globe size={18} /> {language === 'en' ? 'Switch to Hindi' : 'हिंदी में बदलें'}
                         </button>
                     </div>
                 )}
@@ -169,26 +161,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                             {t.heroSubtitle}
                         </p>
 
-                        {/* Promo Badge in Hero */}
-                        <div className="mb-10 animate-bounce duration-3000 inline-block">
-                            <div className="bg-white dark:bg-gray-800 px-6 py-4 rounded-3xl shadow-2xl border-2 border-orange-500 flex items-center gap-4">
-                                <div className="text-4xl">💰</div>
-                                <div className="text-left">
-                                    <p className="text-xs font-bold text-orange-600 uppercase tracking-widest">{language === 'en' ? 'Limited Time' : 'सीमित समय'}</p>
-                                    <p className="text-xl font-black text-gray-900 dark:text-white">
-                                        {language === 'en' ? '₹100 Signup Bonus' : '₹100 साइनअप बोनस'}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
 
-                        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in-up delay-300">
-                            <button onClick={onGetStarted} disabled={isSigningIn} className="w-full sm:w-auto px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-lg shadow-xl shadow-emerald-600/20 transition-all hover:-translate-y-1 hover:shadow-2xl flex items-center justify-center gap-2">
-                                <Briefcase size={24} />
+
+                        <div className="flex flex-col sm:flex-row items-center justify-center gap-6 animate-fade-in-up delay-300">
+                            <button onClick={onGetStarted} disabled={isSigningIn} className="btn btn-primary w-full sm:w-auto px-10 py-5 text-xl shadow-2xl shadow-emerald-600/30 hover:shadow-emerald-600/40 transform hover:-translate-y-1.5 transition-all duration-300">
+                                <Briefcase size={28} className="mr-2" />
                                 {isSigningIn ? t.loading : t.heroBtnPoster}
                             </button>
-                            <button onClick={onGetStarted} disabled={isSigningIn} className="w-full sm:w-auto px-8 py-4 bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-2 border-gray-200 dark:border-gray-700 hover:border-emerald-500 dark:hover:border-emerald-500 rounded-2xl font-bold text-lg transition-all hover:-translate-y-1 flex items-center justify-center gap-2">
-                                <Users size={24} className="text-emerald-600" />
+                            <button onClick={onGetStarted} disabled={isSigningIn} className="btn btn-secondary w-full sm:w-auto px-10 py-5 text-xl shadow-xl hover:shadow-2xl border-2 border-gray-100 dark:border-gray-800 transform hover:-translate-y-1.5 transition-all duration-300">
+                                <Users size={28} className="text-emerald-500 mr-2" />
                                 {isSigningIn ? t.loading : t.heroBtnWorker}
                             </button>
                         </div>
@@ -214,54 +195,58 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="grid md:grid-cols-2 gap-8">
                             {/* Card 1: For Employers */}
-                            <div className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-800 border border-blue-100 dark:border-gray-700 p-8 hover:shadow-2xl transition-all duration-300">
-                                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl group-hover:bg-blue-500/20 transition-all" />
+                            <div className="group relative overflow-hidden rounded-3xl bg-white dark:bg-gray-800 border-2 border-transparent hover:border-blue-500/30 p-8 shadow-xl hover:shadow-2xl transition-all duration-500">
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl group-hover:bg-blue-500/10 transition-all" />
                                 <div className="relative z-10">
-                                    <div className="w-14 h-14 bg-white dark:bg-gray-700 rounded-2xl flex items-center justify-center shadow-sm mb-6 text-blue-600 dark:text-blue-400">
+                                    <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center shadow-sm mb-6 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform duration-500">
                                         <Briefcase size={32} />
                                     </div>
-                                    <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2">
+                                    <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-3">
                                         {t.forEmployers}
                                     </h3>
-                                    <p className="text-gray-600 dark:text-gray-300 mb-6 h-12">
+                                    <p className="text-gray-600 dark:text-gray-400 mb-6 h-12 font-medium leading-relaxed">
                                         {t.employerDesc}
                                     </p>
-                                    <ul className="space-y-3 mb-8">
+                                    <ul className="space-y-4 mb-8">
                                         {['Verified Profiles', 'Direct Calling', 'Negotiate Your Price'].map((item, i) => (
-                                            <li key={i} className="flex items-center gap-2 text-gray-700 dark:text-gray-200 font-medium">
-                                                <CheckCircle size={18} className="text-blue-500" />
+                                            <li key={i} className="flex items-center gap-3 text-gray-700 dark:text-gray-300 font-bold text-sm">
+                                                <div className="p-0.5 bg-blue-500 rounded-full">
+                                                    <CheckCircle size={14} className="text-white" />
+                                                </div>
                                                 <span>{item}</span>
                                             </li>
                                         ))}
                                     </ul>
-                                    <button onClick={onGetStarted} className="inline-flex items-center gap-2 font-bold text-blue-600 dark:text-blue-400 hover:gap-3 transition-all">
+                                    <button onClick={onGetStarted} className="btn-ghost !p-0 font-black text-blue-600 dark:text-blue-400 hover:gap-3 transition-all flex items-center gap-2 border-none">
                                         {t.postJobNow} <ArrowRight size={20} />
                                     </button>
                                 </div>
                             </div>
 
                             {/* Card 2: For Workers */}
-                            <div className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-50 to-green-50 dark:from-gray-800 dark:to-gray-800 border border-emerald-100 dark:border-gray-700 p-8 hover:shadow-2xl transition-all duration-300">
-                                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl group-hover:bg-emerald-500/20 transition-all" />
+                            <div className="group relative overflow-hidden rounded-3xl bg-white dark:bg-gray-800 border-2 border-transparent hover:border-emerald-500/30 p-8 shadow-xl hover:shadow-2xl transition-all duration-500">
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl group-hover:bg-emerald-500/10 transition-all" />
                                 <div className="relative z-10">
-                                    <div className="w-14 h-14 bg-white dark:bg-gray-700 rounded-2xl flex items-center justify-center shadow-sm mb-6 text-emerald-600 dark:text-emerald-400">
+                                    <div className="w-16 h-16 bg-emerald-50 dark:bg-emerald-900/30 rounded-2xl flex items-center justify-center shadow-sm mb-6 text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform duration-500">
                                         <Users size={32} />
                                     </div>
-                                    <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2">
+                                    <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-3">
                                         {t.forWorkers}
                                     </h3>
-                                    <p className="text-gray-600 dark:text-gray-300 mb-6 h-12">
+                                    <p className="text-gray-600 dark:text-gray-400 mb-6 h-12 font-medium leading-relaxed">
                                         {t.workerDesc}
                                     </p>
-                                    <ul className="space-y-3 mb-8">
+                                    <ul className="space-y-4 mb-8">
                                         {['Jobs Near You', 'Keep 100% Earnings', 'Build Your Reputation'].map((item, i) => (
-                                            <li key={i} className="flex items-center gap-2 text-gray-700 dark:text-gray-200 font-medium">
-                                                <CheckCircle size={18} className="text-emerald-500" />
+                                            <li key={i} className="flex items-center gap-3 text-gray-700 dark:text-gray-300 font-bold text-sm">
+                                                <div className="p-0.5 bg-emerald-500 rounded-full">
+                                                    <CheckCircle size={14} className="text-white" />
+                                                </div>
                                                 <span>{item}</span>
                                             </li>
                                         ))}
                                     </ul>
-                                    <button onClick={onGetStarted} className="inline-flex items-center gap-2 font-bold text-emerald-600 dark:text-emerald-400 hover:gap-3 transition-all">
+                                    <button onClick={onGetStarted} className="btn-ghost !p-0 font-black text-emerald-600 dark:text-emerald-400 hover:gap-3 transition-all flex items-center gap-2 border-none">
                                         {t.createProfile} <ArrowRight size={20} />
                                     </button>
                                 </div>
@@ -320,13 +305,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                                 { title: 'Electrician', icon: '⚡', color: 'bg-yellow-100 text-yellow-600' },
                                 { title: 'Plumber', icon: '🔧', color: 'bg-cyan-100 text-cyan-600' },
                                 { title: 'Painter', icon: '🎨', color: 'bg-pink-100 text-pink-600' },
-                                { title: language === 'en' ? 'Refer & Earn' : 'रेफर करें', icon: '🎁', color: 'bg-indigo-100 text-indigo-600' },
                             ].map((cat, i) => (
-                                <button onClick={onGetStarted} key={i} className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm hover:shadow-xl transition-all hover:-translate-y-1 border border-gray-100 dark:border-gray-700 group text-left block w-full">
-                                    <div className={`w-12 h-12 ${cat.color} dark:bg-opacity-20 rounded-xl flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform`}>
+                                <button onClick={onGetStarted} key={i} className="card card-interactive p-6 text-left group">
+                                    <div className={`w-14 h-14 ${cat.color} dark:bg-opacity-20 rounded-2xl flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform duration-500 shadow-sm`}>
                                         {cat.icon}
                                     </div>
-                                    <h3 className="font-bold text-gray-900 dark:text-white text-lg">{cat.title}</h3>
+                                    <h3 className="font-black text-gray-900 dark:text-white text-lg group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{cat.title}</h3>
                                 </button>
                             ))}
                         </div>
@@ -404,14 +388,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                                     { title: { en: 'Connect', hi: 'संपर्क करें' }, icon: <Smartphone size={24} /> },
                                     { title: { en: 'Get Paid', hi: 'भुगतान प्राप्त करें' }, icon: <Calculator size={24} /> },
                                 ].map((step, i) => (
-                                    <div key={i} className="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-lg border-2 border-emerald-50 dark:border-gray-700 text-center relative group">
-                                        <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/50 rounded-2xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 mx-auto mb-6 text-2xl font-bold group-hover:scale-110 transition-transform">
+                                    <div key={i} className="card p-8 text-center relative group hover:border-emerald-500/50 hover:shadow-2xl transition-all duration-500">
+                                        <div className="w-16 h-16 bg-emerald-50 dark:bg-emerald-900/40 rounded-2xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 mx-auto mb-6 text-2xl font-black group-hover:scale-110 transition-transform duration-500 shadow-sm">
                                             {step.icon}
                                         </div>
-                                        <div className="absolute top-4 right-4 text-6xl font-black text-gray-100 dark:text-gray-700 opacity-50 z-[-1] select-none">
+                                        <div className="absolute top-4 right-4 text-7xl font-black text-gray-100/50 dark:text-gray-800/50 z-[-1] select-none group-hover:text-emerald-500/10 transition-colors">
                                             {i + 1}
                                         </div>
-                                        <h3 className="font-bold text-xl text-gray-900 dark:text-white">
+                                        <h3 className="font-black text-xl text-gray-900 dark:text-white tracking-tight">
                                             {language === 'en' ? step.title.en : step.title.hi}
                                         </h3>
                                     </div>
@@ -443,17 +427,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                                 { q: "Is it safe?", a: "We verify phone numbers and allow rating reviews. However, always follow our Safety Tips when meeting someone new." },
                                 { q: "Can I find work in my village?", a: "Yes, Chowkar is designed for local connections. You will see jobs posted within your selected district radius." }
                             ].map((item, i) => (
-                                <div key={i} className="border border-gray-200 dark:border-gray-700 rounded-2xl overflow-hidden">
+                                <div key={i} className="card overflow-hidden !rounded-2xl border-gray-100 dark:border-gray-800 mb-4 transition-all hover:shadow-md">
                                     <button
                                         onClick={() => toggleFaq(i)}
-                                        className="w-full p-6 text-left flex justify-between items-center bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-750 transition-colors"
+                                        className="w-full p-6 text-left flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50 hover:bg-white dark:hover:bg-gray-800 transition-all group"
                                     >
-                                        <span className="font-bold text-gray-900 dark:text-white">{item.q}</span>
-                                        {activeFaq === i ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                                        <span className="font-black text-gray-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{item.q}</span>
+                                        {activeFaq === i ? <ChevronUp size={20} className="text-emerald-600" /> : <ChevronDown size={20} className="text-gray-400 group-hover:text-gray-600" />}
                                     </button>
                                     {activeFaq === i && (
-                                        <div className="p-6 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-t border-gray-100 dark:border-gray-800">
-                                            {item.a}
+                                        <div className="p-6 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border-t border-gray-50 dark:border-gray-800 animate-slide-down">
+                                            <p className="font-medium leading-relaxed">{item.a}</p>
                                         </div>
                                     )}
                                 </div>

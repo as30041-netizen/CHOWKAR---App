@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { supabase } from '../lib/supabase';
-import { fetchJobMessages } from '../services/chatService';
+import { supabase, waitForSupabase } from '../lib/supabase';
+import { fetchJobMessages, blockUser, unblockUser, getRelationshipStatus } from '../services/chatService';
 import { fetchJobContact } from '../services/jobService';
 import { Job, ChatMessage, User } from '../types';
-import { Send, Phone, CheckCircle, ArrowLeft, LockKeyhole, Paperclip, MoreVertical, Check, CheckCheck, Languages, Mic, MicOff, Loader2, Sparkles, Lock, Volume2, Square, Trash2, ShieldAlert, FileText, Flag, ChevronRight, Pencil } from 'lucide-react';
+import { Send, Phone, CheckCircle, ArrowLeft, LockKeyhole, Paperclip, MoreVertical, Check, CheckCheck, Languages, Mic, MicOff, Loader2, Sparkles, Lock, Volume2, Square, Trash2, ShieldAlert, FileText, Flag, ChevronRight, Pencil, Ban } from 'lucide-react';
 import { SafetyTipsModal, CommunityGuidelinesModal, TermsModal } from './InfoModals';
 import { ReportUserModal } from './ReportUserModal';
 import { UserProfileModal } from './UserProfileModal';
@@ -12,10 +12,11 @@ interface ChatInterfaceProps {
   job: Job;
   currentUser: User;
   onClose: () => void;
+  onBackToMessages?: () => void; // NEW: Navigate back to Messages panel
   messages: ChatMessage[];
   onSendMessage: (text: string) => void;
   onIncomingMessage?: (msg: ChatMessage) => void;
-  onCompleteJob: () => void;
+  onCompleteJob: (job?: Job) => void;
   onTranslateMessage: (messageId: string, text: string) => void;
   onDeleteMessage?: (messageId: string) => void;
   onViewJobDetails?: () => void; // New prop optional
@@ -23,6 +24,7 @@ interface ChatInterfaceProps {
   remainingTries?: number;
   onMessageUpdate?: (msg: ChatMessage) => void;
   onEditMessage?: (messageId: string, text: string) => void;
+  receiverId?: string;
 }
 
 const QUICK_REPLIES_WORKER = [
@@ -49,6 +51,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   job,
   currentUser,
   onClose,
+  onBackToMessages,
   messages: liveMessages,
   onSendMessage,
   onIncomingMessage,
@@ -59,13 +62,18 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   onViewJobDetails,
   isPremium,
   remainingTries,
-  onMessageUpdate
+  onMessageUpdate,
+  receiverId: externalReceiverId
 }) => {
-  const { markNotificationsAsReadForJob } = useUser();
+  const { markNotificationsAsReadForJob, setActiveChatId, setActiveJobId } = useUser();
   // Derived Constants
   const isPoster = job.posterId === currentUser.id;
   const acceptedBid = job.bids.find(b => b.id === job.acceptedBidId);
-  const otherPersonId = isPoster ? (acceptedBid?.workerId || '') : job.posterId;
+
+  // Find agreed worker if not accepted yet (for handshake context)
+  const agreedBid = job.bids.find(b => b.negotiationHistory?.some((h: any) => h.agreed));
+
+  const otherPersonId = externalReceiverId || (isPoster ? (acceptedBid?.workerId || agreedBid?.workerId || '') : job.posterId);
 
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -89,20 +97,35 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [historyMessages, setHistoryMessages] = useState<ChatMessage[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
+  // Merge and Deduplicate Messages
+  // Use a Map to ensure unique messages, with liveMessages taking precedence over history
+  const allMessages = React.useMemo(() => {
+    const map = new Map<string, ChatMessage>();
+    historyMessages.forEach(m => map.set(m.id, m));
+    liveMessages.forEach(m => map.set(m.id, m));
+    return Array.from(map.values()).sort((a, b) => a.timestamp - b.timestamp);
+  }, [historyMessages, liveMessages]);
+
+  // Blocking State
+  const [blockingStatus, setBlockingStatus] = useState<{ iBlocked: boolean; theyBlockedMe: boolean }>({ iBlocked: false, theyBlockedMe: false });
+
   // Real-time Broadcast Channel
   const [channel, setChannel] = useState<any>(null);
 
   // Fetch History on Mount
-  // Fetch History on Mount
   useEffect(() => {
     const loadHistory = async () => {
+      if (!job?.id || !currentUser?.id) return;
+
       setIsLoadingHistory(true);
       try {
+        console.log(`[Chat] Fetching messages for job: ${job.id}`);
         const { messages: historyData, error } = await fetchJobMessages(job.id);
         if (error) throw error;
 
-        // Sort by timestamp just in case
+        // Sort by timestamp
         const sorted = (historyData || []).sort((a, b) => a.timestamp - b.timestamp);
+        console.log(`[Chat] Loaded ${sorted.length} messages from history`);
         setHistoryMessages(sorted);
       } catch (error) {
         console.error('Error loading chat history:', error);
@@ -111,17 +134,22 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       }
     };
 
-    if (job.id) {
-      loadHistory();
-    }
-  }, [job.id]);
+    loadHistory();
+  }, [job.id, currentUser?.id]);
 
   // Mark messages AND notifications as read when chat opens
+  // Mark messages AND notifications as read when chat opens OR new messages arrive
   useEffect(() => {
     const markAsRead = async () => {
+      // 0. Only run if we actually have unread messages for US (sent by other)
+      const unreadCount = allMessages.filter(m => !m.read && m.senderId !== currentUser.id).length;
+
+      if (unreadCount === 0) return; // Skip if nothing new to mark read
+
       try {
-        // 1. DB: Mark messages as read via RPC
-        await supabase.rpc('mark_messages_read', {
+        // 1. DB: Mark messages as read via safeRPC
+        const { safeRPC } = await import('../lib/supabase');
+        await safeRPC('mark_messages_read', {
           p_job_id: job.id,
           p_user_id: currentUser.id
         });
@@ -135,10 +163,32 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       }
     };
 
+    let timeoutId: any;
+
     if (job.id && currentUser.id) {
-      markAsRead();
+      // DEBOUNCE: Use a timeout to prevent spamming mark_messages_read RPC
+      timeoutId = setTimeout(markAsRead, 2000); // Wait 2s after last message arrival
+
+      // Set active context to suppress notification spam
+      setActiveChatId(job.id);
+      setActiveJobId(job.id);
+
+      // Fetch blocking status only on mount/job change
+      getRelationshipStatus(otherPersonId).then(status => {
+        setBlockingStatus({ iBlocked: status.iBlocked, theyBlockedMe: status.theyBlockedMe });
+      });
     }
-  }, [job.id, currentUser.id, markNotificationsAsReadForJob]);
+
+    return () => {
+      // 1. Clear any pending markAsRead timeout
+      if (timeoutId) clearTimeout(timeoutId);
+
+      // 2. Clear active context on unmount to resume normal notifications
+      setActiveChatId(null);
+      setActiveJobId(null);
+    };
+    // Trigger when job changes, or when the TOTAL message list changes (to catch new arrivals)
+  }, [job.id, currentUser.id, markNotificationsAsReadForJob, otherPersonId, allMessages.length]);
 
   useEffect(() => {
     const newChannel = supabase.channel(`chat_room:${job.id}`, {
@@ -173,9 +223,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       }, (payload) => {
         // Handle deletion or edit
         const newMsg = payload.new as any;
-        if (newMsg && onMessageUpdate) {
-          // Need to map DB fields to ChatMessage type if they differ, or rely on consistent naming
-          // The DB has created_at etc, standard mapping:
+        if (newMsg) {
           const updated: ChatMessage = {
             id: newMsg.id,
             jobId: newMsg.job_id,
@@ -187,7 +235,14 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             read: newMsg.read,
             readAt: newMsg.read_at ? new Date(newMsg.read_at).getTime() : undefined
           };
-          onMessageUpdate(updated);
+
+          // Update local history state
+          setHistoryMessages(prev => prev.map(m => m.id === updated.id ? updated : m));
+
+          // Also notify parent component
+          if (onMessageUpdate) {
+            onMessageUpdate(updated);
+          }
         }
       })
       .subscribe(async (status) => {
@@ -249,14 +304,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   const quickReplies = isPoster ? QUICK_REPLIES_POSTER : QUICK_REPLIES_WORKER;
 
-  // Merge and Deduplicate Messages
-  const allMessages = [...historyMessages, ...liveMessages]
-    .filter((msg, index, self) =>
-      index === self.findIndex((m) => (
-        m.id === msg.id // Unique ID check
-      ))
-    )
-    .sort((a, b) => a.timestamp - b.timestamp);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -340,8 +387,31 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   const handleTranslateClick = async (msg: ChatMessage) => {
     setTranslatingId(msg.id);
-    await onTranslateMessage(msg.id, msg.text);
-    setTranslatingId(null);
+    try {
+      // 1. Get translation directly
+      const { translateText } = await import('../services/geminiService');
+
+      // Auto-detect target language: logic from App.tsx but localized
+      const hasHindi = /[\u0900-\u097F]/.test(msg.text);
+      const targetLang = hasHindi ? 'en' : 'hi';
+
+      const finalTranslation = await translateText(msg.text, targetLang);
+
+      // 2. Update local history state directly (for historical messages)
+      setHistoryMessages(prev => prev.map(m =>
+        m.id === msg.id ? { ...m, translatedText: finalTranslation } : m
+      ));
+
+      // 3. Also notify parent (optional, keeps sync for session messages)
+      if (onTranslateMessage) {
+        // We call this to trigger any other side effects, but we trust local update for UI
+        onTranslateMessage(msg.id, msg.text);
+      }
+    } catch (error) {
+      console.error('Translation failed', error);
+    } finally {
+      setTranslatingId(null);
+    }
   };
 
   const handleSpeakMessage = (msg: ChatMessage) => {
@@ -398,17 +468,21 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         animate-in slide-in-from-bottom md:slide-in-from-right duration-300 transition-colors">
 
         {/* Header */}
-        <div className="bg-white dark:bg-gray-900 px-4 py-3 shadow-sm border-b border-gray-100 dark:border-gray-800 flex items-center justify-between z-10 pt-safe transition-colors">
+        <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl px-4 py-3 shadow-glass border-b border-gray-100 dark:border-gray-800 flex items-center justify-between z-10 pt-safe transition-all duration-300">
           <div className="flex items-center gap-3">
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full text-gray-600 dark:text-gray-400 transition-colors">
-              <ArrowLeft size={22} />
+            <button
+              onClick={onBackToMessages || onClose}
+              className="btn-ghost !p-2 rounded-full !bg-gray-100 dark:!bg-gray-800 text-gray-500 dark:text-gray-400"
+              title={onBackToMessages ? "Back to Messages" : "Close"}
+            >
+              <ArrowLeft size={20} />
             </button>
 
             <div
-              className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+              className="flex items-center gap-3 cursor-pointer group active:scale-95 transition-transform"
               onClick={() => setShowProfileModal(true)}
             >
-              <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-700 dark:text-emerald-400 font-bold overflow-hidden">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-900/40 dark:to-teal-900/40 border-2 border-white dark:border-gray-800 flex items-center justify-center text-emerald-700 dark:text-emerald-400 font-black text-xl overflow-hidden shadow-sm group-hover:scale-105 transition-transform duration-300">
                 {otherPersonPhoto ? (
                   <img src={otherPersonPhoto} alt={otherPersonName} className="w-full h-full object-cover" />
                 ) : (
@@ -416,13 +490,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 )}
               </div>
               <div>
-                <h2 className="font-bold text-gray-900 dark:text-white leading-none flex items-center gap-1">
+                <h2 className="font-black text-gray-900 dark:text-white leading-none flex items-center gap-1.5 text-base">
                   {otherPersonName}
-                  <ChevronRight size={14} className="text-gray-400" />
+                  <ChevronRight size={14} className="text-gray-400 opacity-60 group-hover:translate-x-0.5 transition-transform" />
                 </h2>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <span className={`w-2 h-2 rounded-full ${isOtherUserOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-300 dark:bg-gray-600'}`}></span>
-                  <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">{isOtherUserOnline ? 'Online' : 'Offline'}</span>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <span className={`w-2 h-2 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.5)] ${isOtherUserOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-300 dark:bg-gray-700'}`}></span>
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500 font-black uppercase tracking-[0.15em]">{isOtherUserOnline ? 'Online' : 'Offline'}</span>
                 </div>
               </div>
             </div>
@@ -430,16 +504,16 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
           <div className="flex items-center gap-1">
             {otherPersonPhone ? (
-              <a href={`tel:${otherPersonPhone}`} className="p-2.5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors">
+              <a href={`tel:${otherPersonPhone}`} className="btn-ghost !p-2.5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
                 <Phone size={20} />
               </a>
             ) : (
-              <div className="p-2 text-gray-300 dark:text-gray-600">
+              <div className="p-2 text-gray-300 dark:text-gray-600 opacity-50">
                 <LockKeyhole size={20} />
               </div>
             )}
             <div className="relative">
-              <button onClick={() => setShowMenu(!showMenu)} className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+              <button onClick={() => setShowMenu(!showMenu)} className="btn-ghost !p-2 rounded-full text-gray-400 dark:text-gray-500">
                 <MoreVertical size={20} />
               </button>
               {showMenu && (
@@ -452,6 +526,26 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                     <button onClick={() => { setShowMenu(false); setShowReportModal(true); }} className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-medium text-red-600 dark:text-red-400 flex items-center gap-2">
                       <Flag size={16} /> Report User
                     </button>
+                    <button
+                      onClick={async () => {
+                        setShowMenu(false);
+                        if (blockingStatus.iBlocked) {
+                          if (confirm('Unblock this user?')) {
+                            await unblockUser(otherPersonId);
+                            setBlockingStatus(prev => ({ ...prev, iBlocked: false }));
+                          }
+                        } else {
+                          if (confirm('Block this user? They will not be able to message you.')) {
+                            await blockUser(otherPersonId);
+                            setBlockingStatus(prev => ({ ...prev, iBlocked: true }));
+                          }
+                        }
+                      }}
+                      className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center gap-2 border-t border-gray-100 dark:border-gray-700"
+                    >
+                      <Ban size={16} className={blockingStatus.iBlocked ? "text-emerald-500" : "text-gray-400"} />
+                      {blockingStatus.iBlocked ? 'Unblock User' : 'Block User'}
+                    </button>
                   </div>
                 </>
               )}
@@ -460,10 +554,38 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         </div>
 
         {/* Job Context Banner */}
-        <div className="bg-emerald-50/80 backdrop-blur-sm px-4 py-2 flex justify-between items-center text-xs border-b border-emerald-100">
-          <span className="font-medium text-emerald-800 line-clamp-1 flex-1">{job.title}</span>
-          <span className="font-bold text-emerald-700 ml-2">₹{acceptedBid?.amount || job.budget}</span>
+        <div className="bg-gradient-to-r from-emerald-500 to-teal-600 px-5 py-2.5 flex justify-between items-center shadow-lg relative z-0">
+          <div className="flex items-center gap-2 overflow-hidden">
+            <div className="p-1 bg-white/20 rounded-lg backdrop-blur-sm">
+              <FileText size={14} className="text-white" />
+            </div>
+            <span className="font-black text-white text-[11px] line-clamp-1 uppercase tracking-widest">{job.title}</span>
+          </div>
+          <span className="bg-white/20 backdrop-blur-md text-white text-[10px] font-black px-3 py-1.5 rounded-full shadow-inner border border-white/10 ml-3 whitespace-nowrap">
+            ₹{acceptedBid?.amount || job.budget}
+          </span>
         </div>
+
+        {/* Phone Number Prompt Banner */}
+        {(!currentUser.phone || currentUser.phone.length < 10) && (
+          <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-4 py-3 flex items-center gap-3 shadow-lg">
+            <Phone size={18} className="text-white flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-white text-xs font-black leading-tight">Add your phone number</p>
+              <p className="text-white/80 text-[10px] font-medium mt-0.5">Share contact info to coordinate with {otherPersonName}</p>
+            </div>
+            <button
+              onClick={() => {
+                // Navigate to profile to add phone
+                onClose();
+                setTimeout(() => window.location.href = '/profile', 100);
+              }}
+              className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white text-[10px] font-black px-3 py-1.5 rounded-full whitespace-nowrap transition-all active:scale-95"
+            >
+              ADD NOW
+            </button>
+          </div>
+        )}
 
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-[#e5ddd5] dark:bg-gray-950 bg-opacity-10 transition-colors" style={{ backgroundImage: 'radial-gradient(var(--bg-pattern-color, #cbd5e1) 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
@@ -484,25 +606,25 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
               <div className="space-y-2">
                 {(msgs as ChatMessage[]).map((msg) => {
-                  const isMe = msg.senderId === currentUser.id;
+                  const isMe = msg.senderId?.toLowerCase() === currentUser.id?.toLowerCase();
                   const isThisSpeaking = speakingMessageId === msg.id;
 
                   // Inline Editing Mode
                   if (editingMessageId === msg.id) {
                     return (
-                      <div key={msg.id} className="flex justify-end mb-2 w-full animate-in fade-in zoom-in-95">
-                        <div className="bg-white dark:bg-gray-800 p-2 rounded-2xl shadow-md border border-emerald-100 dark:border-emerald-900 border-l-4 border-l-emerald-500 w-[85%] max-w-[400px]">
+                      <div key={msg.id} className="flex justify-end mb-4 w-full animate-in fade-in slide-in-from-right-4 duration-300">
+                        <div className="bg-white dark:bg-gray-800 p-3 rounded-3xl shadow-xl border-2 border-emerald-500/20 w-[90%] max-w-[400px]">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600/60 mb-2 ml-1">Editing Message</p>
                           <textarea
-                            className="w-full text-sm p-2 bg-gray-50 dark:bg-gray-900 rounded-lg outline-none focus:ring-1 ring-emerald-500 text-gray-800 dark:text-gray-100 resize-none"
+                            className="input-base !bg-gray-50 dark:!bg-gray-900 !py-3 !px-4 w-full text-sm outline-none ring-offset-2 ring-emerald-500/50 transition-all text-gray-800 dark:text-gray-100 resize-none min-h-[80px]"
                             value={editText}
                             onChange={(e) => setEditText(e.target.value)}
-                            rows={3}
                             autoFocus
                           />
-                          <div className="flex justify-end gap-2 mt-2">
+                          <div className="flex justify-end gap-2 mt-3">
                             <button
                               onClick={() => setEditingMessageId(null)}
-                              className="text-xs px-3 py-1.5 rounded-lg font-medium text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
+                              className="btn btn-secondary !py-2 !px-5 !text-[10px] font-black uppercase tracking-widest"
                             >
                               Cancel
                             </button>
@@ -513,9 +635,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                                 }
                                 setEditingMessageId(null);
                               }}
-                              className="text-xs px-3 py-1.5 rounded-lg font-bold bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
+                              className="btn btn-primary !py-2 !px-6 !text-[10px] font-black uppercase tracking-widest"
                             >
-                              Save
+                              Update
                             </button>
                           </div>
                         </div>
@@ -548,28 +670,28 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                         )}
 
                         <div
-                          className={`relative px-4 py-2 rounded-2xl text-sm shadow-sm ${isMe
-                            ? 'bg-emerald-600 text-white rounded-br-none'
-                            : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 border border-gray-100 dark:border-gray-700 rounded-bl-none'
+                          className={`relative px-5 py-3 rounded-2xl text-sm shadow-md transition-all duration-300 transform font-medium ${isMe
+                            ? 'bg-gradient-to-br from-emerald-600 to-teal-600 text-white rounded-br-none shadow-emerald-500/10'
+                            : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 border border-gray-100/50 dark:border-gray-800 rounded-bl-none shadow-gray-400/5'
                             }`}
                         >
                           <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
                           {msg.translatedText && (
-                            <div className={`mt-2 pt-2 border-t ${isMe ? 'border-emerald-500/50' : 'border-gray-100 dark:border-gray-700'}`}>
-                              <div className="flex items-center gap-1 mb-1 opacity-70">
-                                <Sparkles size={10} />
-                                <span className="text-[10px] font-bold uppercase">Translated</span>
+                            <div className={`mt-3 pt-3 border-t ${isMe ? 'border-white/10' : 'border-gray-100 dark:border-gray-700'}`}>
+                              <div className="flex items-center gap-1.5 mb-1.5 opacity-60">
+                                <Sparkles size={12} className="animate-pulse" />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Translated</span>
                               </div>
-                              <p className="leading-relaxed italic opacity-90">{msg.translatedText}</p>
+                              <p className="leading-relaxed italic opacity-95 text-[13px]">{msg.translatedText}</p>
                             </div>
                           )}
-                          <div className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${isMe ? 'text-emerald-100' : 'text-gray-400 dark:text-gray-500'}`}>
+                          <div className={`flex items-center justify-end gap-1.5 mt-2.5 text-[9px] font-black uppercase tracking-widest ${isMe ? 'text-white/60' : 'text-gray-400 dark:text-gray-500'}`}>
                             <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                             {isMe && (
                               msg.read ? (
-                                <CheckCheck size={14} className="opacity-80" />
+                                <CheckCheck size={14} className="text-white" />
                               ) : (
-                                <Check size={14} className="opacity-80" />
+                                <Check size={14} className="opacity-60" />
                               )
                             )}
                           </div>
@@ -585,7 +707,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                             >
                               {isThisSpeaking ? <Square size={12} fill="currentColor" /> : <Volume2 size={12} />}
                             </button>
-                            {onDeleteMessage && (
+                            {onDeleteMessage && !msg.isDeleted && (
                               <button
                                 onClick={() => {
                                   if (confirm('Delete message?')) onDeleteMessage(msg.id);
@@ -618,15 +740,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             </div>
           ))}
           {isOtherTyping && (
-            <div className="flex items-center gap-2 px-1 py-1 opacity-70 animate-pulse mt-2 ml-2">
-              <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                <div className="flex gap-1">
-                  <div className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce"></div>
-                  <div className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce delay-75"></div>
-                  <div className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce delay-150"></div>
-                </div>
+            <div className="flex items-center gap-3 px-3 py-2 bg-white/50 dark:bg-gray-800/30 backdrop-blur-sm rounded-full w-fit animate-in fade-in slide-in-from-left-4 duration-500 mt-2 ml-2 border border-white dark:border-gray-800 shadow-sm">
+              <div className="flex gap-1">
+                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce"></div>
               </div>
-              <span className="text-xs text-gray-500 font-medium">Typing...</span>
+              <span className="text-[10px] text-gray-500 dark:text-gray-500 font-black uppercase tracking-[0.15em]">{otherPersonName.split(' ')[0]} typing...</span>
             </div>
           )}
           <div ref={messagesEndRef} />
@@ -642,7 +762,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 <button
                   key={i}
                   onClick={() => handleSend(reply)}
-                  className="whitespace-nowrap px-3 py-1.5 bg-white dark:bg-gray-800 border border-emerald-100 dark:border-emerald-900/30 rounded-full text-xs text-emerald-700 dark:text-emerald-400 font-medium hover:bg-emerald-50 dark:hover:bg-emerald-900/30 active:scale-95 transition-all shadow-sm"
+                  className="badge badge-info !bg-white dark:!bg-gray-800 border-emerald-100 dark:border-emerald-900/30 font-bold hover:scale-105 active:scale-95 transition-all shadow-sm whitespace-nowrap cursor-pointer"
                 >
                   {reply}
                 </button>
@@ -654,19 +774,19 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             {/* Archive Banner for COMPLETED jobs */}
             {isArchived && (
               <div className="mb-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 p-4 rounded-xl text-center">
-                <div className="inline-flex items-center gap-2 text-emerald-600 dark:text-emerald-500 font-bold bg-emerald-50 dark:bg-emerald-900/20 px-4 py-2 rounded-full mb-3">
-                  <CheckCircle size={16} />
+                <div className="inline-flex items-center gap-2 text-emerald-600 dark:text-emerald-500 font-bold bg-emerald-50 dark:bg-emerald-900/20 px-4 py-2 rounded-full mb-3 text-xs">
+                  <CheckCircle size={14} />
                   This job has been completed
                 </div>
 
                 <button
-                  onClick={onCompleteJob}
-                  className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 rounded-xl shadow-sm flex items-center justify-center gap-2 transition-all active:scale-95 mb-2"
+                  onClick={() => onCompleteJob(job)}
+                  className="btn btn-primary w-full bg-amber-500 hover:bg-amber-600 mb-2"
                 >
                   <Sparkles size={18} fill="white" />
                   Rate Your Experience
                 </button>
-                <p className="text-xs text-gray-400">
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-none">
                   Chat is archived and read-only.
                 </p>
               </div>
@@ -676,26 +796,41 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             {isPoster && job.status === 'IN_PROGRESS' && (
               <div className="mb-3 px-1">
                 <button
-                  onClick={onCompleteJob}
-                  className="w-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-400 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+                  onClick={() => onCompleteJob(job)}
+                  className="btn btn-outline w-full !text-emerald-800 dark:!text-emerald-400"
                 >
                   <CheckCircle size={18} className="mr-2 text-emerald-600 dark:text-emerald-500" /> Mark Job as Completed
                 </button>
               </div>
             )}
 
-            {/* Input area - hidden for archived jobs */}
-            {!isArchived && (
-              <>
-                <div className="flex items-end gap-2">
-                  <button
-                    onClick={handleVoiceInput}
-                    className={`p-3 rounded-full transition-colors ${isListening ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 animate-pulse' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-                  >
-                    {isListening ? <MicOff size={20} /> : <Mic size={20} />}
-                  </button>
+            {/* Input area - hidden for archived jobs or blocked users */}
+            {!isArchived && !blockingStatus.iBlocked && !blockingStatus.theyBlockedMe && (
+              <div className="flex items-end gap-3 px-1">
+                <button
+                  onClick={handleVoiceInput}
+                  className={`p-3.5 rounded-2xl transition-all active:scale-90 shadow-sm border ${isListening ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-red-200 animate-pulse' : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-100 dark:border-gray-800 hover:text-emerald-500'}`}
+                >
+                  {isListening ? <MicOff size={22} strokeWidth={2.5} /> : <Mic size={22} strokeWidth={2.5} />}
+                </button>
 
-                  <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center min-h-[44px] px-4 py-2 transition-colors">
+                {isListening ? (
+                  <div className="flex-1 bg-gradient-to-r from-red-50 to-red-100 dark:from-red-900/40 dark:to-red-800/20 rounded-3xl flex items-center justify-between min-h-[52px] px-6 py-3 border border-red-200 dark:border-red-800 animate-pop">
+                    <div className="flex items-center gap-4">
+                      <span className="text-red-600 dark:text-red-400 font-black uppercase tracking-widest text-xs animate-pulse">Listening... Speak Now</span>
+                      <div className="flex gap-1 items-center h-4">
+                        <div className="w-1 bg-red-500 rounded-full animate-mic-bounce h-2"></div>
+                        <div className="w-1 bg-red-500 rounded-full animate-mic-bounce h-3 [animation-delay:0.2s]"></div>
+                        <div className="w-1 bg-red-500 rounded-full animate-mic-bounce h-2 [animation-delay:0.4s]"></div>
+                        <div className="w-1 bg-red-500 rounded-full animate-mic-bounce h-2.5 [animation-delay:0.1s]"></div>
+                      </div>
+                    </div>
+                    <button onClick={() => setIsListening(false)} className="text-red-400 hover:text-red-600 dark:text-red-400 dark:hover:text-red-200 font-bold text-[10px] uppercase tracking-widest px-2">
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex-1 bg-gray-50 dark:bg-gray-800 rounded-3xl flex items-center min-h-[52px] px-5 py-3 border border-gray-100 dark:border-gray-800 focus-within:border-emerald-500/50 focus-within:shadow-[0_0_20px_rgba(16,185,129,0.1)] transition-all shadow-inner">
                     <textarea
                       value={inputText}
                       onChange={handleInputChange}
@@ -705,25 +840,45 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                           handleSend();
                         }
                       }}
-                      placeholder="Type a message..."
-                      className="flex-1 bg-transparent outline-none text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 max-h-24 resize-none"
+                      placeholder="Type message here..."
+                      className="flex-1 bg-transparent outline-none text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 max-h-32 resize-none font-medium"
                       rows={1}
                       style={{ lineHeight: '1.5' }}
                     />
                   </div>
+                )}
 
+                <button
+                  onClick={() => handleSend()}
+                  disabled={!inputText.trim()}
+                  className={`p-4 rounded-2xl transition-all duration-300 active:scale-90 shadow-lg flex items-center justify-center ${inputText.trim()
+                    ? 'bg-gradient-to-br from-emerald-600 to-teal-600 text-white shadow-emerald-600/20'
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                    }`}
+                >
+                  <Send size={22} strokeWidth={2.5} className={inputText.trim() ? "translate-x-0.5 -translate-y-0.5" : ""} />
+                </button>
+              </div>
+            )}
+
+            {(blockingStatus.iBlocked || blockingStatus.theyBlockedMe) && (
+              <div className="p-4 text-center bg-gray-100 dark:bg-gray-800 rounded-2xl mx-2 mb-2">
+                <p className="text-sm font-medium text-gray-500 flex items-center justify-center gap-2">
+                  <Ban size={16} />
+                  {blockingStatus.iBlocked ? 'You have blocked this user.' : 'You cannot reply to this conversation.'}
+                </p>
+                {blockingStatus.iBlocked && (
                   <button
-                    onClick={() => handleSend()}
-                    disabled={!inputText.trim()}
-                    className={`p-3 rounded-full shadow-md transition-all transform hover:scale-105 active:scale-95 ${inputText.trim()
-                      ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                      : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-default'
-                      }`}
+                    onClick={async () => {
+                      await unblockUser(otherPersonId);
+                      setBlockingStatus(prev => ({ ...prev, iBlocked: false }));
+                    }}
+                    className="text-emerald-600 text-xs font-bold mt-2 uppercase tracking-wider"
                   >
-                    <Send size={20} className={inputText.trim() ? "ml-0.5" : ""} />
+                    Unblock
                   </button>
-                </div>
-              </>
+                )}
+              </div>
             )}
           </div>
         </div>

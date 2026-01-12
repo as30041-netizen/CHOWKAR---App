@@ -8,7 +8,8 @@ export enum UserRole {
 export enum JobStatus {
   OPEN = 'OPEN',
   IN_PROGRESS = 'IN_PROGRESS',
-  COMPLETED = 'COMPLETED'
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED'
 }
 
 export interface Coordinates {
@@ -33,7 +34,6 @@ export interface User {
   phone?: string; // PRIVATE: Only visible to self or accepted counterparty
   location?: string; // PRIVATE
   coordinates?: Coordinates; // PRIVATE
-  walletBalance?: number; // PRIVATE
   rating: number;
   profilePhoto?: string;
   isPremium?: boolean;
@@ -43,10 +43,7 @@ export interface User {
   experience?: string;
   jobsCompleted?: number;
   joinDate?: number;
-  referralCode?: string;
-  referredBy?: string;
   verified?: boolean;
-  hasSeenWelcomeBonus?: boolean;
   reviews?: Review[];
 }
 
@@ -71,7 +68,6 @@ export interface Bid {
   message: string;
   createdAt: number;
   status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
-  isHighlighted?: boolean;
   negotiationHistory: NegotiationEntry[]; // Track the back and forth
   posterId?: string; // Denormalized for simpler RLS/Realtime
 }
@@ -95,8 +91,6 @@ export interface Job {
   bids: Bid[];
   acceptedBidId?: string;
   image?: string; // Base64 or URL of job image
-  isBoosted?: boolean;
-  boostExpiry?: number;
   reviews?: Review[];
   // === FEED OPTIMIZATION FIELDS (populated by get_home_feed RPC) ===
   bidCount?: number;      // Pre-computed bid count (avoids fetching all bids)
@@ -106,6 +100,7 @@ export interface Job {
   myBidLastNegotiationBy?: UserRole; // Last turn in negotiation (for card UI)
   hasNewBid?: boolean;    // Transient: Poster has unread new bid
   hasNewCounter?: boolean; // Transient: Poster has unread new counter
+  hasAgreement?: boolean;  // Pre-computed: At least one worker has agreed to terms
 }
 
 export interface ChatMessage {
@@ -124,14 +119,6 @@ export interface ChatMessage {
   mediaDuration?: number; // Duration in seconds for voice/video
 }
 
-export interface Transaction {
-  id: string;
-  userId: string;
-  amount: number;
-  type: 'CREDIT' | 'DEBIT';
-  description: string;
-  timestamp: number;
-}
 
 export interface Notification {
   id: string;

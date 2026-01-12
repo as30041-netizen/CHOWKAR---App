@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useUser } from '../contexts/UserContextDB';
 import { useJobs } from '../contexts/JobContextDB';
 import { JobCard } from '../components/JobCard';
@@ -6,9 +6,15 @@ import { JobCardSkeleton } from '../components/Skeleton';
 import { Job, UserRole, JobStatus } from '../types';
 import { calculateDistance } from '../utils/geo';
 import { CATEGORIES, CATEGORY_TRANSLATIONS } from '../constants';
-import { Search, SlidersHorizontal, CheckCircle2, Mic, MicOff, Briefcase, RotateCw, Loader2, ArrowUpDown } from 'lucide-react';
+import {
+    Search, SlidersHorizontal, Mic, MicOff,
+    Briefcase, RotateCw, Loader2, ArrowUpDown, Plus,
+    Sparkles, MapPin, Zap, Clock, History, LayoutDashboard,
+    ChevronRight, ArrowRight, Bell, Star, XCircle
+} from 'lucide-react';
+import { FilterModal } from '../components/FilterModal';
+import { useNavigate } from 'react-router-dom';
 
-// Sort options type
 type SortOption = 'NEWEST' | 'BUDGET_HIGH' | 'BUDGET_LOW' | 'NEAREST';
 
 interface HomeProps {
@@ -23,53 +29,59 @@ interface HomeProps {
     showAlert: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
-import { FilterModal } from '../components/FilterModal';
-
 export const Home: React.FC<HomeProps> = ({
     onBid, onViewBids, onChat, onEdit, onClick, onReplyToCounter, onWithdrawBid,
     setShowFilterModal: _setShowFilterModal, showAlert
 }) => {
-    const { user, role, setRole, t, language, notifications } = useUser();
-    const { jobs, loading, error, refreshJobs, fetchMoreJobs, hasMore, isLoadingMore, loadFeed } = useJobs();
+    const { user, role, setRole, t, language, notifications, isAuthLoading } = useUser();
+    const { jobs, loading, isRevalidating, refreshJobs, fetchMoreJobs, hasMore, isLoadingMore, loadFeed, hideJob, error: jobsError } = useJobs();
+    const [posterTab, setPosterTab] = useState<'ACTIVE' | 'HISTORY'>('ACTIVE');
     const [dashboardTab, setDashboardTab] = useState<'ALL' | 'OPEN' | 'IN_PROGRESS' | 'COMPLETED'>('ALL');
     const [workerTab, setWorkerTab] = useState<'FIND' | 'ACTIVE' | 'HISTORY'>('FIND');
+    const navigate = useNavigate();
 
-    // Optimized Feed Loading based on tabs
-    // Re-fetch when user.id changes to handle post-auth race condition
-    useEffect(() => {
-        // Only load if we have a user (prevents loading before auth completes)
-        if (!user.id) {
-            return;
-        }
-
-        if (role === UserRole.POSTER) {
-            loadFeed('POSTER');
-        } else {
-            if (workerTab === 'FIND') {
-                loadFeed('HOME');
-            } else {
-                loadFeed('WORKER_APPS');
-            }
-        }
-    }, [role, workerTab, loadFeed, user.id]); // Added user.id to re-trigger on auth
-
-    // Local state for search/filter within Home
+    // Search & Filter State
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string>('All');
     const [isSearchingVoice, setIsSearchingVoice] = useState(false);
-
-
-    // Filter Logic integrated
     const [filterLocation, setFilterLocation] = useState('');
     const [filterMinBudget, setFilterMinBudget] = useState('');
     const [filterMaxDistance, setFilterMaxDistance] = useState('');
     const [showFilters, setShowFilters] = useState(false);
-
-    // Sorting state
     const [sortBy, setSortBy] = useState<SortOption>('NEWEST');
     const [showSortMenu, setShowSortMenu] = useState(false);
 
-    // Sort options with translations
+    // Track if this is the first load (page refresh scenario)
+    const isFirstLoadRef = React.useRef(true);
+
+    useEffect(() => {
+        if (isAuthLoading || !user.id) return;
+
+        const loadData = async () => {
+            // On first load (page refresh), wait briefly for session refresh to complete
+            if (isFirstLoadRef.current) {
+                isFirstLoadRef.current = false;
+                console.log('[Home] First load detected, waiting for session refresh...');
+                await new Promise(resolve => setTimeout(resolve, 800)); // Give session refresh time
+            }
+
+            const type = role === UserRole.POSTER ? 'POSTER' : (workerTab === 'FIND' ? 'HOME' : 'WORKER_APPS');
+            console.log(`[Home] Triggering feed load: role=${role}, workerTab=${workerTab}, posterTab=${posterTab}, finalType=${type}`);
+            loadFeed(type, 0, user.id);
+        };
+
+        loadData();
+    }, [role, workerTab, posterTab, dashboardTab, loadFeed, user.id, isAuthLoading]);
+
+    // Handle explicit refresh
+    const handleRefresh = async () => {
+        if (user.id) {
+            await refreshJobs(user.id);
+        } else {
+            await refreshJobs();
+        }
+    };
+
     const sortOptions: { value: SortOption; labelEn: string; labelHi: string }[] = [
         { value: 'NEWEST', labelEn: 'Newest First', labelHi: 'नया पहले' },
         { value: 'BUDGET_HIGH', labelEn: 'Budget: High to Low', labelHi: 'बजट: ज्यादा से कम' },
@@ -80,7 +92,11 @@ export const Home: React.FC<HomeProps> = ({
     const toggleVoiceInput = () => {
         const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
         if (!SpeechRecognition) { showAlert("Voice input not supported", 'error'); return; }
-        if (isSearchingVoice) { setIsSearchingVoice(false); try { (window as any).recognition?.stop(); } catch (e) { } return; }
+        if (isSearchingVoice) {
+            setIsSearchingVoice(false);
+            try { (window as any).recognition?.stop(); } catch (e) { }
+            return;
+        }
 
         setIsSearchingVoice(true);
         try {
@@ -89,347 +105,401 @@ export const Home: React.FC<HomeProps> = ({
             recognition.continuous = false;
             recognition.interimResults = false;
             recognition.lang = language === 'hi' ? 'hi-IN' : 'en-IN';
-            recognition.onresult = (event: any) => { setSearchQuery(event.results[0][0].transcript); setIsSearchingVoice(false); };
+            recognition.onresult = (event: any) => {
+                setSearchQuery(event.results[0][0].transcript);
+                setIsSearchingVoice(false);
+            };
             recognition.onerror = () => setIsSearchingVoice(false);
             recognition.onend = () => setIsSearchingVoice(false);
             recognition.start();
         } catch (e) { setIsSearchingVoice(false); }
     };
 
+    // 1. Memoize jobs with distance calculated (only when jobs or location change)
+    const jobsWithDistance = useMemo(() => {
+        return jobs.map(j => ({
+            ...j,
+            distance: (user.coordinates && j.coordinates)
+                ? calculateDistance(user.coordinates.lat, user.coordinates.lng, j.coordinates.lat, j.coordinates.lng)
+                : undefined
+        }));
+    }, [jobs, user.coordinates]);
+
+    // Derived counts for Poster
+    const posterStats = useMemo(() => {
+        const myJobs = jobsWithDistance.filter(j =>
+            j.posterId && user.id && j.posterId.toLowerCase() === user.id.toLowerCase()
+        );
+        return {
+            open: myJobs.filter(j => j.status === JobStatus.OPEN).length,
+            active: myJobs.filter(j => j.status === JobStatus.IN_PROGRESS).length,
+            completed: myJobs.filter(j => j.status === JobStatus.COMPLETED).length,
+            cancelled: myJobs.filter(j => j.status === JobStatus.CANCELLED).length
+        };
+    }, [jobsWithDistance, user.id]);
+
+    // 2. Final Filtering & Sorting (cheap, safe for search typing)
+    const filteredJobs = useMemo(() => {
+        return jobsWithDistance
+            .filter(j => {
+                const isMyJob = j.posterId && user.id && j.posterId.toLowerCase() === user.id.toLowerCase();
+
+                if (role === UserRole.POSTER) {
+                    if (!isMyJob) return false;
+
+                    if (posterTab === 'ACTIVE') {
+                        // Active: OPEN, IN_PROGRESS
+                        const isActive = j.status === JobStatus.OPEN || j.status === JobStatus.IN_PROGRESS;
+                        if (!isActive) return false;
+                        if (dashboardTab !== 'ALL' && j.status !== dashboardTab) return false;
+                    } else {
+                        // History: COMPLETED, CANCELLED
+                        const isHistory = j.status === JobStatus.COMPLETED || j.status === JobStatus.CANCELLED;
+                        if (!isHistory) return false;
+                    }
+                } else {
+                    if (j.posterId === user.id) return false;
+                    const myBidId = j.myBidId || j.bids.find(b => b.workerId === user.id)?.id;
+                    const myBidStatus = j.myBidStatus || j.bids.find(b => b.workerId === user.id)?.status;
+
+                    if (workerTab === 'FIND') {
+                        // Find: OPEN jobs I haven't bid on
+                        if (j.status !== JobStatus.OPEN || myBidId) return false;
+                    } else if (workerTab === 'ACTIVE') {
+                        // Active: Jobs I bid on (PENDING) OR Jobs I won (IN_PROGRESS)
+                        if (!myBidId) return false;
+                        // Exclude finished/dead states
+                        if (j.status === JobStatus.COMPLETED || j.status === JobStatus.CANCELLED || myBidStatus === 'REJECTED') return false;
+                        // If job started (not OPEN) and I'm not the winner, it's not active for me (it's history)
+                        if (j.status !== JobStatus.OPEN && j.acceptedBidId !== myBidId) return false;
+                    } else {
+                        // History: REJECTED bids, LOST jobs, COMPLETED jobs, CANCELLED jobs
+                        if (!myBidId) return false;
+                        const isRejected = myBidStatus === 'REJECTED' || (j.status !== JobStatus.OPEN && j.acceptedBidId !== myBidId);
+                        const isFinished = j.status === JobStatus.COMPLETED || j.status === JobStatus.CANCELLED;
+                        if (!isRejected && !isFinished) return false;
+                    }
+                }
+
+                if (searchQuery && !j.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+                if (selectedCategory !== 'All' && j.category !== selectedCategory) return false;
+                if (filterLocation && !(j.location || '').toLowerCase().includes(filterLocation.toLowerCase())) return false;
+                if (filterMinBudget && j.budget < parseInt(filterMinBudget)) return false;
+                if (filterMaxDistance && j.distance !== undefined && j.distance > parseInt(filterMaxDistance)) return false;
+
+                return true;
+            })
+            .sort((a, b) => {
+                if (role === UserRole.POSTER) return b.createdAt - a.createdAt;
+
+                switch (sortBy) {
+                    case 'NEWEST': return b.createdAt - a.createdAt;
+                    case 'BUDGET_HIGH': return b.budget - a.budget;
+                    case 'BUDGET_LOW': return a.budget - b.budget;
+                    case 'NEAREST':
+                        if (a.distance === undefined && b.distance === undefined) return 0;
+                        return (a.distance ?? Infinity) - (b.distance ?? Infinity);
+                    default: return b.createdAt - a.createdAt;
+                }
+            });
+    }, [jobsWithDistance, role, posterTab, dashboardTab, workerTab, user.id, searchQuery, selectedCategory, filterLocation, filterMinBudget, filterMaxDistance, sortBy]);
+
+
+
+    const unreadNotificationsCount = notifications.filter(n => !n.read).length;
+
     return (
-        <div className="p-4 animate-fade-in pb-24 md:pb-6">
+        <div className="min-h-screen transition-colors duration-500 overflow-x-hidden">
             <FilterModal
                 isOpen={showFilters}
                 onClose={() => setShowFilters(false)}
-                currentFilters={{ location: filterLocation, minBudget: filterMinBudget, maxDistance: filterMaxDistance }}
+                currentFilters={{
+                    location: filterLocation,
+                    minBudget: filterMinBudget,
+                    maxDistance: filterMaxDistance,
+                    category: selectedCategory,
+                    sortBy: sortBy
+                }}
                 onApply={(f) => {
                     setFilterLocation(f.location);
                     setFilterMinBudget(f.minBudget);
                     setFilterMaxDistance(f.maxDistance);
+                    setSelectedCategory(f.category);
+                    setSortBy(f.sortBy);
                 }}
             />
 
-            {/* Mode Switcher (Global Role Toggle) */}
-            <div className="bg-white dark:bg-gray-900 p-1 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex mb-6 transition-colors">
-                <button
-                    onClick={() => setRole(UserRole.WORKER)}
-                    className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${role === UserRole.WORKER
-                        ? 'bg-emerald-600 text-white shadow-md'
-                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
-                        }`}
-                >
-                    <Briefcase size={18} />
-                    {t.findWork}
-                </button>
-                <button
-                    onClick={() => setRole(UserRole.POSTER)}
-                    className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${role === UserRole.POSTER
-                        ? 'bg-emerald-600 text-white shadow-md'
-                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
-                        }`}
-                >
-                    <CheckCircle2 size={18} />
-                    {t.hireMyJobs}
-                </button>
-            </div>
-
-            {/* Header Title & Worker Tabs */}
-            <div className="mb-4">
-                <div className="flex justify-between items-center mb-3">
-                    <h2 className="text-xl font-bold text-emerald-900 dark:text-emerald-500 flex items-center gap-2">
-                        {role === UserRole.POSTER ? t.myJobDashboard : t.jobsNearMe}
-                        <button onClick={refreshJobs} className="p-1 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-gray-800 rounded-full transition-colors" title="Refresh Jobs">
-                            <div className={loading ? 'animate-spin' : ''}><RotateCw size={16} /></div>
-                        </button>
-                    </h2>
+            {/* --- COMPACT PREMIUM HERO SECTION --- */}
+            <div className={`relative pt-safe transition-all duration-700 ${role === UserRole.POSTER ? 'bg-blue-600 dark:bg-blue-900' : 'bg-emerald-600 dark:bg-emerald-900'}`}>
+                {/* Mesh Gradient Background */}
+                <div className="absolute inset-0 opacity-40 mix-blend-overlay pointer-events-none overflow-hidden">
+                    <div className="absolute -top-[20%] -left-[10%] w-[60%] h-[80%] bg-emerald-400 rounded-full blur-[120px] animate-pulse-subtle" />
+                    <div className="absolute top-[10%] -right-[10%] w-[50%] h-[70%] bg-blue-400 rounded-full blur-[100px] animate-pulse-subtle delay-700" />
                 </div>
 
-                {/* WORKER TABS: Find / Active / History */}
-                {role === UserRole.WORKER && (
-                    <div className="bg-gray-100 dark:bg-gray-800/60 p-1 rounded-xl flex mb-2">
+                <div className="max-w-7xl mx-auto px-6 py-4 relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    {/* Compact Profile & Greeting */}
+                    <div className="flex items-center gap-3">
+                        <div className="relative group cursor-pointer shrink-0" onClick={() => navigate('/profile')}>
+                            <div className="w-12 h-12 rounded-2xl bg-white p-0.5 shadow-xl transition-transform duration-500 group-hover:scale-105">
+                                <div className="w-full h-full rounded-[0.9rem] overflow-hidden bg-gray-100 dark:bg-gray-800">
+                                    {user.profilePhoto ? (
+                                        <img src={user.profilePhoto} className="w-full h-full object-cover" alt="Profile" />
+                                    ) : (
+                                        <div className={`w-full h-full flex items-center justify-center text-lg font-black ${role === UserRole.POSTER ? 'text-blue-600' : 'text-emerald-600'}`}>
+                                            {user.name.charAt(0)}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-black text-white tracking-tight leading-none mb-0.5">
+                                {t.greeting}, {user.name.split(' ')[0]}!
+                            </h2>
+                            <p className="text-white/60 text-[8px] font-black uppercase tracking-[0.3em]">
+                                {role === UserRole.POSTER
+                                    ? (language === 'en' ? 'POSTER' : 'नियुक्ता')
+                                    : (language === 'en' ? 'WORKER' : 'कामगार')}
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Compact Role Switcher */}
+                    <div className="bg-black/10 backdrop-blur-3xl p-1 rounded-[1.5rem] border border-white/10 flex gap-0.5">
                         <button
-                            onClick={() => setWorkerTab('FIND')}
-                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors ${workerTab === 'FIND' ? 'bg-white dark:bg-gray-700 text-emerald-700 dark:text-emerald-400 shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}
+                            onClick={() => setRole(UserRole.WORKER)}
+                            className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all duration-500 flex items-center gap-2 ${role === UserRole.WORKER ? 'bg-white text-emerald-600 shadow-lg scale-100' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
                         >
-                            {language === 'en' ? 'Find Work' : 'काम खोजें'}
+                            <Zap size={12} strokeWidth={3} /> {t.findWork}
                         </button>
                         <button
-                            onClick={() => setWorkerTab('ACTIVE')}
-                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors ${workerTab === 'ACTIVE' ? 'bg-white dark:bg-gray-700 text-blue-700 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}
+                            onClick={() => setRole(UserRole.POSTER)}
+                            className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all duration-500 flex items-center gap-2 ${role === UserRole.POSTER ? 'bg-white text-blue-600 shadow-lg scale-100' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
                         >
-                            {language === 'en' ? 'My Applications' : 'मेरे आवेदन'}
-                        </button>
-                        <button
-                            onClick={() => setWorkerTab('HISTORY')}
-                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors ${workerTab === 'HISTORY' ? 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}
-                        >
-                            {language === 'en' ? 'History' : 'इतिहास'}
+                            <LayoutDashboard size={12} strokeWidth={3} /> {language === 'en' ? 'POSTER' : 'नियुक्ता'}
                         </button>
                     </div>
-                )}
+                </div>
+
+                {/* Bottom Curve/Transition */}
+                <div className="h-6 bg-white dark:bg-gray-950 rounded-t-[2.5rem] mt-2" />
             </div>
 
-            {error && (
-                <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 p-3 rounded-xl text-sm mb-4 flex justify-between items-center border border-red-100 dark:border-red-900/50">
-                    <span>{error}</span>
-                    <button onClick={refreshJobs} className="font-bold underline">Retry</button>
-                </div>
-            )}
+            {/* --- SEARCH & CONTROL BAR --- */}
+            <div className="max-w-7xl mx-auto px-6 -mt-6 relative z-20 space-y-8">
+                {/* Compact Search & Filter Bar */}
+                <div className="flex gap-4 items-center">
+                    <div className="flex-1 bg-white dark:bg-gray-900 p-1.5 rounded-[2.5rem] shadow-glass border-4 border-white dark:border-gray-800 flex items-center gap-2 group transition-all duration-500 focus-within:ring-4 focus-within:ring-emerald-500/10">
+                        <div className="relative flex-1">
+                            <input
+                                type="text"
+                                placeholder={role === UserRole.WORKER
+                                    ? (language === 'en' ? "Search for work..." : "काम खोजें...")
+                                    : (language === 'en' ? "Search your posts..." : "अपनी पोस्ट खोजें...")
+                                }
+                                className="w-full bg-transparent border-none rounded-[2rem] pl-14 pr-6 py-4 font-bold text-lg text-gray-900 dark:text-white outline-none"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                            <Search size={22} className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-emerald-500 transition-colors" />
+                        </div>
 
-            {/* Search/Filter Bar */}
-            <div className="mb-4 space-y-3">
-                <div className="flex gap-2">
-                    <div className="relative flex-1">
-                        <input
-                            type="text"
-                            placeholder={role === UserRole.WORKER ? t.searchWork : t.searchPosts}
-                            className="w-full pl-10 pr-10 py-2.5 appearance-none bg-white dark:bg-gray-900 text-black dark:text-white border border-emerald-100 dark:border-emerald-900/30 rounded-xl text-sm outline-none shadow-sm placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                        <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
                         <button
                             onClick={toggleVoiceInput}
-                            className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full transition-colors ${isSearchingVoice ? 'bg-red-50 dark:bg-red-900/30 text-red-500 dark:text-red-400 animate-pulse' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500'}`}
+                            className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${isSearchingVoice ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-50 dark:bg-gray-800 text-gray-400 hover:text-emerald-500'}`}
                         >
-                            {isSearchingVoice ? <MicOff size={16} /> : <Mic size={16} />}
+                            {isSearchingVoice ? <MicOff size={20} /> : <Mic size={20} />}
                         </button>
                     </div>
 
-                    {/* Sort Dropdown - Only for Worker mode */}
-                    {role === UserRole.WORKER && (
+                    <button
+                        onClick={() => setShowFilters(true)}
+                        className={`w-20 h-20 grow-0 shrink-0 rounded-[2rem] flex items-center justify-center transition-all active:scale-95 border-4 shadow-glass ${filterLocation || filterMinBudget || filterMaxDistance || selectedCategory !== 'All' ? 'bg-emerald-600 text-white border-white dark:border-gray-700' : 'bg-white dark:bg-gray-900 text-gray-500 border-white dark:border-gray-800'}`}
+                    >
                         <div className="relative">
-                            <button
-                                onClick={() => setShowSortMenu(!showSortMenu)}
-                                className={`p-2.5 rounded-xl border transition-colors shadow-sm flex items-center gap-1.5 ${sortBy !== 'NEWEST' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800' : 'bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 border-gray-100 dark:border-gray-800'}`}
-                            >
-                                <ArrowUpDown size={18} />
-                            </button>
-
-                            {/* Dropdown Menu */}
-                            {showSortMenu && (
-                                <>
-                                    <div className="fixed inset-0 z-40" onClick={() => setShowSortMenu(false)} />
-                                    <div className="absolute right-0 top-12 z-50 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 min-w-[180px] animate-fade-in">
-                                        {sortOptions.map(option => (
-                                            <button
-                                                key={option.value}
-                                                onClick={() => { setSortBy(option.value); setShowSortMenu(false); }}
-                                                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${sortBy === option.value
-                                                    ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-semibold'
-                                                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-                                            >
-                                                {language === 'en' ? option.labelEn : option.labelHi}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </>
+                            <SlidersHorizontal size={24} strokeWidth={3} />
+                            {(filterLocation || filterMinBudget || filterMaxDistance || selectedCategory !== 'All') && (
+                                <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 border-2 border-white rounded-full animate-bounce" />
                             )}
                         </div>
-                    )}
-
-                    <button onClick={() => setShowFilters(true)} className={`p-2.5 rounded-xl border transition-colors shadow-sm ${filterLocation || filterMinBudget || filterMaxDistance ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800' : 'bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 border-gray-100 dark:border-gray-800'}`}>
-                        <SlidersHorizontal size={20} />
-                        {(filterLocation || filterMinBudget || filterMaxDistance) && <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white dark:border-gray-900 transform translate-x-1 -translate-y-1"></span>}
                     </button>
                 </div>
-                <div className="flex overflow-x-auto gap-2 pb-2 no-scrollbar">
-                    {['All', ...CATEGORIES].map(cat => (
-                        <button key={cat} onClick={() => setSelectedCategory(cat)} className={`px-4 py-1.5 rounded-full text-xs font-semibold border transition-colors ${selectedCategory === cat ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border-gray-100 dark:border-gray-800'}`}>
-                            {cat === 'All' ? t.allJobs : (CATEGORY_TRANSLATIONS[cat]?.[language] || cat)}
-                        </button>
-                    ))}
-                </div>
-            </div>
 
-            {/* POSTER DASHBOARD: Status Tabs & Stats */}
-            {role === UserRole.POSTER && (
-                <div className="mb-6">
-                    {/* Stats Row */}
-                    <div className="grid grid-cols-3 gap-3 mb-4">
-                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/30 p-3 rounded-xl text-center">
-                            <h3 className="text-2xl font-bold text-blue-700 dark:text-blue-400">
-                                {jobs.filter(j => j.posterId === user.id && j.status === 'OPEN').length}
-                            </h3>
-                            <p className="text-[10px] font-bold text-blue-500 dark:text-blue-300 uppercase tracking-wide">Open</p>
-                        </div>
-                        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/30 p-3 rounded-xl text-center">
-                            <h3 className="text-2xl font-bold text-amber-700 dark:text-amber-400">
-                                {jobs.filter(j => j.posterId === user.id && j.status === 'IN_PROGRESS').length}
-                            </h3>
-                            <p className="text-[10px] font-bold text-amber-500 dark:text-amber-300 uppercase tracking-wide">In Progress</p>
-                        </div>
-                        <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/30 p-3 rounded-xl text-center">
-                            <h3 className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
-                                {jobs.filter(j => j.posterId === user.id && j.status === 'COMPLETED').length}
-                            </h3>
-                            <p className="text-[10px] font-bold text-emerald-500 dark:text-emerald-300 uppercase tracking-wide">Completed</p>
-                        </div>
-                    </div>
-
-                    {/* Dashboard Tabs */}
-                    <div className="flex p-1 bg-gray-100 dark:bg-gray-800/50 rounded-xl overflow-x-auto no-scrollbar">
-                        {(['ALL', 'OPEN', 'IN_PROGRESS', 'COMPLETED'] as const).map(tab => (
-                            <button
-                                key={tab}
-                                onClick={() => setDashboardTab(tab)}
-                                className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${dashboardTab === tab
-                                    ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm'
-                                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                                    }`}
-                            >
-                                {tab === 'ALL' ? t.all :
-                                    tab === 'OPEN' ? t.open :
-                                        tab === 'IN_PROGRESS' ? t.active :
-                                            t.done}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {/* Job List */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {jobs.map(j => ({ ...j, distance: (user.coordinates && j.coordinates) ? calculateDistance(user.coordinates.lat, user.coordinates.lng, j.coordinates.lat, j.coordinates.lng) : undefined }))
-                    .filter(j => {
-                        // POSTER MODE: Show My Jobs (Filtered by Dashboard Tab)
-                        if (role === UserRole.POSTER) {
-                            if (j.posterId !== user.id) return false;
-                            if (dashboardTab !== 'ALL' && j.status !== dashboardTab) return false;
-                            return true;
-                        }
-
-                        // WORKER MODE: Show Nearby Jobs / Applications
-                        const isMyJob = j.posterId === user.id;
-
-                        // Extract my bid info using both pre-computed fields and local bids array
-                        const myBidId = j.myBidId || j.bids.find(b => b.workerId === user.id)?.id;
-                        const myBidStatus = j.myBidStatus || j.bids.find(b => b.workerId === user.id)?.status;
-
-                        if (isMyJob) return false; // Don't show own jobs in finder
-
-                        // Filter based on Worker Tabs
-                        if (workerTab === 'FIND') {
-                            // Show Open jobs where I haven't bid
-                            if (j.status !== JobStatus.OPEN) return false;
-                            if (myBidId) return false;
-                        } else if (workerTab === 'ACTIVE') {
-                            // Show jobs I've bid on (Pending/Accepted)
-                            if (!myBidId) return false;
-
-                            // DETERMINISTIC REJECTION: If for any reason I wasn't picked for an in-progress job
-                            const isEffectivelyRejected = j.status !== JobStatus.OPEN && j.acceptedBidId !== myBidId;
-
-                            // Exclude completed jobs, rejected bids, and jobs where someone else was picked
-                            if (j.status === JobStatus.COMPLETED) return false;
-                            if (myBidStatus === 'REJECTED') return false;
-                            if (isEffectivelyRejected) return false;
-                        } else if (workerTab === 'HISTORY') {
-                            // Show jobs completed OR where I was rejected
-                            if (!myBidId) return false;
-
-                            const isRejected = myBidStatus === 'REJECTED';
-                            const isCompleted = j.status === JobStatus.COMPLETED;
-                            const isEffectivelyRejected = j.status !== JobStatus.OPEN && j.acceptedBidId !== myBidId;
-
-                            if (!isRejected && !isCompleted && !isEffectivelyRejected) return false;
-                        }
-
-                        // Apply Filters
-                        if (searchQuery && !j.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-                        if (selectedCategory !== 'All' && j.category !== selectedCategory) return false;
-                        if (filterLocation && !(j.location || '').toLowerCase().includes(filterLocation.toLowerCase())) return false;
-                        if (filterMinBudget && j.budget < parseInt(filterMinBudget)) return false;
-                        if (filterMaxDistance && j.distance !== undefined && j.distance > parseInt(filterMaxDistance)) return false;
-
-                        return true;
-                    })
-                    // Apply Sorting (Worker mode only)
-                    .sort((a, b) => {
-                        // Poster mode: always newest first
-                        if (role === UserRole.POSTER) {
-                            return b.createdAt - a.createdAt;
-                        }
-
-                        // BOOST LOGIC: Boosted jobs always appear first!
-                        if (a.isBoosted && !b.isBoosted) return -1;
-                        if (!a.isBoosted && b.isBoosted) return 1;
-
-                        // Worker mode: apply selected sort
-                        switch (sortBy) {
-                            case 'NEWEST':
-                                return b.createdAt - a.createdAt;
-                            case 'BUDGET_HIGH':
-                                return b.budget - a.budget;
-                            case 'BUDGET_LOW':
-                                return a.budget - b.budget;
-                            case 'NEAREST':
-                                // Jobs without distance go to the end
-                                if (a.distance === undefined && b.distance === undefined) return 0;
-                                if (a.distance === undefined) return 1;
-                                if (b.distance === undefined) return -1;
-                                return a.distance - b.distance;
-                            default:
-                                return b.createdAt - a.createdAt;
-                        }
-                    })
-                    .map(job => (
-                        <div key={job.id} className="animate-fade-in-up h-full">
-                            <JobCard job={job} currentUserId={user.id} userRole={role} distance={job.distance} language={language}
-                                hasUnreadBids={notifications.some(n =>
-                                    n.relatedJobId === job.id &&
-                                    !n.read &&
-                                    (n.title.toLowerCase().includes('bid') || n.title.toLowerCase().includes('counter'))
-                                )}
-                                onBid={(id) => onBid(id)}
-                                onViewBids={(j) => onViewBids(j)}
-                                onChat={onChat}
-                                onEdit={onEdit}
-                                onClick={() => onClick(job)}
-                                onReplyToCounter={onReplyToCounter}
-                                onWithdrawBid={onWithdrawBid}
-                            />
-                        </div>
-                    ))}
-            </div>
-
-            {/* Load More Button */}
-            {hasMore && !loading && (
-                <div className="mt-8 mb-10 flex justify-center">
-                    <button
-                        onClick={fetchMoreJobs}
-                        disabled={isLoadingMore}
-                        className={`px-8 py-3 rounded-xl font-bold transition-all shadow-md flex items-center gap-2 ${isLoadingMore
-                            ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                            : 'bg-white dark:bg-gray-900 border-2 border-emerald-100 dark:border-emerald-900/30 text-emerald-800 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-gray-800 active:scale-95'
-                            }`}
-                    >
-                        {isLoadingMore ? (
-                            <>
-                                <Loader2 size={18} className="animate-spin text-emerald-600 dark:text-emerald-400" />
-                                {t.loading}
-                            </>
+                <div className="flex flex-col gap-6">
+                    {/* Integrated Switcher */}
+                    <div className="bg-white/50 dark:bg-gray-900/50 p-1.5 rounded-[2.5rem] border-2 border-white dark:border-gray-800 flex gap-1 self-center w-full max-w-2xl">
+                        {role === UserRole.WORKER ? (
+                            [
+                                { id: 'FIND', icon: Zap, label: language === 'en' ? 'Discover' : 'खोजें' },
+                                { id: 'ACTIVE', icon: Clock, label: language === 'en' ? 'Active' : 'सक्रिय' },
+                                { id: 'HISTORY', icon: History, label: language === 'en' ? 'History' : 'इतिहास' }
+                            ].map(tab => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setWorkerTab(tab.id as any)}
+                                    className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-3xl transition-all duration-500 font-black text-[10px] uppercase tracking-widest ${workerTab === tab.id ? 'bg-white dark:bg-gray-800 text-emerald-600 dark:text-emerald-400 shadow-xl scale-100' : 'text-gray-400 hover:text-gray-600'}`}
+                                >
+                                    <tab.icon size={16} strokeWidth={3} />
+                                    {tab.label}
+                                </button>
+                            ))
                         ) : (
-                            <>
-                                <RotateCw size={18} className="text-emerald-600 dark:text-emerald-400" />
-                                {t.loadMore}
-                            </>
+                            [
+                                { id: 'ACTIVE', icon: LayoutDashboard, label: language === 'en' ? 'My Directory' : 'मेरी निर्देशिका', count: posterStats.open + posterStats.active },
+                                { id: 'HISTORY', icon: History, label: language === 'en' ? 'History' : 'इतिहास', count: posterStats.completed + posterStats.cancelled }
+                            ].map(tab => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setPosterTab(tab.id as any)}
+                                    className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-3xl transition-all duration-500 font-black text-[10px] uppercase tracking-widest ${posterTab === tab.id ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-xl scale-100' : 'text-gray-400 hover:text-gray-600'}`}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <tab.icon size={16} strokeWidth={3} />
+                                        <span>{tab.label}</span>
+                                        {tab.count > 0 && (
+                                            <span className={`px-1.5 py-0.5 rounded-md text-[9px] ${posterTab === tab.id ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30' : 'bg-gray-100 dark:bg-gray-800'}`}>
+                                                {tab.count}
+                                            </span>
+                                        )}
+                                    </div>
+                                </button>
+                            ))
                         )}
-                    </button>
+                    </div>
                 </div>
-            )}
 
-            {loading && (
-                <div className="space-y-4">
-                    {[1, 2, 3].map(i => <JobCardSkeleton key={i} />)}
-                </div>
-            )}
+                {/* --- MAIN FEED AREA --- */}
+                <main className="max-w-7xl mx-auto px-6 pb-40 pt-4">
 
-            {jobs.length === 0 && (
-                <div className="text-center py-10 text-gray-400">
-                    <Briefcase size={48} className="mx-auto mb-2 opacity-50" />
-                    <p>{t.noJobsFound}</p>
-                </div>
+
+                    {/* REGULAR FEED HEADER */}
+                    <div className="flex flex-col gap-10">
+                        <div className="flex items-center justify-between px-2">
+                            <div className="flex items-center gap-4">
+                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center border-2 border-white dark:border-gray-800 shadow-lg ${role === UserRole.POSTER ? 'bg-blue-600' : 'bg-emerald-600'} text-white`}>
+                                    {role === UserRole.POSTER ? <LayoutDashboard size={20} /> : <Sparkles size={20} strokeWidth={2.5} />}
+                                </div>
+                                <div className="flex flex-col">
+                                    <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tighter leading-tight">
+                                        {role === UserRole.POSTER
+                                            ? (posterTab === 'HISTORY'
+                                                ? (language === 'en' ? 'History' : 'इतिहास')
+                                                : (language === 'en' ? 'My Directory' : 'मेरी निर्देशिका'))
+                                            : (workerTab === 'FIND'
+                                                ? (language === 'en' ? 'Discover' : 'खोजें')
+                                                : workerTab === 'ACTIVE'
+                                                    ? (language === 'en' ? 'Active Jobs' : 'सक्रिय काम')
+                                                    : (language === 'en' ? 'History' : 'इतिहास'))}
+                                    </h2>
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-0.5">
+                                        {role === UserRole.POSTER
+                                            ? (language === 'en' ? 'Manage Your Job Posts' : 'अपनी जॉब पोस्ट प्रबंधित करें')
+                                            : (language === 'en' ? 'Explore Latest Opportunities' : 'नवीनतम अवसरों की खोज करें')}
+                                    </p>
+                                </div>
+                            </div>
+                            <button onClick={handleRefresh} className={`relative w-12 h-12 bg-gray-50 dark:bg-gray-900 text-gray-400 rounded-xl border-2 border-white dark:border-gray-800 shadow-sm transition-all flex items-center justify-center group hover:text-emerald-500 overflow-hidden ${isRevalidating ? 'ring-2 ring-emerald-500/20' : ''}`}>
+                                <RotateCw size={18} strokeWidth={3} className={loading || isRevalidating ? 'animate-spin' : 'group-hover:rotate-45 transition-transform'} />
+                                {isRevalidating && <span className="absolute inset-0 bg-emerald-500/5 animate-pulse" />}
+                            </button>
+                        </div>
+
+                        {loading ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                {[1, 2, 3, 4, 5, 6].map(i => <JobCardSkeleton key={i} />)}
+                            </div>
+                        ) : filteredJobs.length > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+                                {filteredJobs.map(job => (
+                                    <div key={job.id} className="h-full transform hover:-translate-y-2 transition-transform duration-500">
+                                        <JobCard
+                                            job={job}
+                                            currentUserId={user.id}
+                                            userRole={role}
+                                            distance={job.distance}
+                                            language={language}
+                                            onBid={onBid}
+                                            onViewBids={onViewBids}
+                                            onChat={onChat}
+                                            onEdit={onEdit}
+                                            onClick={() => onClick(job)}
+                                            onReplyToCounter={onReplyToCounter}
+                                            onWithdrawBid={onWithdrawBid}
+                                            onHide={hideJob}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        ) : jobsError ? (
+                            <div className="flex flex-col items-center justify-center py-20 px-10 bg-red-50/50 dark:bg-red-900/10 rounded-[3rem] border-4 border border-red-100 dark:border-red-900/30 animate-pop">
+                                <div className="w-20 h-20 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-6 text-red-500">
+                                    <XCircle size={40} />
+                                </div>
+                                <h3 className="text-xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">
+                                    {language === 'en' ? 'Oops! Something went wrong' : 'ओह! कुछ गलत हो गया'}
+                                </h3>
+                                <p className="text-gray-500 dark:text-gray-400 text-center max-w-xs font-medium text-sm">
+                                    {jobsError}
+                                </p>
+                                <button
+                                    onClick={() => handleRefresh()}
+                                    className="flex items-center gap-2 px-10 py-4 rounded-[2rem] font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl active:scale-95 transition-all text-white mt-8 bg-red-600 shadow-red-600/20"
+                                >
+                                    <RotateCw size={14} />
+                                    {language === 'en' ? 'Retry Loading' : 'पुनः प्रयास करें'}
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center py-32 px-10 bg-white/50 dark:bg-gray-900/50 rounded-[3rem] border-4 border-dashed border-gray-100 dark:border-gray-800 animate-pop">
+                                <div className="w-24 h-24 bg-gray-50 dark:bg-gray-800 rounded-full flex items-center justify-center mb-8 text-gray-300">
+                                    <Sparkles size={48} />
+                                </div>
+                                <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">
+                                    {language === 'en' ? 'No jobs found' : 'कोई काम नहीं मिला'}
+                                </h3>
+                                <p className="text-gray-500 text-center max-w-xs font-medium">
+                                    {language === 'en'
+                                        ? 'Try adjusting your filters or search query to find more opportunities.'
+                                        : 'अधिक अवसर खोजने के लिए अपने फ़िल्टर या खोज क्वेरी को समायोजित करने का प्रयास करें।'}
+                                </p>
+                                <button
+                                    onClick={() => { setSearchQuery(''); setSelectedCategory('All'); setFilterLocation(''); setFilterMinBudget(''); setFilterMaxDistance(''); }}
+                                    className={`px-12 py-5 rounded-[2rem] font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl active:scale-95 transition-all text-white mt-10 ${role === UserRole.POSTER ? 'bg-blue-600 shadow-blue-600/20' : 'bg-emerald-600 shadow-emerald-600/20'}`}
+                                >
+                                    {language === 'en' ? 'Clear All Filters' : 'सभी फ़िल्टर साफ़ करें'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Load More Button */}
+                    {hasMore && !loading && (
+                        <div className="flex justify-center mt-12 pb-10">
+                            <button
+                                onClick={fetchMoreJobs}
+                                disabled={isLoadingMore}
+                                className={`px-12 py-6 rounded-[2.5rem] border-4 font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl transition-all active:scale-95 flex items-center gap-6 ${role === UserRole.POSTER ? 'border-blue-500 text-blue-600 hover:bg-blue-600 hover:text-white' : 'border-emerald-500 text-emerald-600 hover:bg-emerald-600 hover:text-white'}`}
+                            >
+                                {isLoadingMore ? <Loader2 size={24} className="animate-spin" /> : <RotateCw size={24} strokeWidth={3} />}
+                                {isLoadingMore ? t.loading : t.loadMore}
+                            </button>
+                        </div>
+                    )}
+                </main>
+            </div>
+
+            {/* FLOATING ACTION BUTTONS */}
+            {role === UserRole.POSTER && (
+                <button
+                    onClick={() => navigate('/post')}
+                    className="fixed bottom-32 right-8 w-18 h-18 bg-blue-600 text-white rounded-[2rem] shadow-[0_20px_40px_-10px_rgba(37,99,235,0.4)] flex items-center justify-center active:scale-90 transition-all z-[60] md:hidden border-4 border-white dark:border-gray-900 group"
+                >
+                    <Plus size={36} strokeWidth={3} className="group-hover:rotate-90 transition-transform duration-500" />
+                    <div className="absolute right-full mr-4 bg-gray-900 text-white text-[10px] font-black px-4 py-2 rounded-xl opacity-0 translate-x-4 pointer-events-none group-hover:opacity-100 group-hover:translate-x-0 transition-all whitespace-nowrap shadow-xl">
+                        {language === 'en' ? 'POST A NEW JOB' : 'नया काम पोस्ट करें'}
+                    </div>
+                </button>
             )}
         </div>
     );

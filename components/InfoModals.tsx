@@ -1,5 +1,6 @@
 import React from 'react';
-import { X, Shield, Users, FileText, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, X, Shield, Users, FileText, AlertTriangle } from 'lucide-react';
+import { useUser } from '../contexts/UserContextDB';
 
 interface ModalProps {
     isOpen: boolean;
@@ -10,120 +11,154 @@ interface ModalProps {
 }
 
 const InfoBaseModal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, icon: Icon }) => {
+    const { t } = useUser();
+
     if (!isOpen) return null;
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative w-full max-w-2xl bg-white dark:bg-gray-900 rounded-3xl p-6 md:p-8 animate-pop shadow-2xl border border-gray-100 dark:border-gray-800 max-h-[90vh] overflow-y-auto">
-                <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-gray-100 dark:bg-gray-800 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
-                    <X size={20} className="text-gray-500 dark:text-gray-400" />
-                </button>
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-                        <Icon size={24} />
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-xl animate-fade-in" onClick={onClose} />
+            <div className="relative w-full max-w-2xl bg-white dark:bg-gray-950 rounded-[3rem] p-8 md:p-12 animate-slide-up shadow-[0_32px_128px_-16px_rgba(0,0,0,0.4)] border-4 border-white/20 dark:border-gray-800/50 max-h-[90vh] flex flex-col transition-all pb-safe">
+
+                <div className="overflow-y-auto pr-2 custom-scrollbar">
+                    <div className="flex items-center gap-6 mb-10">
+                        <button onClick={onClose} className="p-4 rounded-3xl bg-gray-50/50 dark:bg-gray-900/50 text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all active:scale-90 border border-gray-100 dark:border-gray-800 shadow-sm group">
+                            <ArrowLeft size={24} strokeWidth={3} className="group-hover:-translate-x-0.5 transition-transform" />
+                        </button>
+                        <div className="flex items-center gap-6">
+                            <div className="w-20 h-20 rounded-[2rem] bg-gradient-to-br from-emerald-50 to-teal-100 dark:from-emerald-900/40 dark:to-teal-900/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-glass border-4 border-white/50 dark:border-gray-800/50 rotate-3">
+                                <Icon size={40} strokeWidth={2.5} />
+                            </div>
+                            <div>
+                                <h1 className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-[0.4em] mb-2">{t.infoGuide}</h1>
+                                <h2 className="text-2xl font-black text-gray-900 dark:text-white leading-tight tracking-tight">{title}</h2>
+                            </div>
+                        </div>
                     </div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{title}</h2>
-                </div>
-                <div className="prose dark:prose-invert max-w-none text-gray-600 dark:text-gray-300">
-                    {children}
+
+                    <div className="text-gray-600 dark:text-gray-300">
+                        {children}
+                    </div>
+
+                    <div className="mt-12 pt-8 border-t border-gray-100 dark:border-gray-800 flex justify-center">
+                        <button
+                            onClick={onClose}
+                            className="bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-10 py-5 rounded-[1.5rem] font-black uppercase tracking-[0.2em] text-xs shadow-xl active:scale-95 transition-all"
+                        >
+                            {t.gotIt}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
     );
 };
 
-export const SafetyTipsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = (props) => (
-    <InfoBaseModal {...props} title="Safety Guidelines" icon={Shield}>
-        <div className="space-y-6">
-            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800 animate-pulse-subtle">
-                <h4 className="font-bold text-blue-800 dark:text-blue-300 mb-2 flex items-center gap-2"><AlertTriangle size={18} /> Vital Rule</h4>
-                <p className="text-sm text-blue-700 dark:text-blue-200">Never share OTPs or passwords with anyone. CHOWKAR support will never ask for them.</p>
-            </div>
+export const SafetyTipsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = (props) => {
+    const { t } = useUser();
+    return (
+        <InfoBaseModal {...props} title={t.safetyTitle} icon={Shield}>
+            <div className="space-y-10">
+                <div className="bg-gradient-to-br from-red-500 to-orange-600 p-8 rounded-[2.5rem] text-white shadow-xl shadow-red-500/20 relative overflow-hidden group">
+                    <AlertTriangle size={120} className="absolute -right-8 -bottom-8 opacity-10 rotate-12 transition-transform group-hover:scale-110" />
+                    <h4 className="font-black text-xs uppercase tracking-[0.3em] mb-3 flex items-center gap-2">
+                        <AlertTriangle size={18} className="text-white" /> {t.securityAlert}
+                    </h4>
+                    <p className="text-xl font-black leading-tight">{t.securityDesc}</p>
+                </div>
 
-            <div className="grid gap-4">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Core Safety Rules</h3>
-                <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
-                        <h4 className="font-bold text-sm text-gray-900 dark:text-white mb-1">💰 Keep Payments in App</h4>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Always use our secure wallet for job payments to stay protected.</p>
-                    </div>
-                    <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
-                        <h4 className="font-bold text-sm text-gray-900 dark:text-white mb-1">👤 Verify Identity</h4>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Ensure the person matches their profile. Ask for ID if needed.</p>
-                    </div>
-                    <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
-                        <h4 className="font-bold text-sm text-gray-900 dark:text-white mb-1">💬 In-App Chat Only</h4>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Don't move conversation to other apps. Our chat is recorded for your safety.</p>
-                    </div>
-                    <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
-                        <h4 className="font-bold text-sm text-gray-900 dark:text-white mb-1">🚩 Report Suspicious Activity</h4>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">If anyone asks for upfront fees or OTPs, report them instantly.</p>
+                <div className="grid gap-8">
+                    <h3 className="text-[11px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.3em] ml-1 flex items-center gap-2">
+                        <div className="w-1.5 h-3 bg-emerald-500 rounded-full" />
+                        {t.essentialGuidelines}
+                    </h3>
+                    <div className="grid sm:grid-cols-2 gap-6">
+                        {[
+                            { icon: "💰", title: t.ruleInAppPayments, text: t.ruleInAppPaymentsDesc },
+                            { icon: "👤", title: t.ruleVerifyProfiles, text: t.ruleVerifyProfilesDesc },
+                            { icon: "💬", title: t.ruleStayInChat, text: t.ruleStayInChatDesc },
+                            { icon: "🚩", title: t.ruleReportAbuse, text: t.ruleReportAbuseDesc }
+                        ].map((rule, i) => (
+                            <div key={i} className="group p-8 bg-gray-50/50 dark:bg-gray-900/40 rounded-[2.5rem] border-2 border-gray-100 dark:border-gray-800 hover:border-emerald-500/30 transition-all shadow-sm">
+                                <div className="text-3xl mb-4 group-hover:scale-125 transition-transform origin-left">{rule.icon}</div>
+                                <h4 className="font-black text-md text-gray-900 dark:text-white mb-2 uppercase tracking-tight">{rule.title}</h4>
+                                <p className="text-sm text-gray-400 dark:text-gray-500 font-medium leading-relaxed">{rule.text}</p>
+                            </div>
+                        ))}
                     </div>
                 </div>
-            </div>
 
-            <div className="grid md:grid-cols-2 gap-6 pt-2">
-                <div>
-                    <h3 className="text-md font-bold text-emerald-600 dark:text-emerald-400 mb-2">For Workers</h3>
-                    <ul className="space-y-2 text-sm">
-                        <li className="flex gap-2"><span>•</span> <strong>Verify Location:</strong> Check the map before accepting.</li>
-                        <li className="flex gap-2"><span>•</span> <strong>Public Places:</strong> Meet in well-known areas first.</li>
-                        <li className="flex gap-2"><span>•</span> <strong>Clear Terms:</strong> Agree on rates before starting.</li>
-                    </ul>
-                </div>
-                <div>
-                    <h3 className="text-md font-bold text-blue-600 dark:text-blue-400 mb-2">For Employers</h3>
-                    <ul className="space-y-2 text-sm">
-                        <li className="flex gap-2"><span>•</span> <strong>ID Check:</strong> You can ask for Aadhaar/Voter ID.</li>
-                        <li className="flex gap-2"><span>•</span> <strong>Clear Instructions:</strong> Be precise about the task.</li>
-                        <li className="flex gap-2"><span>•</span> <strong>Treat Fairly:</strong> Provide water for long-duration jobs.</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </InfoBaseModal>
-);
-
-export const CommunityGuidelinesModal: React.FC<{ isOpen: boolean; onClose: () => void }> = (props) => (
-    <InfoBaseModal {...props} title="Community Guidelines" icon={Users}>
-        <div className="space-y-4">
-            <p>CHOWKAR is built on trust. To keep this community safe and helpful, please follow these rules:</p>
-            <div className="grid md:grid-cols-2 gap-4 mt-4">
-                <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                    <h4 className="font-bold text-emerald-600 dark:text-emerald-400 mb-2">Respect Everyone</h4>
-                    <p className="text-sm">No abusive language, discrimination, or harassment. Treat everyone with dignity.</p>
-                </div>
-                <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                    <h4 className="font-bold text-emerald-600 dark:text-emerald-400 mb-2">Be Reliable</h4>
-                    <p className="text-sm">If you accept a job, show up. If you hire someone, pay firmly and on time.</p>
-                </div>
-                <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                    <h4 className="font-bold text-emerald-600 dark:text-emerald-400 mb-2">Honest Reviews</h4>
-                    <p className="text-sm">Leave genuine ratings. Do not use ratings as a bargaining tool.</p>
-                </div>
-                <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                    <h4 className="font-bold text-emerald-600 dark:text-emerald-400 mb-2">No Illegal Work</h4>
-                    <p className="text-sm">Posting or soliciting illegal activities will result in an immediate ban.</p>
+                <div className="grid md:grid-cols-2 gap-8 pt-4">
+                    <div className="bg-emerald-50/30 dark:bg-emerald-950/20 p-8 rounded-[2.5rem] border-2 border-emerald-100 dark:border-emerald-900/30">
+                        <h3 className="text-xl font-black text-emerald-600 dark:text-emerald-400 mb-4 uppercase tracking-tight">{t.forWorkers}</h3>
+                        <ul className="space-y-4 text-sm font-medium text-gray-600 dark:text-gray-400">
+                            <li className="flex gap-3"><span>✅</span> <strong>{t.verifyLocation}:</strong> {t.verifyLocationDesc}</li>
+                            <li className="flex gap-3"><span>✅</span> <strong>{t.publicPlaces}:</strong> {t.publicPlacesDesc}</li>
+                            <li className="flex gap-3"><span>✅</span> <strong>{t.fixedRates}:</strong> {t.fixedRatesDesc}</li>
+                        </ul>
+                    </div>
+                    <div className="bg-blue-50/30 dark:bg-blue-950/20 p-8 rounded-[2.5rem] border-2 border-blue-100 dark:border-blue-900/30">
+                        <h3 className="text-xl font-black text-blue-600 dark:text-blue-400 mb-4 uppercase tracking-tight">{t.forEmployers}</h3>
+                        <ul className="space-y-4 text-sm font-medium text-gray-600 dark:text-gray-400">
+                            <li className="flex gap-3"><span>🛡️</span> <strong>{t.idValidation}:</strong> {t.idValidationDesc}</li>
+                            <li className="flex gap-3"><span>🛡️</span> <strong>{t.workScope}:</strong> {t.workScopeDesc}</li>
+                            <li className="flex gap-3"><span>🛡️</span> <strong>{t.fairConduct}:</strong> {t.fairConductDesc}</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
-        </div>
-    </InfoBaseModal>
-);
+        </InfoBaseModal>
+    );
+};
 
-export const TermsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = (props) => (
-    <InfoBaseModal {...props} title="Terms of Service" icon={FileText}>
-        <div className="space-y-4 text-sm">
-            <p><strong>Last Updated: Dec 2024</strong></p>
-            <p>By using CHOWKAR, you agree to these simplified terms:</p>
-            <ol className="list-decimal pl-5 space-y-2">
-                <li><strong>Platform Role:</strong> CHOWKAR is an intermediary connecting Workers and Posters. We are not responsible for the quality of work or conduct of users, though we strive to ensure safety.</li>
-                <li><strong>Payments:</strong> All payments are made directly between users or via our secure wallet. CHOWKAR is not liable for cash disputes.</li>
-                <li><strong>Data Privacy:</strong> We collect location and phone data to provide services. We do not sell your personal data to third-party ad networks.</li>
-                <li><strong>Termination:</strong> We reserve the right to ban users who violate our Community Guidelines.</li>
-            </ol>
-            <p className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/10 text-yellow-800 dark:text-yellow-200 rounded-lg border border-yellow-100 dark:border-yellow-800">
-                This contains a summary. For full legal text, please contact legal@chowkar.in
-            </p>
-        </div>
-    </InfoBaseModal>
-);
+export const CommunityGuidelinesModal: React.FC<{ isOpen: boolean; onClose: () => void }> = (props) => {
+    const { t } = useUser();
+    return (
+        <InfoBaseModal {...props} title={t.guidelinesTitle} icon={Users}>
+            <div className="space-y-8">
+                <p className="text-lg font-medium leading-relaxed text-gray-500 dark:text-gray-400">{t.guidelinesDesc}</p>
+                <div className="grid md:grid-cols-2 gap-6">
+                    {[
+                        { color: "emerald", icon: "🤝", title: t.respectTitle, text: t.respectDesc },
+                        { color: "blue", icon: "✨", title: t.reliableTitle, text: t.reliableDesc },
+                        { color: "amber", icon: "⭐", title: t.honestReviews, text: t.honestReviewsDesc },
+                        { color: "red", icon: "✋", title: t.safetyFirst, text: t.safetyFirstDesc }
+                    ].map((item, i) => (
+                        <div key={i} className="group p-8 bg-white dark:bg-gray-900 rounded-[2.5rem] border-2 border-gray-100 dark:border-gray-800 shadow-glass transition-all hover:-translate-y-1">
+                            <div className="text-2xl mb-4">{item.icon}</div>
+                            <h4 className={`font-black text-${item.color}-600 dark:text-${item.color}-400 mb-3 uppercase tracking-[0.2em] text-xs flex items-center gap-2`}>
+                                {item.title}
+                            </h4>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium leading-relaxed">{item.text}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </InfoBaseModal>
+    );
+};
+
+export const TermsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = (props) => {
+    const { t } = useUser();
+    return (
+        <InfoBaseModal {...props} title={t.termsTitle} icon={FileText}>
+            <div className="space-y-8">
+                <div className="bg-gray-50 dark:bg-gray-900/50 p-6 rounded-[2rem] border-2 border-gray-100 dark:border-gray-800 inline-block font-black text-xs uppercase tracking-widest text-gray-400">
+                    {t.lastUpdated}: Dec 2024
+                </div>
+                <div className="space-y-4 text-gray-600 dark:text-gray-400 font-medium leading-relaxed text-lg">
+                    <p>{t.termsIntro}</p>
+                    <ol className="list-decimal pl-6 space-y-4">
+                        <li><strong className="text-gray-900 dark:text-white">{t.termRole}:</strong> {t.termRoleDesc}</li>
+                        <li><strong className="text-gray-900 dark:text-white">{t.termPayments}:</strong> {t.termPaymentsDesc}</li>
+                        <li><strong className="text-gray-900 dark:text-white">{t.termPrivacy}:</strong> {t.termPrivacyDesc}</li>
+                        <li><strong className="text-gray-900 dark:text-white">{t.termTermination}:</strong> {t.termTerminationDesc}</li>
+                    </ol>
+                </div>
+                <div className="p-8 bg-amber-50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-400 rounded-[2.5rem] border-2 border-amber-100 dark:border-amber-900/30 flex items-center gap-4">
+                    <AlertTriangle size={32} />
+                    <p className="text-sm font-bold">{t.termsSummary}</p>
+                </div>
+            </div>
+        </InfoBaseModal>
+    );
+};

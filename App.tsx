@@ -6,19 +6,19 @@ import { ChatMessage, Coordinates, Job, JobStatus, UserRole } from './types';
 import {
   MapPin, UserCircle, ArrowLeftRight, Bell, MessageCircle, Languages, Loader2
 } from 'lucide-react';
-import { supabase } from './lib/supabase';
+import { supabase, waitForSupabase } from './lib/supabase';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // --- Lazy loaded Pages ---
 const Home = lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
 const Profile = lazy(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
-const WalletPage = lazy(() => import('./pages/Wallet').then(m => ({ default: m.Wallet })));
 const PostJob = lazy(() => import('./pages/PostJob').then(m => ({ default: m.PostJob })));
+const Analytics = lazy(() => import('./pages/Analytics').then(m => ({ default: m.Analytics })));
 
 // --- Lazy loaded Components ---
 const Confetti = lazy(() => import('./components/Confetti').then(m => ({ default: m.Confetti })));
 const ChatInterface = lazy(() => import('./components/ChatInterface').then(m => ({ default: m.ChatInterface })));
 const ReviewModal = lazy(() => import('./components/ReviewModal').then(m => ({ default: m.ReviewModal })));
-const PaymentModal = lazy(() => import('./components/PaymentModal').then(m => ({ default: m.PaymentModal })));
 const BidModal = lazy(() => import('./components/BidModal').then(m => ({ default: m.BidModal })));
 const JobDetailsModal = lazy(() => import('./components/JobDetailsModal').then(m => ({ default: m.JobDetailsModal })));
 const EditProfileModal = lazy(() => import('./components/EditProfileModal').then(m => ({ default: m.EditProfileModal })));
@@ -35,10 +35,9 @@ const UserProfileModal = lazy(() => import('./components/UserProfileModal').then
 import { BottomNav } from './components/BottomNav';
 
 // Services
-import { signInWithGoogle, completeProfile, markWelcomeBonusAsSeen } from './services/authService';
+import { signInWithGoogle } from './services/authService';
 import { useDeepLinkHandler } from './hooks/useDeepLinkHandler';
 import { cancelJob } from './services/jobService';
-import { checkWalletBalance, deductFromWallet, getAppConfig } from './services/paymentService';
 import { setupPushListeners, removePushListeners, isPushSupported } from './services/pushService';
 import { handleNotificationNavigation, parseNotificationData } from './services/notificationNavigationService';
 import { editMessage } from './services/chatService';
@@ -48,11 +47,12 @@ const AppContent: React.FC = () => {
   const {
     user, setUser, role, setRole, language, setLanguage, isLoggedIn, setIsLoggedIn, isAuthLoading,
     loadingMessage, retryAuth,
-    notifications, transactions, messages, setMessages,
+    notifications, messages, setMessages,
     addNotification, logout, t,
     showSubscriptionModal, setShowSubscriptionModal,
     showAlert, currentAlert, updateUserInDB, refreshUser, setActiveChatId,
-    markNotificationsAsReadForJob, setActiveJobId, deleteNotification, clearNotificationsForJob
+    markNotificationsAsReadForJob, setActiveJobId, deleteNotification, clearNotificationsForJob,
+    showEditProfile, setShowEditProfile
   } = useUser();
 
   const { jobs, updateJob, deleteJob, updateBid, getJobWithFullDetails, refreshJobs } = useJobs();
@@ -74,9 +74,7 @@ const AppContent: React.FC = () => {
   // --- UI State ---
   const [showNotifications, setShowNotifications] = useState(false);
   const [showChatList, setShowChatList] = useState(false);
-  const [showBidHistory, setShowBidHistory] = useState(false); // Used in Wallet Page
   const [showFilterModal, setShowFilterModal] = useState(false); // Used in Home Page
-  const [showEditProfile, setShowEditProfile] = useState(false); // Used in Profile Page
 
   // --- Global Modals State ---
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
@@ -85,29 +83,11 @@ const AppContent: React.FC = () => {
   const [reviewModalData, setReviewModalData] = useState<{ isOpen: boolean, revieweeId: string, revieweeName: string, jobId: string } | null>(null);
   const [viewBidsModal, setViewBidsModal] = useState<{ isOpen: boolean; job: Job | null }>({ isOpen: false, job: null });
   const [counterModalOpen, setCounterModalOpen] = useState<{ isOpen: boolean; bidId: string | null; jobId: string | null; initialAmount: string }>({ isOpen: false, bidId: null, jobId: null, initialAmount: '' });
-
-  // Worker Payment Modal State (for unlocking chat after bid accepted)
-  const [workerPaymentModal, setWorkerPaymentModal] = useState<{ isOpen: boolean; job: Job | null; bidId: string | null }>({ isOpen: false, job: null, bidId: null });
-
   // User Profile Modal State
   const [profileModal, setProfileModal] = useState<{ isOpen: boolean; userId: string; userName?: string }>({ isOpen: false, userId: '' });
 
-  // Wallet Refill Modal State
-  const [showWalletRefill, setShowWalletRefill] = useState(false);
+  // --- UI State ---
 
-  // --- Job Editing State (Used in Home Page -> Edit) ---
-  const [editingJob, setEditingJob] = useState<Job | null>(null);
-  // Note: edit state was mostly local in original app but navigation handling implies it might navigate to Post page?
-  // In the original, handleEditJobLink set local state but didn't seem to open a modal directly in the return.
-  // It set `editingJob` and friends.
-  // For this refactor, I'll rely on navigating to /post with state or handling it. 
-  // Given user wants "split" not "rewrite", I will keep logic as close as possible but structured.
-  // The original App had `handleEditJobLink` but it wasn't clear what it rendered. 
-  // It seems it was preparing to use the `PostJob` component (if it was embedded) or similar.
-  // I will leave the `handleEditJobLink` logic as a stub or navigation for now until I see `PostJob` usage.
-  // Actually, I'll just keep the Navigate to Post for editing if I can.
-  // For now, I'll implement `handleEditJobLink` to Navigate to ` / post` with the job state to pre-fill it (requires PostJob update, but I can't touch it easily).
-  // So I will just keep the legacy state for now in case I missed where it renders.
   // Update: I will just use `useNavigate` to go to ` / post` with state.
   const navigate = useNavigate();
   const location = useLocation();
@@ -127,26 +107,10 @@ const AppContent: React.FC = () => {
         return; // Prioritize Role Selection
       }
 
-      // 2. Profile Completion (Phone/Location) - ONLY pop up if we are sure (user object has been synced)
-      // The optimistic user from auth change might lack phone/location.
-      // We'll assume if walletBalance is defined, we have fetched from DB (since optimistic doesn't usually set exact wallet from DB without fetch)
-      // Actually, let's just use a simpler heuristic: don't auto-show unless we are sure they are missing.
-      // But we need them to fill it. 
+      // 2. Profile Completion (Phone/Location) - Show if essential fields missing
+      // Don't auto-show unless we are sure they are missing. 
 
-      // 2. Profile Completion (Name/Phone/Location)
-      // DISABLED: Profile completion requirement temporarily disabled
-      // if (user.id) {
-      //   const isNameMissing = !user.name || user.name.trim() === '';
-      //   const isPhoneMissing = !user.phone || user.phone.trim() === '';
-      //   const isLocationMissing = !user.location || user.location === 'Not set' || user.location.trim() === '';
 
-      //   if (isNameMissing || isPhoneMissing || isLocationMissing) {
-      //     console.log('[App] Profile incomplete, redirecting to /profile:', { name: !isNameMissing, phone: !isPhoneMissing, location: !isLocationMissing });
-      //     if (location.pathname !== '/profile') {
-      //       navigate('/profile');
-      //     }
-      //   }
-      // }
 
     }
   }, [isLoggedIn, isAuthLoading, user]);
@@ -271,38 +235,16 @@ const AppContent: React.FC = () => {
     }
   }, [jobs, viewBidsModal.isOpen, viewBidsModal.job?.id, selectedJob?.id]);
 
+
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  // WELCOME BONUS CELEBRATION (One-time)
-  useEffect(() => {
-    if (isLoggedIn && transactions.length > 0) {
-      const bonusTx = transactions.find(t => t.description === 'Welcome Bonus ₹100');
-      if (bonusTx && user.hasSeenWelcomeBonus === false) {
-        // Show celebration
-        showAlert(language === 'en'
-          ? "Congratulations! You've received a ₹100 Welcome Bonus! 🎁"
-          : "बधाई हो! आपको ₹100 का स्वागत बोनस मिला है! 🎁", 'success');
-        setShowConfetti(true);
-        setTimeout(() => setShowConfetti(false), 5000);
-
-        // Mark as seen in DB
-        markWelcomeBonusAsSeen(user.id);
-
-        // Optimistic update local state to prevent multiple shows while DB updates
-        setUser(prev => ({ ...prev, hasSeenWelcomeBonus: true }));
-        // Legacy fallback
-        localStorage.setItem(`chowkar_bonus_shown_${user.id}`, 'true');
-      }
-    }
-  }, [isLoggedIn, transactions, user.id, user.hasSeenWelcomeBonus]);
-
   // Count chats with unread messages (only for IN_PROGRESS or COMPLETED jobs)
+  // Note: Chat notification titles are "{SenderName} 💬" from the SQL trigger
   const unreadChatCount = notifications.filter(n =>
     n.userId === user.id &&
     !n.read &&
-    n.title === "New Message" && // Only count actual message notifications
-    n.relatedJobId &&
-    jobs.some(j => j.id === n.relatedJobId && j.status !== 'OPEN') // Exclude OPEN jobs
+    (n.title?.includes('💬') || n.title?.toLowerCase().includes('message')) && // Match chat notifications
+    n.relatedJobId
   ).reduce((acc, n) => {
     if (!acc.includes(n.relatedJobId!)) acc.push(n.relatedJobId!);
     return acc;
@@ -352,24 +294,35 @@ const AppContent: React.FC = () => {
   const handleLogout = async () => { await logout(); };
 
   const handleChatOpen = async (job: Job, receiverId?: string) => {
-    // VALIDATE: Chat only for IN_PROGRESS or COMPLETED jobs
-    if (job.status !== JobStatus.IN_PROGRESS && job.status !== JobStatus.COMPLETED) {
+    // 0. CHECK PROFILE COMPLETION (Source of Truth)
+    if (!user.phone || !user.location || user.location === 'Not set') {
+      setShowEditProfile(true);
       showAlert(language === 'en'
-        ? 'Chat is only available after job is accepted'
-        : 'चैट केवल जॉब स्वीकार होने के बाद उपलब्ध है', 'info');
+        ? 'Please complete your profile (Phone & Location) to start chatting.'
+        : 'चैटिंग शुरू करने के लिए कृपया अपनी प्रोफ़ाइल (फ़ोन और स्थान) पूरी करें।', 'info');
       return;
     }
 
-    // SURGICAL LOADING: If this job came from a lightweight feed (no bids), fetch full details
-    // This is critical for COMPLETED/IN_PROGRESS jobs where we need the bids to identify participants
+    // 1. SURGICAL LOADING: If this job came from a lightweight feed (no bids), fetch full details
     let jobWithBids = job;
     if (job.bids.length === 0 || (job.acceptedBidId && !job.bids.find(b => b.id === job.acceptedBidId))) {
       const fetched = await getJobWithFullDetails(job.id);
       if (fetched) jobWithBids = fetched;
     }
 
-    // VALIDATE: Only poster or accepted worker can chat
+    // 2. CHECK STATUS
+    const isHired = jobWithBids.status === JobStatus.IN_PROGRESS || jobWithBids.status === JobStatus.COMPLETED;
     const acceptedBid = jobWithBids.bids.find(b => b.id === jobWithBids.acceptedBidId);
+
+    // VALIDATE: Chat only for IN_PROGRESS or COMPLETED jobs
+    if (!isHired) {
+      showAlert(language === 'en'
+        ? 'Chat is only available after you hire a worker'
+        : 'चैट केवल कामगार को नियुक्त करने के बाद ही उपलब्ध है', 'info');
+      return;
+    }
+
+    // 3. VALIDATE PARTICIPANT: Only poster or accepted worker can chat
     const isParticipant = user.id === jobWithBids.posterId || user.id === acceptedBid?.workerId;
 
     if (!isParticipant) {
@@ -379,57 +332,11 @@ const AppContent: React.FC = () => {
       return;
     }
 
-    // Use the enriched job object for the rest of the function
-    const currentJob = jobWithBids;
-
-    // WORKER PAYMENT CHECK: If user is the accepted worker, check if they've paid
-    if (user.id === acceptedBid?.workerId && acceptedBid) {
-      // Check connection_payment_status from database
-      const { data: bidData } = await supabase
-        .from('bids')
-        .select('connection_payment_status')
-        .eq('id', acceptedBid.id)
-        .single();
-
-      if (bidData?.connection_payment_status !== 'PAID') {
-        // Worker hasn't paid - check wallet first
-        const config = await getAppConfig();
-        const connectionFee = config.connection_fee;
-        const { sufficient } = await checkWalletBalance(user.id, connectionFee);
-
-        if (sufficient) {
-          // Deduct from wallet and mark as paid
-          const { success } = await deductFromWallet(user.id, connectionFee, 'Connection Fee', 'CONNECTION', currentJob.id);
-          if (success) {
-            // Update bid payment status
-            await supabase.from('bids').update({ connection_payment_status: 'PAID' }).eq('id', acceptedBid.id);
-
-            // Notify poster
-            // DB trigger will handle notification to poster
-            // await addNotification(currentJob.posterId, "Chat is now active", `Chat unlocked for "${currentJob.title}"!`, "SUCCESS", currentJob.id);
-            showAlert(language === 'en' ? `Chat unlocked! ₹${connectionFee} deducted from wallet.` : `चैट अनलॉक! वॉलेट से ₹${connectionFee} काटे गए।`, 'success');
-
-            // Open chat
-            setChatOpen({ isOpen: true, job: currentJob, receiverId: currentJob.posterId });
-            setActiveChatId(currentJob.id);
-            setActiveJobId(currentJob.id);
-            markNotificationsAsReadForJob(currentJob.id);
-            setShowChatList(false);
-            return;
-          }
-        }
-
-        // Wallet insufficient - show payment modal
-        setWorkerPaymentModal({ isOpen: true, job: currentJob, bidId: acceptedBid.id });
-        return;
-      }
-    }
-
-    // Either poster or paid worker - open chat
-    setChatOpen({ isOpen: true, job: currentJob, receiverId });
-    setActiveChatId(currentJob.id);
-    setActiveJobId(currentJob.id);
-    markNotificationsAsReadForJob(currentJob.id);
+    // Open chat immediately - no payment required
+    setChatOpen({ isOpen: true, job: jobWithBids, receiverId });
+    setActiveChatId(jobWithBids.id);
+    setActiveJobId(jobWithBids.id);
+    markNotificationsAsReadForJob(jobWithBids.id);
     setShowChatList(false);
   };
 
@@ -448,17 +355,25 @@ const AppContent: React.FC = () => {
 
     if (!receiverId) {
       // Fallback logic
-      const acceptedBid = job.bids.find(b => b.id === job.acceptedBidId);
+      const acceptedBid = job.bids?.find(b => b.id === job.acceptedBidId);
+      const agreedBid = job.bids?.find(b => b.negotiationHistory?.some((h: any) => h.agreed));
+
       if (isPoster) {
-        receiverId = acceptedBid?.workerId;
+        receiverId = acceptedBid?.workerId || agreedBid?.workerId;
       } else {
         receiverId = job.posterId;
       }
     }
 
+    // Failsafe for Worker roles
+    if (!receiverId && !isPoster) {
+      receiverId = job.posterId;
+      console.log('[Chat] Using job.posterId as failsafe receiverId');
+    }
+
     if (!receiverId) {
-      console.error('Cannot determine chat receiver');
-      showAlert(t.chatReceiverError, 'error');
+      console.error('Cannot determine chat receiver', { isPoster, jobId: job.id });
+      showAlert('Could not find receiver. Please refresh.', 'error');
       return;
     }
 
@@ -476,16 +391,18 @@ const AppContent: React.FC = () => {
 
     // Save to database
     try {
-      const { data, error } = await supabase
-        .from('chat_messages')
-        .insert({
-          job_id: msg.jobId,
-          sender_id: msg.senderId,
-          receiver_id: receiverId,
-          text: msg.text
-        })
-        .select()
-        .single();
+      const { data, error } = await waitForSupabase(async () => {
+        return await supabase
+          .from('chat_messages')
+          .insert({
+            job_id: msg.jobId,
+            sender_id: msg.senderId,
+            receiver_id: receiverId,
+            text: msg.text
+          })
+          .select()
+          .single();
+      });
 
       if (error) {
         console.error('Failed to save message:', error);
@@ -503,9 +420,13 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const handleCompleteJob = async () => {
-    if (!chatOpen.job) return;
-    const currentJob = chatOpen.job;
+  const handleCompleteJob = async (job?: Job) => {
+    // Allow passing job explicitly (from JobDetailsModal) or use chatOpen.job (from ChatInterface)
+    const currentJob = job || chatOpen.job;
+    if (!currentJob) {
+      console.error('[App] handleCompleteJob: No job provided');
+      return;
+    }
 
     try {
       console.log('[App] Marking job as completed:', currentJob.id);
@@ -588,63 +509,24 @@ const AppContent: React.FC = () => {
       }
 
       if (action === 'ACCEPT') {
-        // WORKER ACCEPTS COUNTER = JOB FINALIZED (but worker needs to pay to unlock chat)
-        // 1. Call accept_bid RPC (no fees anymore)
-        const { error: acceptError } = await supabase.rpc('accept_bid', {
-          p_job_id: jobId,
-          p_bid_id: bidId,
-          p_poster_id: job.posterId,
-          p_worker_id: bid.workerId,
-          p_amount: bid.amount,
-          p_poster_fee: 0 // No fee - already paid when posting
-        });
-        if (acceptError) throw acceptError;
+        // NEW FLOW: Worker AGREES to poster's terms, but Poster must Finalize
+        // This prevents the job from immediately moving to IN_PROGRESS without poster's final check
 
-        // 2. Broadcast job update for instant real-time sync
-        try {
-          const updatedJobPayload = {
-            id: jobId,
-            status: 'IN_PROGRESS',
-            accepted_bid_id: bidId,
-            poster_id: job.posterId,
-            title: job.title,
-            description: job.description,
-            category: job.category,
-            budget: job.budget,
-            location: job.location,
-            latitude: job.coordinates?.lat,
-            longitude: job.coordinates?.lng,
-            poster_name: job.posterName,
-            poster_photo: job.posterPhoto,
-            created_at: new Date(job.createdAt).toISOString()
-          };
-          const channel = supabase.channel('job_system_hybrid_sync');
-          await channel.subscribe();
-          await channel.send({
-            type: 'broadcast',
-            event: 'job_updated',
-            payload: updatedJobPayload
-          });
-        } catch (broadcastErr) {
-          console.warn('[Accept] Job broadcast failed:', broadcastErr);
-        }
+        const updatedBid = {
+          ...bid,
+          status: 'PENDING' as const,
+          negotiationHistory: [...(bid.negotiationHistory || []), {
+            amount: bid.amount,
+            by: UserRole.WORKER,
+            timestamp: Date.now(),
+            agreed: true
+          }]
+        };
 
-        // 3. Notify Poster with clear context - no mention of payment!
-        // DB triggers on bids table will handle notifications
-        /*
-        await addNotification(
-          job.posterId,
-          "Worker Confirmed! 🎉",
-          `${bid.workerName} confirmed for "${job.title}" at ₹${bid.amount}. Chat will be ready shortly!`,
-          "SUCCESS",
-          jobId
-        );
-        */
-        // Note: addNotification now handles push automatically
+        await updateBid(updatedBid);
 
-        // 4. Show worker their payment modal to unlock chat
-        setWorkerPaymentModal({ isOpen: true, job, bidId });
-        showAlert(t.counterAcceptedPay, 'success');
+        // Notify Poster (DB trigger will also likely fire when bid is updated)
+        showAlert(t.waitingForPosterFinalize || "Offer accepted! Waiting for Employer to finalize.", 'success');
 
       } else if (action === 'REJECT') {
         // Confirmation dialog
@@ -676,6 +558,17 @@ const AppContent: React.FC = () => {
     try {
       const job = jobs.find(j => j.id === jobId); if (!job) return;
       const bid = job.bids.find(b => b.id === bidId);
+      if (!bid) return;
+
+      // Persist withdrawal to DB by marking as REJECTED (using RPC for safety)
+      const { safeRPC } = await import('./lib/supabase');
+      const { data, error } = await safeRPC('withdraw_from_job', { p_job_id: jobId, p_bid_id: bidId });
+
+      if (error || (data && !data.success)) {
+        throw new Error(error?.message || data?.error || 'Failed to withdraw bid');
+      }
+
+      // Local update (Optimistic)
       const updatedJob = { ...job, bids: job.bids.filter(b => b.id !== bidId) };
       await updateJob(updatedJob);
 
@@ -698,47 +591,32 @@ const AppContent: React.FC = () => {
   };
 
   const handleEditJobLink = async (job: Job) => {
-    // 1. Check for Boost Intent (passed via hacked job prop from JobCard)
-    // JobCard sends a COPY with isBoosted=true. `jobs` state still has isBoosted=false (or true).
-
-    // Check if valid boost request (passed=true, DB=false)
-    const dbJob = jobs.find(j => j.id === job.id);
-    const isBoostRequest = job.isBoosted === true && (!dbJob || dbJob.isBoosted !== true);
-
-    if (isBoostRequest) {
-      if (!confirm(language === 'en' ? `Boost this job for ₹20?\nIt will be pinned to the top of the feed for 24 hours.` : `इस जॉब को ₹20 में बूस्ट करें?\nयह 24 घंटे के लिए सबसे ऊपर दिखेगा।`)) return;
-
-      try {
-        const { checkWalletBalance } = await import('./services/paymentService');
-        const { sufficient } = await checkWalletBalance(user.id, 20);
-
-        if (!sufficient) {
-          if (confirm(language === 'en' ? 'Insufficient balance (₹20 required). Add money to wallet?' : 'अपर्याप्त बैलेंस (₹20 आवश्यक)। वॉलेट में पैसे डालें?')) {
-            setShowWalletRefill(true);
-          }
-          return;
-        }
-
-        const { error } = await supabase.rpc('boost_job', { p_job_id: job.id });
-        if (error) throw error;
-
-        showAlert(language === 'en' ? 'Job Boosted Successfully! 🚀' : 'जॉब सफलतापूर्वक बूस्ट किया गया! 🚀', 'success');
-        setShowConfetti(true);
-        setTimeout(() => setShowConfetti(false), 3000);
-
-        await refreshJobs(); // Update UI
-
-      } catch (e: any) {
-        console.error(e);
-        showAlert(e.message || 'Failed to boost job', 'error');
-      }
+    // Normal Edit Logic
+    if (job.bids.length > 0) {
+      showAlert(t.alertCantEdit, 'error');
       return;
     }
-
-    // Normal Edit Logic
-    if (job.bids.length > 0) { showAlert(t.alertCantEdit, 'error'); return; }
     // Navigate to post page with state to potentially populate it
     navigate('/post', { state: { jobToEdit: job } });
+  };
+
+  const handleCancelJob = async (jobId: string) => {
+    try {
+      setSelectedJob(null); // Close modal immediately
+
+      const result = await cancelJob(jobId);
+
+      if (result.success) {
+        showAlert(t.jobCancelledRefunded || 'Job cancelled successfully.', 'success');
+        // Refresh jobs to update the UI
+        await refreshJobs(user.id);
+      } else {
+        showAlert(result.error || 'Failed to cancel job', 'error');
+      }
+    } catch (error: any) {
+      console.error('[App] Cancel job error:', error);
+      showAlert(`${t.cancellationError || 'Error during cancellation'}: ${error.message || 'Unknown error'}`, 'error');
+    }
   };
 
   const handleEditMessage = async (messageId: string, newText: string) => {
@@ -761,70 +639,27 @@ const AppContent: React.FC = () => {
 
   const handleDeleteMessage = async (messageId: string) => {
     try {
-      await supabase.rpc('soft_delete_chat_message', { p_message_id: messageId });
-      // Update UI to show deleted state (consistent with DB soft delete)
-      setMessages(prev => prev.map(m =>
-        m.id === messageId
-          ? { ...m, text: 'This message was deleted', translatedText: undefined }
-          : m
-      ));
+      // Use service function for direct update (triggering Realtime UPDATE event)
+      // The RPC 'soft_delete_chat_message' currently performs a HARD DELETE which breaks sync
+      const { deleteMessage } = await import('./services/chatService');
+      const result = await deleteMessage(messageId);
+
+      if (result.success) {
+        // Optimistic UI update
+        setMessages(prev => prev.map(m =>
+          m.id === messageId
+            ? { ...m, text: 'This message was deleted', translatedText: undefined, isDeleted: true }
+            : m
+        ));
+      } else {
+        console.error('Failed to delete message:', result.error);
+      }
     } catch (error) {
       console.error('Error deleting message:', error);
     }
   };
 
-  const handleCancelJob = async (jobId: string) => {
-    try {
-      const result = await cancelJob(jobId, 'Cancelled by user');
-      if (result.success) {
-        showAlert(t.jobCancelledRefunded, 'success');
-        setSelectedJob(null);
-        await refreshUser(); // Update wallet balance
-      } else {
-        showAlert(result.error || t.cancelError, 'error');
-      }
-    } catch (e) {
-      console.error(e);
-      showAlert(t.cancellationError, 'error');
-    }
-  };
 
-  // Worker Payment Success Handler - Updates bid and opens chat
-  const handleWorkerPaymentSuccess = async (paymentId: string) => {
-    if (!workerPaymentModal.job || !workerPaymentModal.bidId) return;
-
-    try {
-      // 1. Update bid status in database
-      const { error } = await supabase
-        .from('bids')
-        .update({ connection_payment_status: 'PAID' })
-        .eq('id', workerPaymentModal.bidId);
-
-      if (error) throw error;
-
-      // 2. Refresh local state
-      await refreshUser(); // Update balance
-
-      showAlert(t.paymentSuccessChat, 'success');
-      setShowConfetti(true);
-      setTimeout(() => setShowConfetti(false), 5000);
-
-      // 3. Open chat automatically
-      handleChatOpen(workerPaymentModal.job);
-    } catch (err: any) {
-      console.error('Payment callback error:', err);
-      showAlert('Payment recorded but failed to update status. Please contact support.', 'error');
-    }
-  };
-
-  const handleWalletPaymentSuccess = async (paymentId: string, amount: number) => {
-    // Balance is updated in DB by process_transaction in PaymentModal, 
-    // but we update local state for instant feedback.
-    setUser(prev => ({ ...prev, walletBalance: prev.walletBalance + amount }));
-    showAlert(`₹${amount} added to your wallet!`, 'success');
-    setShowConfetti(true);
-    setTimeout(() => setShowConfetti(false), 5000);
-  };
 
   // --- Views ---
 
@@ -838,7 +673,19 @@ const AppContent: React.FC = () => {
     );
   }
 
-  if (!isLoggedIn) {
+  // CRITICAL FIX: Also show landing if isLoggedIn but user.id is empty (stale localStorage, session expired)
+  // This prevents the "blank user" bug where main UI shows without a valid session
+  if (!isLoggedIn || !user.id) {
+    // If localStorage thinks we're logged in but session isn't ready, show a brief loading state
+    if (isLoggedIn && !user.id) {
+      return (
+        <div className="min-h-screen bg-green-50 dark:bg-gray-950 flex flex-col items-center justify-center p-6 text-gray-900 dark:text-white">
+          <Loader2 size={32} className="text-emerald-600 dark:text-emerald-500 animate-spin mb-4" />
+          <p className="text-emerald-700 dark:text-emerald-400 font-medium">{t.loading}</p>
+        </div>
+      );
+    }
+
     return (
       <Suspense fallback={
         <div className="h-[100dvh] w-full flex flex-col items-center justify-center bg-green-50 dark:bg-gray-950 transition-colors duration-300">
@@ -859,33 +706,69 @@ const AppContent: React.FC = () => {
     );
   }
 
+
   // --- Main Layout ---
   return (
     <div className="h-[100dvh] w-full bg-green-50 dark:bg-gray-950 font-sans text-gray-900 dark:text-white flex flex-col overflow-hidden transition-colors duration-300">
       {/* Header */}
-      <header className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 z-30 shadow-sm flex-none transition-colors duration-300 pt-safe">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
-            <MapPin size={24} className="text-emerald-600 dark:text-emerald-500" fill="#10b981" />
-            <div><h1 className="text-xl font-bold text-emerald-900 dark:text-white leading-none">CHOWKAR</h1></div>
+      <header className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800 z-30 shadow-glass flex-none transition-all duration-300 pt-safe sticky top-0">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/')}>
+            <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center shadow-lg transform group-hover:rotate-6 transition-transform">
+              <MapPin size={22} className="text-white" fill="rgba(255,255,255,0.2)" />
+            </div>
+            <div>
+              <h1 className="text-xl font-black text-gray-900 dark:text-white tracking-tighter leading-none">CHOWKAR</h1>
+              <div className="h-1 w-6 bg-emerald-500 rounded-full mt-1 group-hover:w-10 transition-all" />
+            </div>
           </div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-6">
-            <button onClick={() => navigate('/')} className={`text-sm font-bold ${location.pathname === '/' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400'}`}>{t.navHome}</button>
-            {role === UserRole.POSTER && (
-              <button onClick={() => navigate('/post')} className={`text-sm font-bold ${location.pathname === '/post' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400'}`}>{t.navPost}</button>
-            )}
-            <button onClick={() => navigate('/wallet')} className={`text-sm font-bold ${location.pathname === '/wallet' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400'}`}>{t.navWallet}</button>
-            <button onClick={() => navigate('/profile')} className={`text-sm font-bold ${location.pathname === '/profile' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400'}`}>{t.navProfile}</button>
+          <nav className="hidden md:flex items-center gap-10">
+            {[
+              { path: '/', label: t.navHome },
+              { path: '/post', label: t.navPost, role: UserRole.POSTER },
+              { path: '/profile', label: t.navProfile }
+            ].map((link) => {
+              if (link.role && role !== link.role) return null;
+              const active = location.pathname === link.path;
+              return (
+                <button
+                  key={link.path}
+                  onClick={() => {
+                    if (link.path === '/post' && (!user.phone || !user.location || user.location === 'Not set')) {
+                      setShowEditProfile(true);
+                      showAlert(language === 'en'
+                        ? 'Please complete your profile (Phone & Location) before posting a job.'
+                        : 'काम पोस्ट करने से पहले कृपया अपनी प्रोफ़ाइल (फ़ोन और स्थान) पूरी करें।', 'info');
+                      return;
+                    }
+                    navigate(link.path);
+                  }}
+                  className={`text-[11px] font-black uppercase tracking-[0.2em] transition-all relative group ${active ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-white'}`}
+                >
+                  {link.label}
+                  <span className={`absolute -bottom-2 left-0 h-1 bg-emerald-500 rounded-full transition-all ${active ? 'w-full' : 'w-0 group-hover:w-1/2'}`} />
+                </button>
+              );
+            })}
           </nav>
 
-          <div className="flex items-center gap-3">
-            <button onClick={() => setLanguage(l => l === 'en' ? 'hi' : 'en')} className="p-2 text-emerald-800 dark:text-emerald-400 text-xs font-bold border border-emerald-100 dark:border-emerald-900 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"><Languages size={18} /> {language === 'en' ? 'हि' : 'En'}</button>
-            <button onClick={() => setShowChatList(true)} className="relative p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
-              <MessageCircle size={20} className="text-gray-600 dark:text-gray-400" />
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setLanguage(l => l === 'en' ? 'hi' : 'en')}
+              className="px-4 py-2 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-widest border border-emerald-100 dark:border-emerald-800/50 rounded-xl bg-emerald-50/50 dark:bg-emerald-900/20 hover:scale-105 transition-all flex items-center gap-2 shadow-sm"
+            >
+              <Languages size={15} strokeWidth={2.5} /> {language === 'en' ? 'हिन्दी' : 'English'}
+            </button>
+            <div className="w-px h-6 bg-gray-100 dark:bg-gray-800 mx-1 hidden sm:block" />
+            <button
+              onClick={() => setShowChatList(true)}
+              className="relative p-2.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl transition-all active:scale-90"
+            >
+              <MessageCircle size={22} className="text-gray-600 dark:text-gray-400" strokeWidth={2} />
               {unreadChatCount > 0 && (
-                <span className="absolute top-1.5 right-2 min-w-[18px] h-[18px] bg-emerald-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                <span className="absolute -top-1 -right-1 min-w-[20px] h-[20px] bg-emerald-500 text-white text-[10px] font-black rounded-full flex items-center justify-center px-1.5 shadow-[0_0_10px_rgba(16,185,129,0.5)] border-2 border-white dark:border-gray-900">
                   {unreadChatCount}
                 </span>
               )}
@@ -893,61 +776,77 @@ const AppContent: React.FC = () => {
             <button
               onClick={() => setShowNotifications(true)}
               data-notifications-button
-              className="relative p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+              className="relative p-2.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl transition-all active:scale-90"
             >
-              <Bell size={20} className="text-gray-600 dark:text-gray-400" />
+              <Bell size={22} className="text-gray-600 dark:text-gray-400" strokeWidth={2} />
               {unreadCount > 0 && (
-                <span className="absolute top-1.5 right-2 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                <span className="absolute -top-1 -right-1 min-w-[20px] h-[20px] bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center px-1.5 shadow-[0_0_10px_rgba(239,68,68,0.5)] border-2 border-white dark:border-gray-900">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
             </button>
-
           </div>
         </div>
       </header>
 
       {/* Alerts */}
       {showConfetti && <Confetti />}
+      {/* Premium Alerts */}
+      {showConfetti && <Confetti />}
       {currentAlert && (
-        <div className={`fixed top-16 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-full shadow-xl font-bold text-sm flex items-center gap-3 backdrop-blur-md ${currentAlert.type === 'error' ? 'bg-red-500/90 text-white' : currentAlert.type === 'success' ? 'bg-emerald-600/90 text-white' : 'bg-gray-800/90 text-white'} `}>
-          <span>{currentAlert.message}</span>
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[200] animate-slide-down pointer-events-none">
+          <div className={`px-8 py-4 rounded-[2rem] shadow-[0_20px_40px_rgba(0,0,0,0.1)] font-black text-xs uppercase tracking-[0.2em] flex items-center gap-4 backdrop-blur-xl border ${currentAlert.type === 'error' ? 'bg-red-500/90 text-white border-red-400/50' : currentAlert.type === 'success' ? 'bg-emerald-600/90 text-white border-emerald-500/50' : 'bg-gray-900/90 text-white border-gray-700/50'} `}>
+            <div className={`w-2 h-2 rounded-full animate-pulse ${currentAlert.type === 'error' ? 'bg-red-200' : currentAlert.type === 'success' ? 'bg-emerald-200' : 'bg-gray-400'}`} />
+            {currentAlert.message}
+          </div>
         </div>
       )}
 
       {/* Router View */}
       <main className="flex-1 overflow-y-auto bg-green-50 dark:bg-gray-950 w-full relative transition-colors duration-300">
-        <div className="max-w-7xl mx-auto w-full h-full">
-          <Suspense fallback={
-            <div className="h-full w-full flex items-center justify-center bg-green-50/50 dark:bg-gray-950/50">
-              <Loader2 size={32} className="text-emerald-600 dark:text-emerald-500 animate-spin" />
-            </div>
-          }>
-            <Routes>
-              <Route path="/" element={<Home
-                onBid={(id) => setBidModalOpen({ isOpen: true, jobId: id })}
-                onViewBids={(j) => {
+        <Suspense fallback={
+          <div className="h-full w-full flex items-center justify-center bg-green-50/50 dark:bg-gray-950/50">
+            <Loader2 size={32} className="text-emerald-600 dark:text-emerald-500 animate-spin" />
+          </div>
+        }>
+          <Routes>
+            <Route path="/" element={<Home
+              onBid={(id) => {
+                if (!user.phone || !user.location || user.location === 'Not set') {
+                  setShowEditProfile(true);
+                  showAlert(language === 'en'
+                    ? 'Please complete your profile (Phone & Location) before bidding.'
+                    : 'बोली लगाने से पहले कृपया अपनी प्रोफ़ाइल (फ़ोन और स्थान) पूरी करें।', 'info');
+                  return;
+                }
+                setBidModalOpen({ isOpen: true, jobId: id });
+              }}
+              onViewBids={(j) => {
+                console.log('[App] onViewBids handler called', j.id);
+                try {
                   setViewBidsModal({ isOpen: true, job: j });
-                  getJobWithFullDetails(j.id, true); // Proactively fetch latest
-                }}
-                onChat={handleChatOpen}
-                onEdit={handleEditJobLink}
-                onClick={(j) => {
-                  setSelectedJob(j);
-                  getJobWithFullDetails(j.id, true); // Proactively fetch latest
-                }}
-                onReplyToCounter={handleWorkerReplyToCounter}
-                onWithdrawBid={handleWithdrawBid}
-                setShowFilterModal={setShowFilterModal}
-                showAlert={showAlert}
-              />} />
-              <Route path="/wallet" element={<WalletPage onShowBidHistory={() => setShowBidHistory(true)} onAddMoney={() => setShowWalletRefill(true)} />} />
-              <Route path="/profile" element={<Profile onEditProfile={() => setShowEditProfile(true)} setShowSubscriptionModal={setShowSubscriptionModal} onLogout={handleLogout} />} />
-              <Route path="/post" element={<PostJob />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Suspense>
-        </div>
+                  getJobWithFullDetails(j.id, true);
+                } catch (err) {
+                  console.error('[App] Error in onViewBids handler', err);
+                }
+              }}
+              onChat={handleChatOpen}
+              onEdit={handleEditJobLink}
+              onClick={(j) => {
+                setSelectedJob(j);
+                getJobWithFullDetails(j.id, true); // Proactively fetch latest
+              }}
+              onReplyToCounter={handleWorkerReplyToCounter}
+              onWithdrawBid={handleWithdrawBid}
+              setShowFilterModal={setShowFilterModal}
+              showAlert={showAlert}
+            />} />
+            <Route path="/profile" element={<Profile setShowSubscriptionModal={setShowSubscriptionModal} onLogout={handleLogout} />} />
+            <Route path="/post" element={<PostJob />} />
+            <Route path="/analytics" element={<Analytics />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </main>
 
       <BottomNav />
@@ -971,17 +870,24 @@ const AppContent: React.FC = () => {
           onEdit={(job) => { setSelectedJob(null); handleEditJobLink(job); }}
           onCancel={handleCancelJob}
           onDelete={async (jobId) => {
+            // Optimistic UI update: Close modal immediately
+            setSelectedJob(null);
+
             try {
-              await deleteJob(jobId);
-              setSelectedJob(null);
-              showAlert(t.alertJobDeleted, 'success');
-            } catch {
-              showAlert('Failed to delete job', 'error');
+              const result = await deleteJob(jobId) as any;
+              if (result && result.success) {
+                showAlert(t.alertJobDeleted, 'success');
+              } else {
+                showAlert(result?.error || 'Failed to delete job', 'error');
+              }
+            } catch (error: any) {
+              showAlert(error.message || 'Failed to delete job', 'error');
             }
           }}
           showAlert={showAlert}
           onReplyToCounter={handleWorkerReplyToCounter}
           onViewProfile={(userId, name) => setProfileModal({ isOpen: true, userId, userName: name })}
+          onCompleteJob={handleCompleteJob}
         />
 
         <EditProfileModal
@@ -1040,7 +946,10 @@ const AppContent: React.FC = () => {
 
             if (title.includes("worker ready") || title.includes("joined the chat")) {
               if (role === 'POSTER' && fullJob.posterId === user.id) {
-                handleChatOpen(fullJob);
+                // Identify the specific worker who agreed
+                const agreedBid = fullJob.bids.find(b => b.negotiationHistory?.some((h: any) => h.agreed));
+                const workerId = agreedBid?.workerId;
+                handleChatOpen(fullJob, workerId);
               } else {
                 setSelectedJob(fullJob);
               }
@@ -1106,10 +1015,6 @@ const AppContent: React.FC = () => {
           onChatSelect={handleChatOpen}
         />
 
-        <BidHistoryModal
-          isOpen={showBidHistory}
-          onClose={() => setShowBidHistory(false)}
-        />
 
         <ReviewModal
           isOpen={reviewModalData?.isOpen || false}
@@ -1139,6 +1044,12 @@ const AppContent: React.FC = () => {
             job={chatOpen.job}
             currentUser={user}
             onClose={() => { setChatOpen({ isOpen: false, job: null }); setActiveChatId(null); setActiveJobId(null); }}
+            onBackToMessages={() => {
+              setChatOpen({ isOpen: false, job: null });
+              setActiveChatId(null);
+              setActiveJobId(null);
+              setShowChatList(true); // Reopen Messages panel
+            }}
             messages={messages.filter(m => m.jobId === chatOpen.job?.id)}
             onSendMessage={handleSendMessage}
             onCompleteJob={handleCompleteJob}
@@ -1147,6 +1058,7 @@ const AppContent: React.FC = () => {
             onEditMessage={handleEditMessage}
             onIncomingMessage={(msg) => setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])}
             onMessageUpdate={handleMessageUpdate}
+            receiverId={chatOpen.receiverId}
             isPremium={user.isPremium}
             remainingTries={user.isPremium ? 999 : (2 - (user.aiUsageCount || 0))}
           />
@@ -1166,15 +1078,6 @@ const AppContent: React.FC = () => {
           }}
         />
 
-        <PaymentModal
-          isOpen={workerPaymentModal.isOpen}
-          onClose={() => setWorkerPaymentModal({ isOpen: false, job: null, bidId: null })}
-          paymentType="CONNECTION"
-          relatedJobId={workerPaymentModal.job?.id}
-          relatedBidId={workerPaymentModal.bidId || undefined}
-          onPaymentSuccess={handleWorkerPaymentSuccess}
-          onPaymentFailure={(error) => showAlert(error || 'Payment failed', 'error')}
-        />
 
         <UserProfileModal
           isOpen={profileModal.isOpen}
@@ -1183,27 +1086,22 @@ const AppContent: React.FC = () => {
           onClose={() => setProfileModal({ isOpen: false, userId: '' })}
         />
 
-        <PaymentModal
-          isOpen={showWalletRefill}
-          onClose={() => setShowWalletRefill(false)}
-          paymentType="WALLET_REFILL"
-          onPaymentSuccess={handleWalletPaymentSuccess}
-          onPaymentFailure={(error) => showAlert(error || 'Payment failed', 'error')}
-        />
       </Suspense>
 
-    </div>
+    </div >
   );
 };
 
 export const App: React.FC = () => {
   return (
-    <Router>
-      <UserProvider>
-        <JobProvider>
-          <AppContent />
-        </JobProvider>
-      </UserProvider>
-    </Router>
+    <ErrorBoundary>
+      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <UserProvider>
+          <JobProvider>
+            <AppContent />
+          </JobProvider>
+        </UserProvider>
+      </Router>
+    </ErrorBoundary>
   );
 };

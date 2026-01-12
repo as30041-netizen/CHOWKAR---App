@@ -30,6 +30,229 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+// ============================================================================
+// SUPABASE INITIALIZATION TRACKING
+// The Supabase client can block queries until auth state is resolved.
+// This utility ensures we wait for initialization before making queries.
+// ============================================================================
+
+let isInitialized = false;
+let initPromise: Promise<void> | null = null;
+
+/**
+ * Initialize the Supabase client and wait for auth state to be resolved.
+ * Call this before making any queries on page load.
+ */
+export const initSupabase = (): Promise<void> => {
+  if (isInitialized) return Promise.resolve();
+
+  if (!initPromise) {
+    initPromise = new Promise<void>((resolve) => {
+      console.log('[Supabase] Initializing client...');
+
+      // Listen for the first auth state change
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        console.log(`[Supabase] Auth state changed: ${event}`);
+        if (!isInitialized) {
+          isInitialized = true;
+          console.log('[Supabase] ✅ Client initialized');
+          // Add small delay to ensure query execution is ready
+          setTimeout(() => {
+            console.log('[Supabase] ✅ Client fully ready for queries');
+            resolve();
+          }, 100);
+        }
+      });
+
+      // Also resolve after a timeout to prevent blocking forever
+      setTimeout(() => {
+        if (!isInitialized) {
+          isInitialized = true;
+          console.log('[Supabase] ⚠️ Initialization timeout, proceeding anyway');
+          resolve();
+        }
+      }, 3000);
+    });
+  }
+
+  return initPromise;
+};
+
+/**
+ * Check if Supabase client is initialized
+ */
+export const isSupabaseReady = () => isInitialized;
+
+/**
+ * Utility to wait for Supabase to be ready before running a query
+ */
+export const waitForSupabase = async <T>(queryFn: () => Promise<T>): Promise<T> => {
+  await initSupabase();
+  return queryFn();
+};
+
+// ============================================================================
+// CACHED SESSION MANAGEMENT (Industry Best Practice)
+// Avoids calling getSession() multiple times which can cause race conditions
+// ============================================================================
+
+let cachedSession: {
+  accessToken: string | null;
+  userId: string | null;
+  lastUpdated: number;
+} = { accessToken: null, userId: null, lastUpdated: 0 };
+
+// Keep session cache in sync with auth state changes
+supabase.auth.onAuthStateChange((event, session) => {
+  if (session?.access_token) {
+    cachedSession = {
+      accessToken: session.access_token,
+      userId: session.user?.id || null,
+      lastUpdated: Date.now()
+    };
+    console.log('[Supabase] Session cache updated for:', session.user?.email);
+  } else if (event === 'SIGNED_OUT') {
+    cachedSession = { accessToken: null, userId: null, lastUpdated: Date.now() };
+    console.log('[Supabase] Session cache cleared (signed out)');
+  }
+});
+
+/**
+ * Get cached access token - FAST, no async!
+ * Falls back to null if no session cached yet.
+ * Use this instead of calling getSession() in hot paths.
+ */
+export const getCachedAccessToken = (): string | null => {
+  return cachedSession.accessToken;
+};
+
+/**
+ * Get cached user ID - FAST, no async!
+ */
+export const getCachedUserId = (): string | null => {
+  return cachedSession.userId;
+};
+
+/**
+ * Get access token with optional fresh fetch.
+ * Will return cached token if available and recent (< 5 min).
+ * Falls back to localStorage directly to avoid getSession() hangs.
+ */
+export const getAccessToken = async (): Promise<string | undefined> => {
+  // 1. If memory cache is fresh (< 5 min), use it immediately
+  if (cachedSession.accessToken && (Date.now() - cachedSession.lastUpdated < 5 * 60 * 1000)) {
+    return cachedSession.accessToken;
+  }
+
+  // 2. Try to get from localStorage directly (fastest, most reliable on refresh)
+  try {
+    const storageKey = 'sb-ghtshhafukyirwkfdype-auth-token';
+    const authData = localStorage.getItem(storageKey);
+    if (authData) {
+      const parsed = JSON.parse(authData);
+      if (parsed.access_token) {
+        // Update memory cache
+        cachedSession = {
+          accessToken: parsed.access_token,
+          userId: parsed.user?.id || null,
+          lastUpdated: Date.now()
+        };
+        return parsed.access_token;
+      }
+    }
+  } catch (e) {
+    console.warn('[Supabase] Failed to parse localStorage session');
+  }
+
+  // 3. Last resort: Try getSession() with timeout
+  try {
+    const tokenPromise = supabase.auth.getSession().then(r => {
+      if (r.data.session?.access_token) {
+        cachedSession = {
+          accessToken: r.data.session.access_token,
+          userId: r.data.session.user?.id || null,
+          lastUpdated: Date.now()
+        };
+        return r.data.session.access_token;
+      }
+      return undefined;
+    });
+    const timeoutPromise = new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 1500));
+    return await Promise.race([tokenPromise, timeoutPromise]);
+  } catch (e) {
+    console.warn('[Supabase] getSession failed');
+    return cachedSession.accessToken || undefined;
+  }
+};
+
+/**
+ * SAFE RPC CALLER - Uses REST API directly to avoid Supabase client hanging
+ * This is the recommended way to call RPCs after page refresh
+ * 
+ * DEFENSIVE: If cache is empty (fresh login, race condition), waits briefly for auth init
+ */
+export const safeRPC = async <T = any>(
+  functionName: string,
+  params: Record<string, any> = {}
+): Promise<{ data: T | null; error: Error | null }> => {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  // Get token from cache (fast) or fetch with timeout
+  let accessToken = getCachedAccessToken();
+
+  // DEFENSIVE: If cache empty, wait briefly for auth initialization
+  if (!accessToken) {
+    console.log(`[safeRPC] Cache empty, waiting for auth init...`);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    accessToken = getCachedAccessToken();
+  }
+
+  // Still empty? Try fetching with timeout
+  if (!accessToken) {
+    accessToken = await getAccessToken() || undefined;
+  }
+
+  const authHeader = accessToken ? `Bearer ${accessToken}` : `Bearer ${supabaseKey}`;
+  const tokenStatus = accessToken ? 'authenticated' : 'anon';
+
+  console.log(`[safeRPC] Calling ${functionName} (${tokenStatus})...`);
+
+  try {
+    const response = await fetch(
+      `${supabaseUrl}/rest/v1/rpc/${functionName}`,
+      {
+        method: 'POST',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': authHeader,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(params)
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[safeRPC] ${functionName} failed:`, response.status, errorText);
+      return { data: null, error: new Error(errorText || `RPC failed: ${response.status}`) };
+    }
+
+    // Handle 204 No Content for void functions
+    if (response.status === 204) {
+      console.log(`[safeRPC] ${functionName} success (204 No Content)`);
+      return { data: null, error: null };
+    }
+
+    const data = await response.json().catch(() => null);
+    console.log(`[safeRPC] ${functionName} success`);
+    return { data, error: null };
+  } catch (e: any) {
+    console.error(`[safeRPC] ${functionName} error:`, e);
+    return { data: null, error: e };
+  }
+};
+
 // Debug logging for Capacitor (only in development)
 if (Capacitor.isNativePlatform()) {
   logger.log('🔧 [Supabase] Running on native platform:', Capacitor.getPlatform());

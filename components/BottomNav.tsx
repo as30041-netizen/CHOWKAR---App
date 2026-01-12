@@ -1,46 +1,47 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutGrid, Plus, Navigation, Wallet, UserCircle } from 'lucide-react';
+import { LayoutGrid, Plus, UserCircle } from 'lucide-react';
 import { useUser } from '../contexts/UserContextDB';
 import { UserRole } from '../types';
 
 export const BottomNav: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { role, t } = useUser();
+    const { role, t, user, showAlert, setShowEditProfile, language } = useUser();
 
     const isActive = (path: string) => location.pathname === path;
 
     return (
-        <nav className="bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 md:hidden flex justify-around items-center px-2 py-3 fixed bottom-0 left-0 right-0 z-30 pb-[calc(12px+env(safe-area-inset-bottom))] shadow-lg-up transition-colors duration-300">
-            <button onClick={() => navigate('/')} className={`flex flex-col items-center gap-1 min-w-[64px] ${isActive('/') ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-gray-400 dark:text-gray-500 font-medium'}`}>
-                <LayoutGrid size={24} className={isActive('/') ? 'drop-shadow-sm' : ''} />
-                <span className="text-[10px]">{t.home}</span>
+        <nav className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-t border-gray-100 dark:border-gray-800 md:hidden flex justify-around items-center px-4 py-3 fixed bottom-0 left-0 right-0 z-30 pb-safe shadow-[0_-8px_30px_rgb(0,0,0,0.04)] transition-all duration-300">
+            <button onClick={() => navigate('/')} className={`flex flex-col items-center gap-1.5 transition-all duration-300 active:scale-90 ${isActive('/') ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                <LayoutGrid size={24} className={`transition-all ${isActive('/') ? 'drop-shadow-[0_0_8px_rgba(16,185,129,0.3)] scale-110' : ''}`} />
+                <span className={`text-[10px] font-black uppercase tracking-widest transition-opacity ${isActive('/') ? 'opacity-100' : 'opacity-60'}`}>{t.home}</span>
             </button>
 
-            {role === UserRole.POSTER ? (
-                <button onClick={() => navigate('/post')} className="flex flex-col items-center gap-1 -mt-8">
-                    <div className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg border-4 border-green-50 dark:border-gray-900 transition-transform active:scale-95 ${isActive('/post') ? 'bg-emerald-700 dark:bg-emerald-600 text-white' : 'bg-emerald-600 dark:bg-emerald-500 text-white'}`}>
-                        <Plus size={28} />
+            {role === UserRole.POSTER && (
+                <button
+                    onClick={() => {
+                        if (!user.phone || !user.location || user.location === 'Not set') {
+                            setShowEditProfile(true);
+                            showAlert(language === 'en'
+                                ? 'Please complete your profile (Phone & Location) before posting a job.'
+                                : 'काम पोस्ट करने से पहले कृपया अपनी प्रोफ़ाइल (फ़ोन और स्थान) पूरी करें।', 'info');
+                            return;
+                        }
+                        navigate('/post');
+                    }}
+                    className="flex flex-col items-center gap-1.5 -mt-10 relative group"
+                >
+                    <div className={`w-16 h-16 rounded-[22px] flex items-center justify-center shadow-[0_12px_24px_-8px_rgba(16,185,129,0.5)] border-[5px] border-green-50 dark:border-gray-900 transition-all duration-500 active:scale-95 group-hover:rotate-90 ${isActive('/post') ? 'bg-gradient-to-br from-emerald-600 to-teal-600 text-white' : 'bg-gradient-to-br from-emerald-500 to-teal-500 text-white'}`}>
+                        <Plus size={32} strokeWidth={3} />
                     </div>
-                    <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400">{t.postJob}</span>
-                </button>
-            ) : (
-                <button onClick={() => { }} className="flex flex-col items-center gap-1 min-w-[64px] opacity-20 cursor-not-allowed">
-                    {/* Placeholder for symmetry or another Worker feature */}
-                    <Navigation size={24} />
-                    <span className="text-[10px]">Map</span>
                 </button>
             )}
 
-            <button onClick={() => navigate('/wallet')} className={`flex flex-col items-center gap-1 min-w-[64px] ${isActive('/wallet') ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-gray-400 dark:text-gray-500 font-medium'}`}>
-                <Wallet size={24} className={isActive('/wallet') ? 'drop-shadow-sm' : ''} />
-                <span className="text-[10px]">{t.wallet}</span>
-            </button>
 
-            <button onClick={() => navigate('/profile')} className={`flex flex-col items-center gap-1 min-w-[64px] ${isActive('/profile') ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-gray-400 dark:text-gray-500 font-medium'}`}>
-                <UserCircle size={24} className={isActive('/profile') ? 'drop-shadow-sm' : ''} />
-                <span className="text-[10px]">{t.profile}</span>
+            <button onClick={() => navigate('/profile')} className={`flex flex-col items-center gap-1.5 transition-all duration-300 active:scale-90 ${isActive('/profile') ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                <UserCircle size={24} className={`transition-all ${isActive('/profile') ? 'drop-shadow-[0_0_8px_rgba(16,185,129,0.3)] scale-110' : ''}`} />
+                <span className={`text-[10px] font-black uppercase tracking-widest transition-opacity ${isActive('/profile') ? 'opacity-100' : 'opacity-60'}`}>{t.profile}</span>
             </button>
         </nav>
     );

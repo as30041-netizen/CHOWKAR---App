@@ -1,8 +1,9 @@
-import React, { createContext, useState, useContext, ReactNode, useEffect, useRef, startTransition } from 'react';
-import { User, UserRole, Transaction, Notification, ChatMessage } from '../types';
-import { MOCK_USER, TRANSLATIONS, FREE_AI_USAGE_LIMIT } from '../constants';
+import React, { createContext, useState, useContext, ReactNode, useEffect, useRef, startTransition, useCallback } from 'react';
+import { User, UserRole, Notification, ChatMessage } from '../types';
+import { TRANSLATIONS, FREE_AI_USAGE_LIMIT } from '../constants';
 import { supabase } from '../lib/supabase';
-import { updateWalletBalance, incrementAIUsage as incrementAIUsageDB, updateUserProfile, getCurrentUser, getUserProfile, signOut } from '../services/authService';
+import { incrementAIUsage as incrementAIUsageDB, updateUserProfile, getCurrentUser, getUserProfile, signOut } from '../services/authService';
+import { fetchUserNotifications } from '../services/notificationService';
 import { registerPushNotifications, setupPushListeners, removePushListeners, isPushSupported } from '../services/pushService';
 import { initializeAppStateTracking, setAppLoginState, cleanupAppStateTracking, shouldSendPushNotification } from '../services/appStateService';
 import { LocalNotifications } from '@capacitor/local-notifications';
@@ -19,8 +20,6 @@ interface UserContextType {
   setIsLoggedIn: React.Dispatch<React.SetStateAction<boolean>>;
   isAuthLoading: boolean;
   loadingMessage: string;
-  transactions: Transaction[];
-  setTransactions: React.Dispatch<React.SetStateAction<Transaction[]>>;
   notifications: Notification[];
   setNotifications: React.Dispatch<React.SetStateAction<Notification[]>>;
   messages: ChatMessage[];
@@ -44,6 +43,8 @@ interface UserContextType {
   markNotificationsAsReadForJob: (jobId: string) => Promise<void>;
   deleteNotification: (notifId: string) => Promise<void>;
   clearNotificationsForJob: (jobId: string) => Promise<void>;
+  showEditProfile: boolean;
+  setShowEditProfile: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -66,12 +67,11 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     id: '',
     name: '',
     rating: 0,
-    walletBalance: 0,
     jobsCompleted: 0
   };
 
   // Init user from storage to prevent flashing/empty state on reload
-  // BUT fallback to INITIAL_USER instead of MOCK_USER to prevent fake data
+  // BUT fallback to INITIAL_USER to prevent fake data
   const [user, setUser] = useState<User>(() => getInitialState('chowkar_user', INITIAL_USER));
   const [role, setRole] = useState<UserRole>(() => getInitialState('chowkar_role', UserRole.WORKER));
   const [language, setLanguage] = useState<'en' | 'hi'>(() => getInitialState('chowkar_language', 'en'));
@@ -93,7 +93,6 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return false;
   });
 
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
@@ -117,6 +116,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [showEditProfile, setShowEditProfile] = useState(false);
   const [currentAlert, setCurrentAlert] = useState<{ message: string, type: 'success' | 'error' | 'info' } | null>(null);
 
   // If we have the persistent flag OR are in a callback, we are NOT loading initially (Optimistic Success)
@@ -131,7 +131,17 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const [loadingMessage, setLoadingMessage] = useState('Initializing...');
   const [hasInitialized, setHasInitialized] = useState(false);
+
+  // Track state transitions to avoid flickering
+  const pendingAuthEventRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
   const currentUserIdRef = useRef<string | null>(null);
+  const userProfileRef = useRef<User>(user);
+
+  // Keep ref in sync with state for use in callbacks
+  useEffect(() => {
+    userProfileRef.current = user;
+  }, [user]);
 
   // CRITICAL: Track if we are currently handling an OAuth callback to prevent state wipes
   const isAuthCallbackRef = useRef<boolean>(false);
@@ -151,18 +161,20 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     // Never persist mock data to local storage
     if (user.id && !user.id.startsWith('u') && !user.name.includes('Mock')) {
+      console.log('[Data] Syncing user to localStorage:', user.id);
       localStorage.setItem('chowkar_user', JSON.stringify(user));
     }
   }, [user]);
 
-  // Cleanup: If we start and find mock data in storage, clear it
+  // Cleanup: If we start and find legacy test data in storage, clear it
   useEffect(() => {
     const savedUser = localStorage.getItem('chowkar_user');
     if (savedUser) {
       try {
         const parsed = JSON.parse(savedUser);
-        if (parsed.id === 'u1' || parsed.name?.includes('Mock')) {
-          console.log('[Auth] Found mock user in storage, clearing...');
+        if (parsed.id === 'u1' || parsed.name?.toLowerCase().includes('mock')) {
+          console.log('[Auth] Found legacy test user in storage, clearing...');
+          localStorage.removeItem('chowkar_isLoggedIn');
           localStorage.removeItem('chowkar_user');
           setUser(INITIAL_USER);
         }
@@ -188,14 +200,74 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     console.log('[Auth] Initializing authentication...');
     let mounted = true;
 
-    // 1. SAFETY TIMEOUT: Force app to open if auth hangs for more than 3 seconds
-    const safetyTimeout = setTimeout(() => {
+    // CRITICAL FIX: Force session refresh on every page load to ensure auth token is fresh
+    // This makes page refresh behave like fresh login
+    const refreshSessionOnLoad = async () => {
+      // SKIP if we are processing an auth callback (Supabase handles this automatically)
+      // calling refreshSession here causes a race condition that swallows the INITIAL_SESSION event
+      if (isAuthCallbackRef.current) {
+        console.log('[Auth] Auth callback detected, skipping manual refresh to allow auto-handling...');
+        return;
+      }
+
+      try {
+        console.log('[Auth] Refreshing session on page load...');
+        const { data: { session }, error } = await supabase.auth.refreshSession();
+        if (error) {
+          console.warn('[Auth] Session refresh failed:', error.message);
+          // Session might be expired - this will trigger SIGNED_OUT event
+        } else if (session) {
+          console.log('[Auth] Session refreshed successfully for:', session.user?.email);
+        }
+      } catch (err) {
+        console.warn('[Auth] Session refresh exception:', err);
+      }
+    };
+
+    // Trigger session refresh (non-blocking)
+    refreshSessionOnLoad();
+
+    // 1. SAFETY TIMEOUT: Force app to open if auth hangs
+    // extend wait time if we are processing a callback (OAuth takes longer)
+    const timeoutDuration = isAuthCallbackRef.current ? 20000 : 4000;
+
+    const safetyTimeout = setTimeout(async () => {
       if (mounted && isAuthLoading) {
-        console.warn('[Auth] Safety timeout reached. Forcing app initialization.');
+        console.warn(`[Auth] Safety timeout reached (${timeoutDuration}ms). Checking session manually...`);
+
+        try {
+          // Wrapped in timeout to prevent hanging forever if client is stuck
+          const sessionPromise = supabase.auth.getSession();
+          // Relaxed manually check timeout to 3s (was 1s) to give slow clients a chance
+          const timeoutPromise = new Promise<{ data: { session: null } }>((resolve) =>
+            setTimeout(() => resolve({ data: { session: null } }), 3000)
+          );
+
+          const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
+
+          if (session?.user) {
+            console.log('[Auth] Recovered session manually after timeout');
+            // Manually trigger state update since event listener missed it
+            setIsLoggedIn(true);
+            currentUserIdRef.current = session.user.id;
+            setUser(prev => ({ ...prev, id: session.user.id, email: session.user.email }));
+          } else {
+            // If we can't find a session, assume we are logged out
+            console.warn('[Auth] No session found (or timed out). Defaulting to logged out.');
+            setIsLoggedIn(false);
+            localStorage.removeItem('chowkar_isLoggedIn');
+          }
+        } catch (e) {
+          console.error('[Auth] Manual check failed:', e);
+          setIsLoggedIn(false);
+          localStorage.removeItem('chowkar_isLoggedIn');
+        }
+
+        // ALWAYS unblock the UI
         setHasInitialized(true);
         setIsAuthLoading(false);
       }
-    }, 3000);
+    }, timeoutDuration);
 
     // 2. Consolidated Auth handling via Supabase listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -233,51 +305,68 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setHasInitialized(true);
       }
 
-      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
         if (session?.user) {
-          // Prevent redundant re-initialization if session is already active
-          if (currentUserIdRef.current === session.user.id && isLoggedIn) {
-            if (isAuthLoading) setIsAuthLoading(false);
-            setHasInitialized(true);
-            return;
+          // If we are already logged in with the same user, just update the ref and continue
+          const currentUser = userProfileRef.current;
+          const isSameUser = currentUser.id === session.user.id;
+
+          if (isSameUser && isLoggedIn) {
+            console.log('[Auth] session refresh/token event for already logged in user. updating in background.');
+            // Update token if needed (ref handled internally by supabase)
+            // But don't toggle loading state to prevent flickering
           }
 
           console.log('[Auth] Handling session:', event);
           localStorage.setItem('chowkar_isLoggedIn', 'true');
-
           setIsLoggedIn(true);
-          const optimisticUser: User = {
-            ...INITIAL_USER,
-            id: session.user.id,
-            email: session.user.email || '',
-            name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User'
-          };
-
-          // Optimistically set user immediately for perceived speed
-          setUser(optimisticUser);
           currentUserIdRef.current = session.user.id;
+
+          // SET ID IMMEDIATELY to unblock feed loading in Home.tsx
+          // This ensures that even if profile fetch is slow, the app knows the user identity
+          setUser(prev => {
+            if (prev.id === session.user.id) return prev;
+            return {
+              ...prev,
+              id: session.user.id,
+              email: session.user.email || prev.email,
+              name: prev.name || session.user.user_metadata?.full_name || session.user.user_metadata?.name || ''
+            };
+          });
 
           // CLEAR URL SENSITIVE DATA AFTER SUCCESSFUL CONSUMPTION
           if (isAuthCallbackRef.current && typeof window !== 'undefined') {
             console.log('[Auth] Cleaning sensitive data from URL...');
             window.history.replaceState({}, document.title, window.location.pathname);
-            isAuthCallbackRef.current = false; // Reset to prevent repeated cleanings
+            isAuthCallbackRef.current = false;
           }
 
-          // CRITICAL FIX: Fetch FULL profile (with phone/location) BEFORE releasing loading state
-          // This prevents App.tsx from seeing an incomplete user and popping up the edit modal
+          // STALE-WHILE-REVALIDATE: Fetch FULL profile (with phone/location)
           try {
-            console.log('[Auth] Fetching full profile before release...');
-            const { user: fullUser } = await getCurrentUser(session.user);
-            if (fullUser) {
+            console.log('[Auth] Fetching profile update...');
+            const { user: fullUser, error: fetchError } = await getCurrentUser(session.user);
+            if (fullUser && mountedRef.current) {
+              // Update with full profile data
               setUser(fullUser);
             }
           } catch (err) {
-            console.warn('[Auth] Failed to pre-fetch full profile', err);
+            console.warn('[Auth] Background profile refresh failed', err);
+          } finally {
+            if (mountedRef.current) {
+              setIsAuthLoading(false);
+              setHasInitialized(true);
+            }
           }
-
-          setIsAuthLoading(false);
-          setHasInitialized(true);
+        } else if (event === 'INITIAL_SESSION') {
+          // Initial session is null, wait for actual state before clearing
+          console.log('[Auth] INITIAL_SESSION is null, checking for persistent state...');
+          if (localStorage.getItem('chowkar_isLoggedIn') === 'true') {
+            // We expect a login, don't stop loading yet
+            console.log('[Auth] Persistent login found, waiting for redirect/refresh event...');
+          } else {
+            setIsAuthLoading(false);
+            setHasInitialized(true);
+          }
         }
       } else if (event === 'SIGNED_OUT') {
         console.log('[Auth] SIGNED_OUT event received');
@@ -294,7 +383,6 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           startTransition(() => {
             setUser(INITIAL_USER);
             setIsLoggedIn(false);
-            setTransactions([]);
             setNotifications([]);
             setMessages([]);
             setIsAuthLoading(false);
@@ -308,6 +396,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     return () => {
+      mountedRef.current = false;
       mounted = false;
       clearTimeout(safetyTimeout);
       subscription.unsubscribe();
@@ -331,10 +420,9 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.log('[Data] Fetching user data in parallel...');
 
       // OPTIMIZATION: Fetch all user data in parallel instead of sequentially
-      const [profileResult, transactionsResult, notificationsResult] = await Promise.all([
+      const [profileResult, notificationsResult] = await Promise.all([
         getUserProfile(user.id),
-        supabase.from('transactions').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
-        supabase.from('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50)
+        fetchUserNotifications(user.id)
       ]);
 
       // Process profile
@@ -343,40 +431,13 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setUser(refreshedUser);
       }
 
-      // Process transactions
-      const { data: transactionsData, error: transError } = transactionsResult;
-      if (transError) {
-        console.error('[Data] Error fetching transactions:', transError);
-      } else {
-        const txs: Transaction[] = transactionsData?.map(tx => ({
-          id: tx.id,
-          userId: tx.user_id,
-          amount: tx.amount,
-          type: tx.type as 'CREDIT' | 'DEBIT',
-          description: tx.description,
-          timestamp: new Date(tx.created_at).getTime()
-        })) || [];
-        setTransactions(txs);
-        // console.log('[Data] Transactions loaded:', txs.length);
-      }
-
       // Process notifications
-      const { data: notificationsData, error: notifError } = notificationsResult;
+      const { notifications: notificationsData, error: notifError } = notificationsResult;
       if (notifError) {
         console.error('[Data] Error fetching notifications:', notifError);
       } else {
-        const notifs: Notification[] = notificationsData?.map(notif => ({
-          id: notif.id,
-          userId: notif.user_id,
-          title: notif.title,
-          message: notif.message,
-          type: notif.type as 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR',
-          read: notif.read,
-          timestamp: new Date(notif.created_at).getTime(),
-          relatedJobId: notif.related_job_id || undefined
-        })) || [];
-        setNotifications(notifs);
-        console.log('[Data] Notifications loaded:', notifs.length);
+        setNotifications(notificationsData);
+        console.log('[Data] Notifications loaded:', notificationsData.length);
       }
 
       // OPTIMIZATION: We do NOT fetch full chat history here anymore to save bandwidth.
@@ -430,6 +491,12 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.log('[Realtime] Notification received via hybrid channel:', notifData);
 
       const relatedJobId = notifData.related_job_id || notifData.relatedJobId || undefined;
+
+      // CRITICAL: Skip notification if user is currently viewing this chat or job
+      if (relatedJobId && (relatedJobId === activeChatIdRef.current || relatedJobId === activeJobIdRef.current)) {
+        console.log('[Realtime] Suppressing notification for active chat/job:', relatedJobId);
+        return;
+      }
 
       // Note: No longer suppressing notifications when app is open.
       // Industry best practice: always show in-app notification for awareness
@@ -553,6 +620,35 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, [isLoggedIn, user.id]);
 
+  // Handle Visibility Change (Foreground sync) with debouncing
+  useEffect(() => {
+    if (!isLoggedIn || !user.id) return;
+
+    let debounceTimer: NodeJS.Timeout | null = null;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Debounce: Only refresh if 2 seconds have passed since last foreground event
+        if (debounceTimer) {
+          clearTimeout(debounceTimer);
+        }
+
+        debounceTimer = setTimeout(() => {
+          console.log('[Realtime] App foregrounded, refreshing data for sync...');
+          fetchUserData().catch(err => console.error('Foreground refresh failed', err));
+        }, 2000);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+    };
+  }, [isLoggedIn, user.id]);
+
   // Listen for notification taps (LocalNotifications)
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -621,7 +717,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               // Optimistic Update Check
               const tempMatchIndex = prev.findIndex(m =>
                 m.id.startsWith('temp_') &&
-                m.senderId === newMsg.senderId &&
+                m.senderId?.toLowerCase() === newMsg.senderId?.toLowerCase() &&
                 m.jobId === newMsg.jobId &&
                 m.text === newMsg.text
               );
@@ -639,56 +735,45 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 msgSender: newMsg.senderId,
                 myId: user.id,
                 activeChat: activeChatIdRef.current,
-                msgJob: newMsg.jobId,
-                throttle: lastNotificationTimeRef.current[newMsg.jobId]
+                msgJob: newMsg.jobId
               });
 
               return [...prev, newMsg];
             });
 
-            // NOTIFICATION LOGIC
-            if (newMsg.senderId !== user.id && activeChatIdRef.current !== newMsg.jobId) {
-              const now = Date.now();
-              const lastTime = lastNotificationTimeRef.current[newMsg.jobId] || 0;
+            // NOTIFICATION LOGIC REMOVED: 
+            // We now rely 100% on the backend trigger 'trg_notify_on_chat_message' 
+            // which inserts into the 'notifications' table.
+            // The 'user_notifications' subscription above will pick that up and show the alert.
+            // This prevents "double toasts" (one from here + one from notification table).
 
-              if (now - lastTime > 2000) { // 2s throttle
-                console.log('[Realtime] Triggering Notification', newMsg.jobId);
-                lastNotificationTimeRef.current[newMsg.jobId] = now;
-
-                // Insert notification into DB (which will trigger the other listener to update UI)
-                const preview = newMsg.text.length > 50 ? newMsg.text.substring(0, 50) + '...' : newMsg.text;
-
-                // REMOVED: Backend Trigger 'on_chat_message_created' now handles this reliably (even if offline).
-                // await addNotification(
-                //   user.id,
-                //   "New Message",
-                //   preview,
-                //   "INFO",
-                //   newMsg.jobId
-                // );
-
-                // Also show a local toast for immediate "wow" factor
-
-                // Also show a local toast for immediate "wow" factor
-                showAlert(`New message: ${preview}`, 'info');
-              } else {
-                console.log('[Realtime] Notification throttled for job:', newMsg.jobId);
-              }
-            }
           } else if (payload.eventType === 'UPDATE') {
-            console.log('[Realtime] Message Updated:', payload.new.id);
-            setMessages(prev => prev.map(m =>
-              m.id === payload.new.id
-                ? { ...m, text: payload.new.text, translatedText: payload.new.translated_text || undefined }
-                : m
-            ));
+            console.log('[Realtime] Message Updated:', payload.new.id, 'Read:', payload.new.read);
+            const updatedMsg: ChatMessage = {
+              id: payload.new.id,
+              jobId: payload.new.job_id,
+              senderId: payload.new.sender_id,
+              text: payload.new.is_deleted ? 'This message was deleted' : payload.new.text,
+              translatedText: payload.new.translated_text || undefined,
+              timestamp: new Date(payload.new.created_at).getTime(),
+              isDeleted: payload.new.is_deleted,
+              read: payload.new.read,
+            };
+            setMessages(prev => prev.map(m => m.id === updatedMsg.id ? updatedMsg : m));
+          } else if (payload.eventType === 'DELETE') {
+            setMessages(prev => prev.filter(m => m.id !== payload.old.id));
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[Realtime] Chat subscription status:', status);
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[Realtime] Chat sync lost, will attempt recovery...');
+        }
+      });
 
     return () => {
-      chatSubscription.unsubscribe();
+      supabase.removeChannel(chatSubscription);
     };
   }, [isLoggedIn, user.id]);
 
@@ -711,10 +796,9 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         },
         (payload) => {
           console.log('[Realtime] Profile updated:', payload.new);
-          // Update wallet balance and other profile fields
+          // Update profile fields
           setUser(prev => ({
             ...prev,
-            walletBalance: payload.new.wallet_balance ?? prev.walletBalance,
             rating: payload.new.rating ?? prev.rating,
             isPremium: payload.new.is_premium ?? prev.isPremium
           }));
@@ -871,7 +955,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, 3000);
   };
 
-  const markNotificationsAsReadForJob = async (jobId: string) => {
+  const markNotificationsAsReadForJob = useCallback(async (jobId: string) => {
     // Optimistic update
     setNotifications(prev => prev.map(n =>
       n.relatedJobId === jobId && !n.read
@@ -879,10 +963,11 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         : n
     ));
 
-    // DB update using RPC
+    // DB update using safeRPC
     if (user.id) {
       try {
-        const { error } = await supabase.rpc('mark_messages_read', {
+        const { safeRPC } = await import('../lib/supabase');
+        const { error } = await safeRPC('mark_messages_read', {
           p_job_id: jobId,
           p_user_id: user.id
         });
@@ -901,22 +986,23 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('[UserContext] Error marking notifications read:', err);
       }
     }
-  };
+  }, [user.id]);
 
   // Delete a single notification (used when user clicks on it)
-  const deleteNotification = async (notifId: string) => {
+  const deleteNotification = useCallback(async (notifId: string) => {
     // Optimistic update
     setNotifications(prev => prev.filter(n => n.id !== notifId));
 
-    // DB delete using RPC
+    // DB delete using safeRPC
     if (user.id) {
       try {
-        const { error } = await supabase.rpc('soft_delete_notification', { p_notification_id: notifId });
+        const { safeRPC } = await import('../lib/supabase');
+        const { error } = await safeRPC('soft_delete_notification', { p_notification_id: notifId });
         if (error) {
-          console.warn('[UserContext] RPC soft_delete_notification failed, falling back to direct delete:', error);
+          console.warn('[UserContext] RPC soft_delete_notification failed, falling back to mark as read:', error);
           await supabase
             .from('notifications')
-            .delete()
+            .update({ read: true })
             .eq('id', notifId)
             .match({ user_id: user.id });
         }
@@ -924,22 +1010,20 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('[UserContext] Error deleting notification:', err);
       }
     }
-  };
+  }, [user.id]);
 
-  // Clear all notifications for a specific job (used when opening job context)
-  const clearNotificationsForJob = async (jobId: string) => {
+  // Clear all notifications for a specific job (Soft Delete/Hide)
+  const clearNotificationsForJob = useCallback(async (jobId: string) => {
     // Optimistic update
     setNotifications(prev => prev.filter(n => n.relatedJobId !== jobId));
 
-    // DB delete
+    // DB: Mark as read/hidden instead of deleting
     if (user.id) {
-      await supabase
-        .from('notifications')
-        .delete()
-        .eq('user_id', user.id)
-        .eq('related_job_id', jobId);
+      const { safeRPC } = await import('../lib/supabase');
+      // We use a bulk soft-delete or just mark all as read for this job
+      await safeRPC('soft_delete_job_notifications', { p_job_id: jobId });
     }
-  };
+  }, [user.id]);
 
   const checkFreeLimit = () => {
     const isFreeLimitReached = !user.isPremium && (user.aiUsageCount || 0) >= FREE_AI_USAGE_LIMIT;
@@ -991,7 +1075,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       const updatePromise = updateUserProfile(user.id, updates);
       const timeoutPromise = new Promise<{ success: boolean; error?: string }>((_, reject) =>
-        setTimeout(() => reject(new Error('The database is responding very slowly. This usually happens when the 9GB bandwidth limit is exceeded. Please wait 30 seconds...')), 30000)
+        setTimeout(() => reject(new Error('Connection timed out while updating profile. Please check your internet and try again.')), 15000)
       );
 
       const result = await Promise.race([updatePromise, timeoutPromise]);
@@ -1002,11 +1086,6 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       console.log('[Data] DB Update Success');
-
-      // Update wallet balance separately if needed
-      if (updates.walletBalance !== undefined) {
-        await updateWalletBalance(user.id, updates.walletBalance);
-      }
     } catch (error) {
       console.error('Error updating user:', error);
       // Revert optimistic update if needed? For now, we rely on refresh.
@@ -1023,6 +1102,9 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       localStorage.removeItem('chowkar_user');
       localStorage.removeItem('chowkar_onboarding_complete');
       localStorage.removeItem('chowkar_role'); // Clear role to force reset
+      localStorage.removeItem('chowkar_language'); // Clear language preference
+      localStorage.removeItem('chowkar_feed_cache'); // Clear any feed cache
+      localStorage.removeItem('chowkar_pending_navigation'); // Clear pending navigation
 
       // 2. CLEAR URL TO PREVENT RE-LOGIN ON REFRESH
       // This removes access_token, code, etc. from the address bar
@@ -1044,7 +1126,6 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsAuthLoading(false);
         setHasInitialized(true);
         setUser(INITIAL_USER);
-        setTransactions([]);
         setNotifications([]);
         setMessages([]);
       });
@@ -1079,7 +1160,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (session?.user) {
         setLoadingMessage('Loading your profile...');
-        const { user: currentUser, error } = await getCurrentUser();
+        const { user: currentUser, error } = await getCurrentUser(session.user);
 
         if (error || !currentUser) {
           throw new Error('Failed to load profile');
@@ -1108,7 +1189,6 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       isLoggedIn, setIsLoggedIn,
       isAuthLoading,
       loadingMessage,
-      transactions, setTransactions,
       notifications, setNotifications,
       messages, setMessages,
       addNotification,
@@ -1127,7 +1207,9 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setActiveJobId,
       markNotificationsAsReadForJob,
       deleteNotification,
-      clearNotificationsForJob
+      clearNotificationsForJob,
+      showEditProfile,
+      setShowEditProfile
     }}>
       {children}
     </UserContext.Provider>

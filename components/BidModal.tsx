@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { XCircle, LayoutGrid } from 'lucide-react';
+import { ArrowLeft, XCircle, LayoutGrid, IndianRupee } from 'lucide-react';
 import { useUser } from '../contexts/UserContextDB';
 import { useJobs } from '../contexts/JobContextDB';
 import { Bid, UserRole } from '../types';
 import { enhanceBidMessageStream } from '../services/geminiService';
-import { getAppConfig } from '../services/paymentService';
-
 import { supabase } from '../lib/supabase';
 
 interface BidModalProps {
@@ -30,15 +28,77 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
     const [bidAmount, setBidAmount] = useState('');
     const [bidMessage, setBidMessage] = useState('');
     const [isEnhancingBid, setIsEnhancingBid] = useState(false);
-    // Add missing state for checkout logic
-    const [shouldHighlight, setShouldHighlight] = useState(false);
+
+    // FRESH bid check - fetch from API instead of using cached data
+    const [existingBid, setExistingBid] = useState<Bid | null>(null);
+    const [isCheckingBid, setIsCheckingBid] = useState(false);
+
+    // Check for existing bid whenever modal opens or user changes
+    useEffect(() => {
+        if (!isOpen || !jobId || !contextUser.id) {
+            setExistingBid(null);
+            return;
+        }
+
+        const checkExistingBid = async () => {
+            setIsCheckingBid(true);
+            try {
+                const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+                const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+                console.log('[BidModal] Checking for existing bid - User:', contextUser.id, 'Job:', jobId);
+
+                const session = (await supabase.auth.getSession()).data.session;
+                const authHeader = session?.access_token ? `Bearer ${session.access_token}` : `Bearer ${supabaseKey}`;
+
+                const response = await fetch(
+                    `${supabaseUrl}/rest/v1/bids?worker_id=eq.${contextUser.id}&job_id=eq.${jobId}`,
+                    {
+                        method: 'GET',
+                        headers: {
+                            'apikey': supabaseKey,
+                            'Authorization': authHeader,
+                            'Content-Type': 'application/json'
+                        }
+                    }
+                );
+
+                if (response.ok) {
+                    const bids = await response.json();
+                    if (bids && bids.length > 0) {
+                        console.log('[BidModal] Found existing bid for this user:', bids[0]);
+                        setExistingBid({
+                            id: bids[0].id,
+                            jobId: bids[0].job_id,
+                            workerId: bids[0].worker_id,
+                            amount: bids[0].amount,
+                            status: bids[0].status,
+                            message: bids[0].message
+                        } as Bid);
+                    } else {
+                        console.log('[BidModal] No existing bid found for this user');
+                        setExistingBid(null);
+                    }
+                }
+            } catch (error) {
+                console.error('[BidModal] Error checking existing bid:', error);
+                setExistingBid(null);
+            } finally {
+                setIsCheckingBid(false);
+            }
+        };
+
+        checkExistingBid();
+    }, [isOpen, jobId, contextUser.id]);
 
     if (!isOpen || !jobId) return null;
+
+    // Get current job for reference (for budget display, etc.)
+    const job = jobs.find(j => j.id === jobId);
 
     const handleEnhanceBid = async () => {
         if (!contextCheckFreeLimit()) return;
         if (!bidMessage.trim()) return;
-        const job = jobs.find(j => j.id === jobId);
         if (!job) return;
 
         setIsEnhancingBid(true);
@@ -47,21 +107,14 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
         contextIncrementAiUsage();
     };
 
-    // Get current job for reference
-    const job = jobs.find(j => j.id === jobId);
-
-    // Check if user already has a bid on this job
-    const existingBid = job?.bids.find(b => b.workerId === contextUser.id);
-
     const handlePlaceBid = async () => {
         if (!jobId || !bidAmount) return;
 
         const currentJob = jobs.find(j => j.id === jobId);
         if (!currentJob) return;
 
-        // VALIDATION 1: Check for duplicate bid
-        const alreadyBid = currentJob.bids.find(b => b.workerId === contextUser.id);
-        if (alreadyBid) {
+        // VALIDATION 1: Check for duplicate bid (using fresh API check)
+        if (existingBid) {
             showAlert(
                 contextLanguage === 'en'
                     ? 'You have already placed a bid on this job. Wait for the employer to respond.'
@@ -83,6 +136,12 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
             return;
         }
 
+        // VALIDATION 3: Warn (but don't block) if bid exceeds budget
+        if (currentJob.budget && amount > currentJob.budget) {
+            // This is just a warning - we still proceed with the bid
+            console.log(`[BidModal] Warning: Bid ₹${amount} exceeds budget ₹${currentJob.budget}`);
+        }
+
         const newBid: Bid = {
             id: `b${Date.now()}`,
             jobId: currentJob.id,
@@ -98,33 +157,20 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
             message: bidMessage,
             createdAt: Date.now(),
             status: 'PENDING',
-            negotiationHistory: [{ amount: parseInt(bidAmount), by: UserRole.WORKER, timestamp: Date.now() }]
+            // Fresh bids should have empty negotiation history - it only gets populated when counter-offers happen
+            negotiationHistory: []
         };
 
         try {
             const realBidId = await addBid(newBid);
 
-            // Handle Highlight if requested
-            if (shouldHighlight && realBidId) {
-                try {
-                    const { error: highlightError } = await supabase.rpc('highlight_bid', { p_bid_id: realBidId });
-                    if (highlightError) throw highlightError;
-
-                    showAlert(contextLanguage === 'en' ? 'Bid placed & Highlighted! ✨' : 'बोली लगाई गई और हाईलाइट की गई! ✨', 'success');
-                } catch (hErr) {
-                    console.error('Highlight failed:', hErr);
-                    showAlert(contextLanguage === 'en' ? 'Bid placed, but highlight failed.' : 'बोली लगाई गई, लेकिन हाईलाइट विफल रही।', 'info');
-                }
-            } else {
-                showAlert(contextT.alertBidPlaced, 'success');
-            }
+            showAlert(contextT.alertBidPlaced, 'success');
 
             onSuccess();
             onClose();
             // Reset state
             setBidAmount('');
             setBidMessage('');
-            setShouldHighlight(false);
         } catch (err: any) {
             console.error('Bid Error:', err);
             const msg = err.message || '';
@@ -137,15 +183,29 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center pointer-events-none">
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-auto" onClick={onClose}></div>
-            <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-t-3xl sm:rounded-3xl p-6 pointer-events-auto animate-pop relative transition-colors">
-                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"><XCircle size={24} /></button>
-                <h3 className="text-xl font-bold mb-4 dark:text-white">{contextT.placeBid}</h3>
-                {/* Show warning if user already bid */}
-                {existingBid && (
-                    <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3 mb-4">
-                        <p className="text-sm text-amber-800 dark:text-amber-300 font-medium">
+        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-md pointer-events-auto" onClick={onClose}></div>
+            <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl p-5 pointer-events-auto animate-slide-up pb-safe relative shadow-lg transition-all">
+
+                <div className="flex items-center gap-4 mb-8">
+                    <button
+                        onClick={onClose}
+                        className="btn-ghost !p-2 rounded-xl !bg-gray-100 dark:!bg-gray-800 text-gray-700 dark:text-gray-300 group"
+                        aria-label="Back"
+                    >
+                        <ArrowLeft size={20} className="group-hover:-translate-x-0.5 transition-transform" />
+                    </button>
+                    <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
+                        <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl">
+                            <IndianRupee size={22} className="text-emerald-600 dark:text-emerald-400" />
+                        </div>
+                        {contextT.placeBid}
+                    </h3>
+                </div>
+                {/* Show warning if user already bid (check runs silently in background) */}
+                {!isCheckingBid && existingBid && (
+                    <div className="badge badge-warning w-full py-3 mb-4 rounded-xl items-start h-auto text-left leading-tight">
+                        <p className="font-medium">
                             {contextLanguage === 'en'
                                 ? `You already bid ₹${existingBid.amount} on this job. Status: ${existingBid.status}`
                                 : `आपने इस जॉब पर ₹${existingBid.amount} बोली लगाई है। स्थिति: ${existingBid.status}`}
@@ -153,86 +213,60 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
                     </div>
                 )}
 
-                <div className="space-y-4">
+                <div className="space-y-6">
                     {/* Job Budget Reference */}
                     {job && (
-                        <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 rounded-xl p-3">
-                            <p className="text-sm text-emerald-800 dark:text-emerald-300">
-                                {contextLanguage === 'en'
-                                    ? `Employer's Budget: ₹${job.budget}`
-                                    : `नियोक्ता का बजट: ₹${job.budget}`}
-                            </p>
+                        <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 p-4 rounded-2xl flex items-center justify-between">
+                            <span className="text-[10px] font-black text-emerald-600/60 dark:text-emerald-400/60 uppercase tracking-widest">Employer's Budget</span>
+                            <span className="text-lg font-black text-emerald-700 dark:text-emerald-400">₹{job.budget}</span>
                         </div>
                     )}
 
                     <div>
-                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">{contextT.yourOffer}</label>
-                        <input
-                            type="number"
-                            value={bidAmount}
-                            onChange={(e) => setBidAmount(e.target.value)}
-                            className="w-full p-3 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 font-bold text-lg text-gray-900 dark:text-white"
-                            placeholder={job ? `₹${job.budget}` : "0"}
-                            min="1"
-                        />
+                        <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-3 ml-1 block">{contextT.yourOffer}</label>
+                        <div className="relative group">
+                            <span className="absolute left-5 top-1/2 -translate-y-1/2 text-emerald-500 font-black text-xl group-focus-within:scale-110 transition-transform">₹</span>
+                            <input
+                                type="number"
+                                value={bidAmount}
+                                onChange={(e) => setBidAmount(e.target.value)}
+                                className="input-base !pl-12 !py-4 !text-xl font-black text-emerald-600 dark:text-emerald-400 !bg-gray-50 dark:!bg-gray-800/50 !rounded-2xl border-transparent focus:!border-emerald-500/50 focus:!shadow-[0_0_20px_rgba(16,185,129,0.1)] transition-all"
+                                placeholder={job ? `${job.budget}` : "0"}
+                                min="1"
+                            />
+                        </div>
                     </div>
                     <div>
-                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">{contextT.msgToEmployer}</label>
+                        <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block px-1">{contextT.msgToEmployer}</label>
                         <textarea
                             value={bidMessage}
                             onChange={(e) => setBidMessage(e.target.value)}
-                            className="w-full p-3 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 h-24 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                            className="input-base input-focus h-28"
                             placeholder={contextT.bidMessagePlaceholder}
                             maxLength={500}
                         ></textarea>
-                        <div className="flex justify-between items-center mt-1">
-                            <button onClick={handleEnhanceBid} disabled={isEnhancingBid} className="text-xs text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1 hover:underline">
-                                <div className="w-4 h-4 bg-emerald-100 dark:bg-emerald-900/50 rounded-full flex items-center justify-center"><LayoutGrid size={10} /></div> {isEnhancingBid ? (contextLanguage === 'en' ? 'Enhancing...' : 'बढ़ा रहा...') : (contextLanguage === 'en' ? 'Enhance with AI' : 'AI से बढ़ाएं')}
+                        <div className="flex justify-between items-center mt-2 px-1">
+                            <button onClick={handleEnhanceBid} disabled={isEnhancingBid} className="btn-ghost !p-0 text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 group">
+                                <div className="p-1 bg-emerald-100 dark:bg-emerald-900/50 rounded-lg group-hover:scale-110 transition-transform"><LayoutGrid size={12} /></div>
+                                <span className="text-xs font-bold">{isEnhancingBid ? (contextLanguage === 'en' ? 'Enhancing...' : 'बढ़ा रहा...') : (contextLanguage === 'en' ? 'Enhance with AI' : 'AI से बढ़ाएं')}</span>
                             </button>
-                            <span className="text-xs text-gray-400 dark:text-gray-500">{bidMessage.length}/500</span>
+                            <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">{bidMessage.length}/500</span>
                         </div>
                     </div>
-                    <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800 mb-2">
-                        <p className="text-xs text-blue-800 dark:text-blue-300">
+                    <div className="bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100/50 dark:border-blue-900/30 p-4 rounded-2xl">
+                        <p className="text-[11px] font-bold text-blue-700/80 dark:text-blue-400/80 leading-relaxed">
                             {contextLanguage === 'en'
-                                ? `Bidding is FREE! If your bid is accepted, you'll pay a small connection fee to unlock chat and contact details.`
-                                : `बोली लगाना मुफ्त है! यदि आपकी बोली स्वीकार की जाती है, तो चैट और संपर्क विवरण अनलॉक करने के लिए एक छोटी कनेक्शन फीस का भुगतान करना होगा।`}
+                                ? `Bidding is 100% FREE! Once your bid is accepted, you can connect with the employer directly via chat.`
+                                : `बोली लगाना 100% मुफ्त है! जब आपकी बोली स्वीकार हो जाएगी, आप सीधे नियोक्ता से चैट के माध्यम से जुड़ सकते हैं।`}
                         </p>
-                    </div>
-
-                    {/* Highlight Bid Option (Upsell) */}
-                    <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/10 dark:to-orange-900/10 p-3 rounded-xl border border-amber-200 dark:border-amber-800/50 flex items-center gap-3">
-                        <input
-                            type="checkbox"
-                            id="highlightBid"
-                            className="w-5 h-5 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
-                            checked={shouldHighlight}
-                            onChange={(e) => {
-                                // Check balance before allowing check
-                                if (e.target.checked && contextUser.walletBalance < 10) {
-                                    showAlert(contextLanguage === 'en' ? 'Insufficient balance for highlighting (₹10). Add money to wallet.' : 'हाईलाइट करने के लिए बैलेंस कम है (₹10)। वॉलेट में पैसे डालें।', 'error');
-                                    return;
-                                }
-                                setShouldHighlight(e.target.checked);
-                            }}
-                        />
-                        <label htmlFor="highlightBid" className="flex-1 cursor-pointer">
-                            <p className="text-sm font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1">
-                                {contextLanguage === 'en' ? 'Highlight my Bid' : 'मेरी बोली को हाईलाइट करें'}
-                                <span className="bg-amber-200 text-amber-900 text-[9px] px-1.5 rounded-full border border-amber-300 ml-1">✨ ₹10</span>
-                            </p>
-                            <p className="text-xs text-amber-700 dark:text-amber-400 leading-tight mt-0.5">
-                                {contextLanguage === 'en' ? 'Get noticed faster with a golden border!' : 'गोल्डन बॉर्डर के साथ जल्दी noticed हों!'}
-                            </p>
-                        </label>
                     </div>
 
                     <button
                         onClick={handlePlaceBid}
                         disabled={!!existingBid}
-                        className={`w-full py-3 rounded-xl font-bold shadow-lg transition-colors ${existingBid
-                            ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                            : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                        className={`btn w-full mt-4 !py-5 !rounded-2xl font-black uppercase tracking-[0.2em] transition-all text-sm shadow-xl ${existingBid
+                            ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                            : 'btn-primary shadow-emerald-500/20 hover:shadow-emerald-500/40 hover:-translate-y-1 active:scale-95'
                             }`}
                     >
                         {existingBid

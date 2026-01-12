@@ -1,5 +1,5 @@
 
-import { Job, JobStatus, User, UserRole, Bid, Transaction, Notification } from './types';
+import { Job, JobStatus, User, UserRole, Bid, Notification } from './types';
 
 export const CATEGORIES = [
   'Farm Labor',
@@ -97,6 +97,9 @@ export const TRANSLATIONS = {
     chat: "Chat",
     jobDescription: "Job Description",
     startDate: "Start Date",
+    postedDate: "Posted Date",
+    appliedOn: "Applied On",
+    proposedBudget: "Your Proposed Budget",
     underBudget: "Under Budget",
 
     // Wallet
@@ -147,6 +150,7 @@ export const TRANSLATIONS = {
     alertJobUpdated: "Job updated successfully!",
     alertBidPlaced: "Bid placed successfully!",
     alertCantEdit: "Cannot edit: Job has pending bids.",
+    waitingForPosterFinalize: "Offer accepted! Waiting for Employer to finalize.",
     alertCantDeleteProgress: "Cannot delete a job that is currently in progress.",
     alertCantDeleteCompleted: "Cannot delete a completed job.",
     alertConfirmDelete: "Are you sure you want to delete this job?",
@@ -198,6 +202,58 @@ export const TRANSLATIONS = {
     nearest: "Nearest",
     bidMessagePlaceholder: "Describe your proposal...",
 
+    // Info Modals
+    infoGuide: "Platform Guide",
+    gotIt: "Got it, Thanks",
+    safetyTitle: "Safety Rules",
+    securityAlert: "Security Alert",
+    securityDesc: "Never share OTPs or passwords. CHOWKAR will NEVER ask for them under any circumstances.",
+    essentialGuidelines: "Essential Guidelines",
+    ruleInAppPayments: "In-App Payments",
+    ruleInAppPaymentsDesc: "Always use our secure wallet for all job payments to stay protected by our system.",
+    ruleVerifyProfiles: "Verify Profiles",
+    ruleVerifyProfilesDesc: "Ensure the face matches the profile photo. Don't hesitate to ask for ID verification.",
+    ruleStayInChat: "Stay in Chat",
+    ruleStayInChatDesc: "Don't move to WhatsApp or calls. In-app chats are recorded for your own safety.",
+    ruleReportAbuse: "Report Abuse",
+    ruleReportAbuseDesc: "If someone asks for upfront fees or behaves suspiciously, report them instantly.",
+    verifyLocation: "Verify Location",
+    verifyLocationDesc: "Check the map & distance before heading out.",
+    publicPlaces: "Public Places",
+    publicPlacesDesc: "Meet in well-lit, busy areas for first contact.",
+    fixedRates: "Fixed Rates",
+    fixedRatesDesc: "Ensure the budget is locked before starting.",
+    idValidation: "ID Validation",
+    idValidationDesc: "Request Govt ID before allowing inside.",
+    workScope: "Work Scope",
+    workScopeDesc: "Give precise, clear instructions via chat.",
+    fairConduct: "Fair Conduct",
+    fairConductDesc: "Show empathy & provide water for hard labor.",
+
+    guidelinesTitle: "Guidelines",
+    guidelinesDesc: "CHOWKAR is built on trust. To keep our marketplace safe, please adhere to these core principles:",
+    respectTitle: "Respect Everyone",
+    respectDesc: "No abusive language, discrimination, or harassment. Treat everyone with dignity.",
+    reliableTitle: "Be Reliable",
+    reliableDesc: "If you accept, show up. If you hire, provide clear instructions and pay firmly on time.",
+    honestReviews: "Honest Reviews",
+    honestReviewsDesc: "Leave genuine ratings based on performance. Do not use ratings as a bargaining tool.",
+    safetyFirst: "Safety First",
+    safetyFirstDesc: "Soliciting illegal activities will result in an immediate permanent ban.",
+
+    termsTitle: "Terms",
+    lastUpdated: "Last Updated",
+    termsIntro: "By using CHOWKAR, you agree to these simplified terms:",
+    termRole: "Platform Role",
+    termRoleDesc: "We are an intermediary connecting users. We don't employ workers.",
+    termPayments: "Payments",
+    termPaymentsDesc: "Use our wallet for safety. We are not liable for cash-only disputes.",
+    termPrivacy: "Data Privacy",
+    termPrivacyDesc: "We use location only to find nearby work. We NEVER sell your data.",
+    termTermination: "Termination",
+    termTerminationDesc: "Violating guidelines will result in an immediate account ban.",
+    termsSummary: "This contains a summary. For full legal text, please contact legal@chowkar.in",
+
     // Reviews
     rateExperience: "Rate your experience",
     howWasWork: "How was the work with",
@@ -233,7 +289,23 @@ export const TRANSLATIONS = {
     withdraw: "Withdraw",
     yourOfferLabel: "Your Offer",
     noBidsFound: "No bids found.",
+    noBidsDesc: "Your job applications will appear here once you start bidding.",
     acceptingBidFeeWarn: "Accepting this bid will deduct a ₹{fee} platform fee from your wallet. Continue?",
+
+    // Payment Modal
+    secureCheckout: "Secure Checkout",
+    publishJob: "Publish Job",
+    unlockChat: "Unlock Chat",
+    addFunds: "Add Funds",
+    paymentSuccessful: "Payment Successful!",
+    paymentSecureDesc: "Your transaction was completed securely.",
+    paymentFailed: "Payment Failed",
+    tryAgain: "Try Again",
+    totalPayable: "Total Amount Payable",
+    encryptedGateway: "Encrypted Gateway",
+    securedBy: "Secured by Razorpay & SSL Protocol",
+    processingTransaction: "Processing Transaction...",
+    payNow: "Pay ₹{amount} Now",
 
     // Landing Page
     heroTitle: "Find Work. Hire Locally. Zero Commission.",
@@ -317,7 +389,7 @@ export const TRANSLATIONS = {
     paymentSuccessJobFail: "Payment successful but failed to create job. Please contact support.",
     cantEditInProgress: "Cannot edit a job that is in progress.",
     cantEditCompleted: "Cannot edit a completed or cancelled job.",
-    cancelJobRefundPrompt: "Cancel job and refund fees?",
+    cancelJobRefundPrompt: "Cancel this job?",
     cancelJob: "Cancel Job",
     deleteJobPrompt: "Are you sure you want to delete this job?",
     withdrawBidPrompt: "Are you sure you want to withdraw your bid?",
@@ -387,6 +459,9 @@ export const TRANSLATIONS = {
     chat: "चैट करें",
     jobDescription: "काम का विवरण",
     startDate: "तारीख",
+    postedDate: "पोस्ट किया",
+    appliedOn: "आवेदन किया",
+    proposedBudget: "आपका बजट",
     underBudget: "बजट के अंदर",
 
     // Wallet
@@ -437,6 +512,7 @@ export const TRANSLATIONS = {
     alertJobUpdated: "काम अपडेट किया गया!",
     alertBidPlaced: "बोली सफलतापूर्वक लगाई गई!",
     alertCantEdit: "अभी एडिट नहीं कर सकते: लोगों ने बोली लगाई है।",
+    waitingForPosterFinalize: "प्रस्ताव स्वीकार किया! मालिक द्वारा अंतिम पुष्टि की प्रतीक्षा है।",
     alertCantDeleteProgress: "चल रहे काम को हटा नहीं सकते।",
     alertCantDeleteCompleted: "पूरे हो चुके काम को हटा नहीं सकते।",
     alertConfirmDelete: "क्या आप यह काम हटाना चाहते हैं?",
@@ -488,6 +564,58 @@ export const TRANSLATIONS = {
     nearest: "सबसे पास",
     bidMessagePlaceholder: "अपना प्रस्ताव बताएं...",
 
+    // Info Modals
+    infoGuide: "प्लेटफ़ॉर्म गाइड",
+    gotIt: "समझ गया, धन्यवाद",
+    safetyTitle: "सुरक्षा नियम",
+    securityAlert: "सुरक्षा अलर्ट",
+    securityDesc: "कधी भी OTP या पासवर्ड साझा न करें। CHOWKAR आपसे किसी भी परिस्थिति में ये नहीं मांगेगा।",
+    essentialGuidelines: "आवश्यक दिशा-निर्देश",
+    ruleInAppPayments: "इन-ऐप भुगतान",
+    ruleInAppPaymentsDesc: "सुरक्षित रहने के लिए हमेशा हमारे वॉलेट का उपयोग करें।",
+    ruleVerifyProfiles: "प्रोफ़ाइल सत्यापित करें",
+    ruleVerifyProfilesDesc: "सुनिश्चित करें कि चेहरा प्रोफ़ाइल फोटो से मेल खाता है। आईडी मांगने में संकोच न करें।",
+    ruleStayInChat: "चैट में रहें",
+    ruleStayInChatDesc: "WhatsApp या कॉल पर न जाएं। आपकी सुरक्षा के लिए चैट रिकॉर्ड की जाती हैं।",
+    ruleReportAbuse: "दुरुपयोग की रिपोर्ट करें",
+    ruleReportAbuseDesc: "यदि कोई अग्रिम शुल्क मांगता है या संदिग्ध व्यवहार करता है, तो तुरंत रिपोर्ट करें।",
+    verifyLocation: "स्थान सत्यापित करें",
+    verifyLocationDesc: "बाहर जाने से पहले मानचित्र और दूरी की जाँच करें।",
+    publicPlaces: "सार्वजनिक स्थान",
+    publicPlacesDesc: "प्रथम संपर्क के लिए अच्छी रोशनी वाले, व्यस्त क्षेत्रों में मिलें।",
+    fixedRates: "निश्चित दरें",
+    fixedRatesDesc: "शुरू करने से पहले सुनिश्चित करें कि बजट लॉक है।",
+    idValidation: "आईडी सत्यापन",
+    idValidationDesc: "अंदर आने देने से पहले सरकारी आईडी मांगे।",
+    workScope: "कार्य दायरा",
+    workScopeDesc: "चैट के माध्यम से सटीक, स्पष्ट निर्देश दें।",
+    fairConduct: "उचित व्यवहार",
+    fairConductDesc: "सहानुभूति दिखाएं और कड़ी मेहनत के लिए पानी उपलब्ध कराएं।",
+
+    guidelinesTitle: "दिशा-निर्देश",
+    guidelinesDesc: "CHOWKAR विश्वास पर बना है। हमारे बाज़ार को सुरक्षित रखने के लिए, कृपया इन मूल सिद्धांतों का पालन करें:",
+    respectTitle: "सभी का सम्मान करें",
+    respectDesc: "कोई अपमानजनक भाषा, भेदभाव या उत्पीड़न नहीं। सभी के साथ गरिमा से व्यवहार करें।",
+    reliableTitle: "भरोसेमंद बनें",
+    reliableDesc: "यदि आप स्वीकार करते हैं, तो पहुंचें। यदि आप काम देते हैं, तो स्पष्ट निर्देश दें और समय पर भुगतान करें।",
+    honestReviews: "ईमानदार समीक्षाएं",
+    honestReviewsDesc: "प्रदर्शन के आधार पर वास्तविक रेटिंग दें। रेटिंग को सौदेबाजी के उपकरण के रूप में उपयोग न करें।",
+    safetyFirst: "सुरक्षा सर्वोपरि",
+    safetyFirstDesc: "अवैध गतिविधियों के लिए उकसाने पर खाते पर स्थायी प्रतिबंध लगा दिया जाएगा।",
+
+    termsTitle: "नियम एवं शर्तें",
+    lastUpdated: "आखिरी अपडेट",
+    termsIntro: "CHOWKAR का उपयोग करके, आप इन सरल शर्तों से सहमत होते हैं:",
+    termRole: "प्लेटफ़ॉर्म की भूमिका",
+    termRoleDesc: "हम उपयोगकर्ताओं को जोड़ने वाले एक मध्यस्थ हैं। हम कामगारों को नियुक्त नहीं करते हैं।",
+    termPayments: "भुगतान",
+    termPaymentsDesc: "सुरक्षा के लिए हमारे वॉलेट का उपयोग करें। हम केवल नकद विवादों के लिए उत्तरदायी नहीं हैं।",
+    termPrivacy: "डेटा गोपनीयता",
+    termPrivacyDesc: "हम आसपास के काम खोजने के लिए ही स्थान का उपयोग करते हैं। हम आपका डेटा कभी नहीं बेचते।",
+    termTermination: "खाता बंद करना",
+    termTerminationDesc: "दिशानिर्देशों का उल्लंघन करने पर खाते पर तुरंत प्रतिबंध लगा दिया जाएगा।",
+    termsSummary: "इसमें एक सारांश है। पूर्ण कानूनी पाठ के लिए, कृपया legal@chowkar.in पर संपर्क करें।",
+
     // Reviews
     rateExperience: "अपना अनुभव रेट करें",
     howWasWork: "इनके साथ काम कैसा रहा",
@@ -523,7 +651,23 @@ export const TRANSLATIONS = {
     withdraw: "निकालें",
     yourOfferLabel: "आपका प्रस्ताव",
     noBidsFound: "कोई बोली नहीं मिली।",
+    noBidsDesc: "जब आप बोली लगाना शुरू करेंगे तो आपके आवेदन यहाँ दिखाई देंगे।",
     acceptingBidFeeWarn: "इस बोली को स्वीकार करने पर आपके वॉलेट से ₹{fee} प्लेटफॉर्म शुल्क काट लिया जाएगा। जारी रखें?",
+
+    // Payment Modal
+    secureCheckout: "सुरक्षित चेकआउट",
+    publishJob: "जॉब पोस्ट करें",
+    unlockChat: "चैट अनलॉक करें",
+    addFunds: "पैसे जोड़ें",
+    paymentSuccessful: "भुगतान सफल!",
+    paymentSecureDesc: "आपका लेनदेन सुरक्षित रूप से पूरा हो गया था।",
+    paymentFailed: "भुगतान विफल",
+    tryAgain: "पुनः प्रयास करें",
+    totalPayable: "कुल देय राशि",
+    encryptedGateway: "एन्क्रिप्टेड गेटवे",
+    securedBy: "Razorpay और SSL प्रोटोकॉल द्वारा सुरक्षित",
+    processingTransaction: "लेनदेन संसाधित हो रहा है...",
+    payNow: "अभी ₹{amount} का भुगतान करें",
 
     // Landing Page
     heroTitle: "काम खोजें। स्थानीय लोगों को रखें। शून्य कमीशन।",
@@ -607,7 +751,7 @@ export const TRANSLATIONS = {
     paymentSuccessJobFail: "भुगतान सफल लेकिन जॉब बनाने में विफल। सहायता से संपर्क करें।",
     cantEditInProgress: "प्रगति पर चल रहे काम को संपादित नहीं कर सकते।",
     cantEditCompleted: "पूरे हो चुके या रद्द किए गए काम को संपादित नहीं कर सकते।",
-    cancelJobRefundPrompt: "जॉब रद्द करें और रिफंड पाएं?",
+    cancelJobRefundPrompt: "क्या आप यह जॉब रद्द करना चाहते हैं?",
     cancelJob: "रॉब रद्द करें",
     deleteJobPrompt: "क्या आप इस जॉब को हटाना चाहते हैं?",
     withdrawBidPrompt: "क्या आप अपनी बोली वापस लेना चाहते हैं?",
@@ -626,150 +770,7 @@ export const TRANSLATIONS = {
   }
 };
 
-export const POSTER_FEE = 19; // Fixed fee for hiring a worker
-export const WORKER_COMMISSION_RATE = 0.05; // 5% commission on bid amount
+export const POSTER_FEE = 0; // Free for now
+export const WORKER_COMMISSION_RATE = 0; // 0% commission
 export const FREE_AI_USAGE_LIMIT = 2; // Number of free AI uses allowed
 
-// Mock location: Center of Nagpur
-export const MOCK_USER: User = {
-  id: 'u1',
-  name: 'Rajesh Kumar',
-  email: 'rajesh@example.com',
-  phone: '+91 98765 43210',
-  location: 'Nagpur, Maharashtra',
-  coordinates: { lat: 21.1458, lng: 79.0882 },
-  walletBalance: 500,
-  rating: 4.8,
-  // profilePhoto: 'https://randomuser.me/api/portraits/men/32.jpg', // Example valid URL if needed
-  isPremium: false,
-  aiUsageCount: 0,
-  bio: 'Hardworking individual with experience in agricultural and construction tasks. Reliable, punctual, and always ready to learn new skills.',
-  skills: ['Tractor Driving', 'Harvesting', 'Heavy Lifting', 'Basic Carpentry'],
-  experience: '5 Years',
-  jobsCompleted: 14,
-  joinDate: Date.now() - 31536000000, // Approx 1 year ago
-  reviews: [
-    {
-      id: 'r1',
-      reviewerId: 'u2',
-      reviewerName: 'Amit Singh',
-      rating: 5,
-      comment: 'Rajesh was extremely helpful with the rice harvest. Very hardworking and polite.',
-      tags: ['Hardworking', 'Polite'],
-      date: Date.now() - 864000000 // 10 days ago
-    },
-    {
-      id: 'r2',
-      reviewerId: 'u3',
-      reviewerName: 'Suresh Patil',
-      rating: 4,
-      comment: 'Good driving skills, arrived on time.',
-      tags: ['Punctual', 'Skilled'],
-      date: Date.now() - 1728000000 // 20 days ago
-    }
-  ]
-};
-
-export const MOCK_JOBS: Job[] = [
-  {
-    id: 'j1',
-    posterId: 'u1', // CHANGED TO CURRENT USER (RAJESH) FOR DEMO
-    posterName: 'Rajesh Kumar', // CHANGED TO CURRENT USER
-    posterPhone: '+91 98765 43210',
-    title: 'Need help with Rice Harvest',
-    description: 'Looking for 3 people to help with rice harvesting in my field for 2 days. Lunch provided.',
-    category: 'Farm Labor',
-    location: 'Wardha, MH',
-    coordinates: { lat: 20.7453, lng: 78.6022 }, // ~50km from Nagpur
-    jobDate: '2024-11-20',
-    duration: '2 Days',
-    budget: 1200,
-    status: JobStatus.OPEN,
-    createdAt: Date.now() - 86400000,
-    bids: []
-  },
-  {
-    id: 'j2',
-    posterId: 'u3',
-    posterName: 'Suresh Patil',
-    posterPhone: '+91 88776 65544',
-    title: 'Tempo Driver Needed',
-    description: 'Need a driver to transport goods from village to city market. Must have license.',
-    category: 'Driver',
-    location: 'Nagpur, MH',
-    coordinates: { lat: 21.1460, lng: 79.0885 }, // Very close to user
-    jobDate: '2024-10-25',
-    duration: '8 Hours',
-    budget: 800,
-    status: JobStatus.OPEN,
-    createdAt: Date.now() - 172800000,
-    bids: [
-      {
-        id: 'b1',
-        jobId: 'j2',
-        workerId: 'u1', // Current user bid on this
-        workerName: 'Rajesh Kumar',
-        workerPhone: '+91 98765 43210',
-        workerRating: 4.5,
-        workerLocation: 'Nagpur, Maharashtra',
-        workerCoordinates: { lat: 21.1458, lng: 79.0882 },
-        amount: 750,
-        message: 'I have 5 years heavy vehicle experience.',
-        createdAt: Date.now() - 100000,
-        status: 'PENDING',
-        negotiationHistory: [
-          { amount: 750, by: UserRole.WORKER, timestamp: Date.now() - 100000 }
-        ]
-      }
-    ]
-  },
-  {
-    id: 'j3',
-    posterId: 'u1', // Current user posted this
-    posterName: 'Rajesh Kumar',
-    posterPhone: '+91 98765 43210',
-    title: 'Fix Water Pump',
-    description: 'Submersible pump not starting. Need electrician urgently.',
-    category: 'Electrical',
-    location: 'Nagpur, MH',
-    coordinates: { lat: 21.1458, lng: 79.0882 },
-    jobDate: '2024-10-24',
-    duration: '2 Hours',
-    budget: 500,
-    status: JobStatus.OPEN,
-    createdAt: Date.now() - 400000,
-    // REMOVED BIDS SO EDIT BUTTON SHOWS
-    bids: []
-  }
-];
-
-export const MOCK_TRANSACTIONS: Transaction[] = [
-  {
-    id: 't1',
-    userId: 'u1',
-    amount: 500,
-    type: 'CREDIT',
-    description: 'Added money to wallet',
-    timestamp: Date.now() - 100000000
-  },
-  {
-    id: 't2',
-    userId: 'u1',
-    amount: 15,
-    type: 'DEBIT',
-    description: 'Platform Fee: Tempo Driver Bid',
-    timestamp: Date.now() - 86400000
-  }
-];
-
-export const MOCK_NOTIFICATIONS: Notification[] = [
-  {
-    id: 'n1',
-    userId: 'u1',
-    title: 'Welcome to CHOWKAR',
-    message: 'Get started by finding work or posting a job.',
-    type: 'INFO',
-    read: false,
-    timestamp: Date.now() - 10000000
-  }
-];

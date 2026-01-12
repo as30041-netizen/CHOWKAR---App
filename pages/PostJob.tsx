@@ -11,7 +11,7 @@ export const PostJob: React.FC = () => {
     const jobToEdit = location.state?.jobToEdit as Job | undefined;
 
     return (
-        <div className="pb-24 md:pb-6">
+        <div className="max-w-4xl mx-auto pb-24 md:pb-12 pt-6">
             <JobPostingForm
                 onSuccess={() => navigate('/')}
                 onCancel={() => navigate('/')}

@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase, waitForSupabase } from '../lib/supabase';
 import { ChatMessage } from '../types';
 
 export const ITEMS_PER_PAGE = 50;
@@ -11,20 +11,25 @@ export const ITEMS_PER_PAGE = 50;
  */
 export const fetchJobMessages = async (jobId: string, page: number = 0) => {
     const from = page * ITEMS_PER_PAGE;
-    const to = from + ITEMS_PER_PAGE - 1;
 
     try {
-        const { data, error } = await supabase
-            .from('chat_messages')
-            .select('*')
-            .eq('job_id', jobId)
-            .order('created_at', { ascending: false }) // Fetch newest first for pagination
-            .range(from, to);
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const { safeFetch } = await import('./fetchUtils');
 
-        if (error) throw error;
+        console.log(`[ChatService] Fetching messages for job ${jobId}...`);
+
+        const response = await safeFetch(
+            `${supabaseUrl}/rest/v1/chat_messages?job_id=eq.${jobId}&order=created_at.desc&offset=${from}&limit=${ITEMS_PER_PAGE}`
+        );
+
+        if (!response.ok) {
+            throw new Error(`Fetch failed: ${response.status}`);
+        }
+
+        const data = await response.json();
 
         // Reverse back to chronological order for display
-        const messages: ChatMessage[] = (data || []).reverse().map(msg => ({
+        const messages: ChatMessage[] = (data || []).reverse().map((msg: any) => ({
             id: msg.id,
             jobId: msg.job_id,
             senderId: msg.sender_id,
@@ -40,6 +45,7 @@ export const fetchJobMessages = async (jobId: string, page: number = 0) => {
             mediaDuration: msg.media_duration
         }));
 
+        console.log(`[ChatService] ✅ Loaded ${messages.length} messages for job ${jobId}`);
         return { messages, error: null };
     } catch (error) {
         console.error('Error fetching messages:', error);
@@ -92,14 +98,40 @@ export interface InboxChatSummary {
         isRead: boolean;
     };
     unreadCount: number;
+    isArchived: boolean;
+    isDeleted: boolean;
 }
 
 export const fetchInboxSummaries = async (userId: string): Promise<{ chats: InboxChatSummary[], error?: any }> => {
     try {
         console.log('[ChatService] Fetching inbox summaries...');
-        const { data, error } = await supabase.rpc('get_inbox_summaries', { p_user_id: userId });
 
-        if (error) throw error;
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const { safeFetch } = await import('./fetchUtils');
+
+        console.log(`[ChatService] Calling RPC for user ${userId}...`);
+
+        const response = await safeFetch(
+            `${supabaseUrl}/rest/v1/rpc/get_inbox_summaries`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ p_user_id: userId })
+            }
+        );
+
+        console.log('[ChatService] RPC response status:', response.status);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[ChatService] RPC error:', errorText);
+            throw new Error(`RPC failed: ${response.status} - ${errorText}`);
+        }
+
+        const data = await response.json();
+        console.log(`[ChatService] ✅ RPC returned ${data?.length || 0} chat threads`);
 
         const chats: InboxChatSummary[] = (data || []).map((row: any) => ({
             jobId: row.job_id,
@@ -116,9 +148,12 @@ export const fetchInboxSummaries = async (userId: string): Promise<{ chats: Inbo
                 senderId: row.last_message_sender_id,
                 isRead: row.last_message_is_read
             } : undefined,
-            unreadCount: Number(row.unread_count || 0)
+            unreadCount: Number(row.unread_count || 0),
+            isArchived: !!row.is_archived,
+            isDeleted: !!row.is_deleted
         }));
 
+        console.log(`[ChatService] ✅ Inbox loaded: ${chats.length} chats`);
         return { chats, error: null };
     } catch (error) {
         console.error('[ChatService] Error fetching inbox summaries:', error);
@@ -128,10 +163,12 @@ export const fetchInboxSummaries = async (userId: string): Promise<{ chats: Inbo
 
 export const editMessage = async (messageId: string, newText: string): Promise<{ success: boolean; error?: any }> => {
     try {
-        const { error } = await supabase
-            .from('chat_messages')
-            .update({ text: newText })
-            .eq('id', messageId);
+        const { error } = await waitForSupabase(async () => {
+            return await supabase
+                .from('chat_messages')
+                .update({ text: newText })
+                .eq('id', messageId);
+        });
 
         if (error) throw error;
         return { success: true };
@@ -141,18 +178,70 @@ export const editMessage = async (messageId: string, newText: string): Promise<{
     }
 };
 
+
 export const deleteMessage = async (messageId: string): Promise<{ success: boolean; error?: any }> => {
     try {
-        // Soft delete
-        const { error } = await supabase
-            .from('chat_messages')
-            .update({ is_deleted: true, text: 'This message was deleted', media_url: null })
-            .eq('id', messageId);
+        // Use safeRPC (preferred - handles authorization without blocking)
+        const { safeRPC } = await import('../lib/supabase');
+        const { error: rpcError } = await safeRPC('soft_delete_chat_message', { p_message_id: messageId });
 
-        if (error) throw error;
+        if (rpcError) {
+            // Fallback: Direct table update (if RPC missing)
+            console.warn('RPC soft_delete_chat_message failed, using direct update:', rpcError.message);
+            const { error: updateError } = await supabase
+                .from('chat_messages')
+                .update({ is_deleted: true, text: 'This message was deleted' })
+                .eq('id', messageId);
+            if (updateError) throw updateError;
+        }
+
         return { success: true };
     } catch (error) {
         console.error('Error deleting message:', error);
         return { success: false, error };
+    }
+};
+
+// --- BLOCKING SYSTEM ---
+
+export const blockUser = async (userIdToBlock: string): Promise<{ success: boolean; error?: any }> => {
+    try {
+        // Use safeRPC
+        const { safeRPC } = await import('../lib/supabase');
+        const { error } = await safeRPC('block_user', { p_blocked_id: userIdToBlock });
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error('Error blocking user:', error);
+        return { success: false, error };
+    }
+};
+
+export const unblockUser = async (userIdToUnblock: string): Promise<{ success: boolean; error?: any }> => {
+    try {
+        const { safeRPC } = await import('../lib/supabase');
+        const { error } = await safeRPC('unblock_user', { p_blocked_id: userIdToUnblock });
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        console.error('Error unblocking user:', error);
+        return { success: false, error };
+    }
+};
+
+export const getRelationshipStatus = async (otherUserId: string): Promise<{ iBlocked: boolean; theyBlockedMe: boolean; error?: any }> => {
+    try {
+        const { safeRPC } = await import('../lib/supabase');
+        const { data, error } = await safeRPC('check_relationship_status', { p_other_user_id: otherUserId });
+        if (error) throw error;
+
+        return {
+            iBlocked: data.i_blocked,
+            theyBlockedMe: data.they_blocked_me
+        };
+    } catch (error) {
+        // Silent fail (default to false) to avoid breaking chat if SQL not run
+        console.warn('Error fetching relationship status (SQL might be missing):', error);
+        return { iBlocked: false, theyBlockedMe: false, error };
     }
 };

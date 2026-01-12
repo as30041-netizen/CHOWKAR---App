@@ -116,9 +116,9 @@ export const enhanceBidMessageStream = async (
 
     let fullText = '';
     for await (const chunk of result.stream) {
-        const text = chunk.text();
-        fullText += text;
-        onUpdate(fullText);
+      const text = chunk.text();
+      fullText += text;
+      onUpdate(fullText);
     }
   } catch (error) {
     console.error("Error generating bid message:", error);

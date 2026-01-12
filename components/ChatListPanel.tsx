@@ -12,7 +12,7 @@ interface ChatListPanelProps {
 }
 
 export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, onChatSelect }) => {
-    const { user, t, language, messages: liveMessages, notifications, setNotifications } = useUser();
+    const { user, t, language, messages: liveMessages, notifications, setNotifications, clearNotificationsForJob } = useUser();
     const { jobs, getJobWithFullDetails } = useJobs();
     const [inboxChats, setInboxChats] = useState<import('../services/chatService').InboxChatSummary[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -24,56 +24,94 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
     const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
     const [archivedChats, setArchivedChats] = useState<Set<string>>(new Set());
     const [deletedChats, setDeletedChats] = useState<Set<string>>(new Set());
+    const hasFetchedRef = React.useRef(false);
+    const lastFetchTimeRef = React.useRef(0);
 
     // Load available chats using Optimized RPC (Solves N+1 Query Problem)
+    // Only fetch once when panel opens, not on every message change
     useEffect(() => {
-        if (!isOpen || !user.id || user.id.length < 10 || user.id === 'u1') return;
+        if (!isOpen || !user.id || user.id.length < 10 || user.id === 'u1') {
+            return;
+        }
+
+        // DEBOUNCE: Skip if fetched recently (< 5 seconds) to prevent notification/realtime loops
+        const now = Date.now();
+        if (hasFetchedRef.current && (now - lastFetchTimeRef.current < 5000)) {
+            console.log('[ChatListPanel] Skipping fetch (throttled)');
+            return;
+        }
+
+        hasFetchedRef.current = true;
+        lastFetchTimeRef.current = now;
 
         const loadChats = async () => {
-            setIsLoading(true);
+            // Only show loading spinner on FIRST load, not background refreshes
+            if (inboxChats.length === 0) setIsLoading(true);
+
             try {
+                // Small delay to ensure Supabase client is fully ready
+                await new Promise(resolve => setTimeout(resolve, 100));
+
                 // Dynamic import to avoid circular dependencies if any
                 const { fetchInboxSummaries } = await import('../services/chatService');
                 const { chats, error } = await fetchInboxSummaries(user.id);
 
                 if (error) {
                     console.error('Failed to load inbox:', error);
+                    hasFetchedRef.current = false; // Allow retry on error
                 } else {
                     setInboxChats(chats);
-                    // Also ensure these jobs are loaded in context details if user opens them later
-                    chats.forEach(c => getJobWithFullDetails(c.jobId));
+                    // Optimized Prefetch: Stagger requests to avoid freezing UI
+                    chats.forEach((c, index) => {
+                        setTimeout(() => {
+                            getJobWithFullDetails(c.jobId);
+                        }, 500 + (index * 200)); // Stagger by 200ms
+                    });
                 }
             } catch (err) {
                 console.error('Error loading inbox:', err);
+                hasFetchedRef.current = false; // Allow retry on error
             } finally {
                 setIsLoading(false);
             }
         };
 
         loadChats();
-    }, [isOpen, user.id, liveMessages.length]); // Refresh when new messages arrive live
+    }, [isOpen, user.id]); // Removed liveMessages.length - don't refetch on every message
 
     // 2. Filter Logic (Archive / Tabs / Search) 
     const filteredChats = useMemo(() => {
-        return inboxChats.filter(chat => {
-            // Check Live Messages for updates
-            const isManuallyArchived = archivedChats.has(chat.jobId);
-            const isDeleted = deletedChats.has(chat.jobId);
-            const isCompleted = chat.jobStatus === 'COMPLETED';
 
-            if (isDeleted) return false;
+        return inboxChats.filter(chat => {
+            // Source of truth: Server flag OR local optimistic update
+            const isManuallyArchived = archivedChats.has(chat.jobId) || chat.isArchived;
+            const isDeleted = deletedChats.has(chat.jobId) || chat.isDeleted;
+            // Only treat COMPLETED/CANCELLED as auto-archived (not IN_PROGRESS)
+            const isAutoArchived = chat.jobStatus === 'COMPLETED' || chat.jobStatus === 'CANCELLED';
+
+
+            if (isDeleted) {
+                return false;
+            }
 
             if (!showArchived) {
-                // Active: Hide manually archived OR completed
-                if (isManuallyArchived || isCompleted) return false;
+                // Active View: Hide manually archived OR completed jobs
+                if (isManuallyArchived || isAutoArchived) {
+                    return false;
+                }
             } else {
-                // Archive: Show manually archived OR completed
-                if (!isManuallyArchived && !isCompleted) return false;
+                // Archive View: Show ONLY manually archived OR completed jobs
+                if (!isManuallyArchived && !isAutoArchived) {
+                    return false;
+                }
             }
 
             // Tabs Filter
-            if (activeTab === 'AS_POSTER' && chat.posterId !== user.id) return false;
-            if (activeTab === 'AS_WORKER' && chat.posterId === user.id) return false;
+            const posterId = chat.posterId?.toLowerCase();
+            const currentUserId = user.id?.toLowerCase();
+
+            if (activeTab === 'AS_POSTER' && posterId !== currentUserId) return false;
+            if (activeTab === 'AS_WORKER' && posterId === currentUserId) return false;
 
             // Search Filter
             if (searchTerm) {
@@ -91,12 +129,13 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                 return timeB - timeA;
             });
 
-    }, [inboxChats, activeTab, searchTerm, showArchived, archivedChats, deletedChats]);
+    }, [inboxChats, activeTab, searchTerm, showArchived, archivedChats, deletedChats, user.id]);
 
     // Archive/Delete Helper Functions
     const handleArchiveChat = async (jobId: string) => {
         try {
-            await supabase.rpc('archive_chat', { p_job_id: jobId });
+            const { safeRPC } = await import('../lib/supabase');
+            await safeRPC('archive_chat', { p_job_id: jobId });
             setArchivedChats(prev => new Set(prev).add(jobId));
             setActiveMenuId(null);
         } catch (error) {
@@ -107,7 +146,8 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
 
     const handleUnarchiveChat = async (jobId: string) => {
         try {
-            await supabase.rpc('unarchive_chat', { p_job_id: jobId });
+            const { safeRPC } = await import('../lib/supabase');
+            await safeRPC('unarchive_chat', { p_job_id: jobId });
             setArchivedChats(prev => {
                 const updated = new Set(prev);
                 updated.delete(jobId);
@@ -124,14 +164,11 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
         if (!confirm('Delete this conversation? This will hide all messages.')) return;
 
         try {
-            await supabase.rpc('delete_chat', { p_job_id: jobId });
+            const { safeRPC } = await import('../lib/supabase');
+            await safeRPC('delete_chat', { p_job_id: jobId });
 
-            // Also delete related notifications
-            await supabase
-                .from('notifications')
-                .delete()
-                .eq('user_id', user.id)
-                .eq('related_job_id', jobId);
+            // Also clear notifications for this job (Soft clear)
+            await clearNotificationsForJob(jobId);
 
             // Update local state
             setDeletedChats(prev => new Set(prev).add(jobId));
@@ -147,39 +184,42 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
 
     return (
         <div className="fixed inset-0 z-50 flex items-start justify-end">
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}></div>
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={onClose}></div>
 
-            <div className="relative w-full max-w-sm bg-white dark:bg-gray-900 h-full shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col border-l border-gray-100 dark:border-gray-800 pt-safe pb-safe transition-colors">
+            <div className="relative w-full max-w-sm bg-white dark:bg-gray-900 h-full shadow-[-20px_0_50px_rgba(0,0,0,0.1)] animate-slide-in-right flex flex-col border-l border-gray-100 dark:border-gray-800 pt-safe pb-safe transition-all duration-500 sm:rounded-l-[3rem]">
 
                 {/* Header */}
-                <div className="bg-white dark:bg-gray-900 px-4 py-4 border-b border-gray-100 dark:border-gray-800 z-10 sticky top-0 transition-colors">
-                    <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">{t.chats || 'Messages'}</h2>
-                        <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
-                            <XCircle size={22} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300" />
+                <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl px-6 py-8 border-b border-gray-100 dark:border-gray-800 z-10 sticky top-0 transition-colors">
+                    <div className="flex justify-between items-center mb-8">
+                        <div>
+                            <h2 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">{t.chats || 'Messages'}</h2>
+                            <div className="h-1.5 w-10 bg-emerald-500 rounded-full mt-2" />
+                        </div>
+                        <button onClick={onClose} className="p-3 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl text-gray-400 dark:text-gray-500 transition-all active:scale-90">
+                            <XCircle size={28} strokeWidth={1.5} />
                         </button>
                     </div>
 
                     {/* Search Bar */}
-                    <div className="relative mb-3">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={16} />
+                    <div className="relative mb-4">
+                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={18} />
                         <input
                             type="text"
                             placeholder="Search chats or jobs..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-900 dark:text-white text-sm rounded-xl pl-10 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 placeholder-gray-400 dark:placeholder-gray-500 transition-all"
+                            className="input-base input-focus !pl-11 !py-3 shadow-inner bg-gray-50/50 dark:bg-gray-800/50"
                         />
                     </div>
 
-                    {/* Filter Tabs */}
-                    <div className="flex p-1 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+                    {/* Filter Tabs - Modernized pill style */}
+                    <div className="flex p-1.5 bg-gray-50 dark:bg-gray-800/50 rounded-[1.5rem] border border-gray-100 dark:border-gray-800/50">
                         {(['ALL', 'AS_WORKER', 'AS_POSTER'] as const).map(tab => (
                             <button
                                 key={tab}
                                 onClick={() => setActiveTab(tab)}
-                                className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${activeTab === tab
-                                    ? 'bg-white dark:bg-gray-800 text-emerald-700 dark:text-emerald-400 shadow-sm'
+                                className={`flex-1 py-3 text-[10px] font-black uppercase tracking-[0.2em] rounded-[1.25rem] transition-all duration-300 ${activeTab === tab
+                                    ? 'bg-white dark:bg-gray-700 text-emerald-600 dark:text-emerald-400 shadow-[0_4px_12px_rgba(0,0,0,0.05)] scale-[1.02]'
                                     : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
                                     }`}
                             >
@@ -204,12 +244,12 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                 <div className="flex-1 overflow-y-auto p-4 space-y-2">
                     {isLoading ? (
                         // Skeleton Loading State
-                        Array.from({ length: 3 }).map((_, i) => (
-                            <div key={i} className="flex gap-4 p-4 rounded-2xl border border-gray-100 animate-pulse">
-                                <div className="w-12 h-12 bg-gray-100 rounded-full"></div>
-                                <div className="flex-1 space-y-2">
-                                    <div className="h-4 bg-gray-100 rounded w-3/4"></div>
-                                    <div className="h-3 bg-gray-100 rounded w-1/2"></div>
+                        Array.from({ length: 4 }).map((_, i) => (
+                            <div key={i} className="flex gap-4 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 animate-pulse bg-white/50 dark:bg-gray-900/50">
+                                <div className="w-14 h-14 bg-gray-200 dark:bg-gray-800 rounded-full"></div>
+                                <div className="flex-1 space-y-3 pt-1">
+                                    <div className="h-4 bg-gray-200 dark:bg-gray-800 rounded w-3/4"></div>
+                                    <div className="h-3 bg-gray-150 dark:bg-gray-800/50 rounded w-1/2"></div>
                                 </div>
                             </div>
                         ))
@@ -244,7 +284,7 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
 
                             const isPoster = chat.posterId === user.id;
                             const roleLabel = isPoster ? 'Hiring' : 'Job';
-                            const roleClass = isPoster ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400';
+                            const roleBadgeClass = isPoster ? 'badge-info' : 'badge-success';
 
                             // Formatter for time
                             const timeDisplay = lastMsgTime
@@ -257,100 +297,79 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                             const hasUnreadRealtime = unreadRealtime > 0;
 
                             return (
-                                <div key={chat.jobId} className="relative">
+                                <div key={chat.jobId} className="relative mb-2">
                                     <button
-                                        onClick={() => {
-                                            // Determine single authorized receiver
-                                            // RPC gives us 'counterpartId' which is exactly who we talk to
+                                        onClick={async () => {
                                             const targetReceiverId = chat.counterpartId;
+                                            let contextJob = jobs.find(j => j.id === chat.jobId);
 
-                                            // We need to pass a full 'Job' object to onChatSelect
-                                            // But we only have a summary. 
-                                            // We can construct a minimal dummy Job OR verify if getJobWithFullDetails can be awaited.
-                                            // Current UI expects a Job object.
-                                            // Ideally we should refactor onChatSelect to take ID, but for now let's find it in 'jobs' context
-                                            const contextJob = jobs.find(j => j.id === chat.jobId);
+                                            if (!contextJob) {
+                                                console.log(`[ChatListPanel] Job ${chat.jobId} not in context, fetching explicitly...`);
+                                                contextJob = await getJobWithFullDetails(chat.jobId);
+                                            }
 
                                             if (contextJob) {
                                                 onClose();
                                                 onChatSelect(contextJob, targetReceiverId);
                                             } else {
-                                                // Fallback: If job not in context (rare due to getJobWithFullDetails call), 
-                                                // Should we block? Or try to fetch?
-                                                // Use a minimal object if allowed
-                                                // For now, let's rely on the pre-fetch we did in useEffect.
-                                                console.warn("Job not fully loaded in context yet, attempting open anyway");
-                                                // Create a partial job to satisfy type check if possible, or wait?
-                                                // Just try to grab it from state again or force it.
-                                                onClose();
-                                                // NOTE: This might crash if onChatSelect relies on specific job fields not present.
-                                                // But we synced context in useEffect, so it SHOULD be there.
-                                                if (contextJob) onChatSelect(contextJob, targetReceiverId);
+                                                console.warn("Could not find or fetch job details for:", chat.jobId);
                                             }
                                         }}
-                                        className={`w-full text-left p-3 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-800 border-2 transition-all group relative overflow-hidden ${hasUnreadRealtime
-                                            ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-400 dark:border-emerald-800 shadow-md'
-                                            : 'bg-white dark:bg-gray-900 border-transparent hover:border-gray-100 dark:hover:border-gray-800'
+                                        className={`w-full text-left p-5 rounded-[2rem] border transition-all duration-500 relative overflow-hidden group/card ${hasUnreadRealtime
+                                            ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/50 shadow-lg shadow-emerald-500/5'
+                                            : 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:border-gray-200 dark:hover:border-gray-700'
                                             }`}
                                     >
-                                        <div className="flex items-start gap-3">
-                                            {/* Avatar */}
+                                        <div className="flex items-center gap-4">
+                                            {/* Avatar Area */}
                                             <div className="relative shrink-0">
-                                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-100 to-teal-50 dark:from-emerald-900/40 dark:to-teal-900/40 border border-white dark:border-gray-700 shadow-sm flex items-center justify-center text-emerald-700 dark:text-emerald-400 font-bold overflow-hidden">
+                                                <div className="w-16 h-16 rounded-[1.5rem] bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 border-2 border-white dark:border-gray-800 shadow-sm flex items-center justify-center text-gray-700 dark:text-gray-300 font-black text-xl overflow-hidden transition-all duration-500 group-hover/card:scale-105 group-hover/card:rotate-3">
                                                     {chat.counterpartPhoto ? (
                                                         <img src={chat.counterpartPhoto} alt={chat.counterpartName} className="w-full h-full object-cover" />
                                                     ) : (
                                                         chat.counterpartName.charAt(0)
                                                     )}
                                                 </div>
-                                                {/* Unread Count Badge - positioned on avatar */}
                                                 {hasUnreadRealtime && (
-                                                    <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shadow-lg border-2 border-white">
+                                                    <div className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-black min-w-[22px] h-[22px] px-1 rounded-full flex items-center justify-center shadow-lg border-2 border-emerald-50 dark:border-emerald-900 animate-bounce">
                                                         {unreadRealtime > 9 ? '9+' : unreadRealtime}
                                                     </div>
                                                 )}
                                             </div>
 
-                                            {/* Content */}
-                                            <div className="flex-1 min-w-0 pt-0.5">
-                                                <div className="flex justify-between items-center mb-0.5">
-                                                    <h4 className={`font-bold truncate pr-2 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors ${hasUnreadRealtime ? 'text-gray-900 dark:text-white' : 'text-gray-900 dark:text-white'}`}>
+                                            {/* Content Area */}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <h4 className="font-black text-gray-900 dark:text-white truncate pr-2 tracking-tight transition-colors group-hover/card:text-emerald-600 dark:group-hover/card:text-emerald-400">
                                                         {chat.counterpartName}
-                                                        {hasUnreadRealtime && <span className="ml-2 w-2 h-2 bg-emerald-500 rounded-full inline-block animate-pulse"></span>}
                                                     </h4>
                                                     {timeDisplay && (
-                                                        <div className="flex items-center gap-1">
-                                                            {hasUnreadRealtime && (
-                                                                <span className="bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded animate-pulse">
-                                                                    NEW
-                                                                </span>
-                                                            )}
-                                                            <span className={`text-[10px] font-medium whitespace-nowrap ${hasUnreadRealtime ? 'text-emerald-700 font-bold' : 'text-gray-400'}`}>
-                                                                {timeDisplay}
-                                                            </span>
-                                                        </div>
+                                                        <span className={`text-[9px] font-black uppercase tracking-widest ${hasUnreadRealtime ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400'}`}>
+                                                            {timeDisplay}
+                                                        </span>
                                                     )}
                                                 </div>
 
-                                                <div className="flex items-center gap-1.5 mb-1">
-                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${roleClass}`}>
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-lg border ${isPoster
+                                                        ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-800/50'
+                                                        : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800/50'}`}>
                                                         {roleLabel}
                                                     </span>
-                                                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 truncate">{chat.jobTitle}</p>
-                                                </div>
-
-                                                <div className="flex items-center justify-between">
-                                                    <p className={`text-sm truncate ${hasUnreadRealtime ? 'font-semibold text-gray-800 dark:text-gray-200' : (lastMsgText ? 'text-gray-600 dark:text-gray-400' : 'text-emerald-600 dark:text-emerald-400 italic')}`}>
-                                                        {lastMsgText
-                                                            ? (lastMsgIsDeleted ? <span className="italic text-gray-400 dark:text-gray-500">This message was deleted</span> : lastMsgText)
-                                                            : 'Start the conversation...'
-                                                        }
+                                                    <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 truncate uppercase tracking-tighter">
+                                                        {chat.jobTitle}
                                                     </p>
-
-                                                    {/* Hover Action Arrow */}
-                                                    <ChevronRight size={16} className="text-gray-300 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all" />
                                                 </div>
+
+                                                <p className={`text-sm truncate ${hasUnreadRealtime ? 'font-black text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 font-medium'}`}>
+                                                    {lastMsgText
+                                                        ? (lastMsgIsDeleted ? <span className="italic opacity-40">Message deleted</span> : lastMsgText)
+                                                        : <span className="text-emerald-600/50 italic">Start chatting...</span>
+                                                    }
+                                                </p>
                                             </div>
+
+                                            <ChevronRight size={18} className="text-gray-300 dark:text-gray-700 opacity-0 group-hover/card:opacity-100 group-hover/card:translate-x-1 transition-all shrink-0" />
                                         </div>
                                     </button>
 
@@ -360,23 +379,23 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                                             e.stopPropagation();
                                             setActiveMenuId(activeMenuId === chat.jobId ? null : chat.jobId);
                                         }}
-                                        className="absolute top-3 right-3 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors z-10"
+                                        className="absolute top-4 right-4 btn-ghost !p-2 rounded-full !bg-transparent opacity-0 group-hover:opacity-100 transition-opacity"
                                     >
-                                        <MoreVertical size={16} className="text-gray-400 dark:text-gray-500" />
+                                        <MoreVertical size={16} className="text-gray-400" />
                                     </button>
 
                                     {/* Dropdown Menu */}
                                     {activeMenuId === chat.jobId && (
-                                        <div className="absolute top-12 right-3 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 py-1 z-50 min-w-[160px]">
+                                        <div className="absolute top-14 right-4 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 py-2 z-50 min-w-[170px] animate-pop overflow-hidden">
                                             {showArchived ? (
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         handleUnarchiveChat(chat.jobId);
                                                     }}
-                                                    className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300"
+                                                    className="w-full px-4 py-3 text-left text-sm font-bold hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-3 text-gray-700 dark:text-gray-300 transition-colors"
                                                 >
-                                                    <Archive size={14} />
+                                                    <Archive size={16} />
                                                     Unarchive
                                                 </button>
                                             ) : (
@@ -385,9 +404,9 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                                                         e.stopPropagation();
                                                         handleArchiveChat(chat.jobId);
                                                     }}
-                                                    className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300"
+                                                    className="w-full px-4 py-3 text-left text-sm font-bold hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-3 text-gray-700 dark:text-gray-300 transition-colors"
                                                 >
-                                                    <Archive size={14} />
+                                                    <Archive size={16} />
                                                     Archive
                                                 </button>
                                             )}
@@ -396,9 +415,9 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                                                     e.stopPropagation();
                                                     handleDeleteChat(chat.jobId);
                                                 }}
-                                                className="w-full px-4 py-2 text-left text-sm hover:bg-red-50 dark:hover:bg-red-900/30 flex items-center gap-2 text-red-600 dark:text-red-400"
+                                                className="w-full px-4 py-3 text-left text-sm font-bold hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-3 text-red-600 dark:text-red-400 transition-colors"
                                             >
-                                                <Trash2 size={14} />
+                                                <Trash2 size={16} />
                                                 Delete
                                             </button>
                                         </div>

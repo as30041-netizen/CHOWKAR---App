@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import { useUser } from '../contexts/UserContextDB';
 import { useJobs } from '../contexts/JobContextDB';
 import { UserRole } from '../types';
@@ -88,21 +89,32 @@ export const CounterModal: React.FC<CounterModalProps> = ({ isOpen, onClose, bid
     };
 
     return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose}></div>
-            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-3xl p-6 relative z-10 animate-pop">
-                <h3 className="font-bold text-lg mb-4 dark:text-white">{t.counterOffer}</h3>
-                <input
-                    type="number"
-                    value={counterInputAmount}
-                    onChange={(e) => setCounterInputAmount(e.target.value)}
-                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 font-bold text-2xl mb-4 text-center text-gray-900 dark:text-white"
-                    placeholder="₹"
-                    min="1"
-                />
+        <div className="fixed inset-0 z-[110] flex items-center justify-center pointer-events-none p-4">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-md pointer-events-auto" onClick={onClose}></div>
+            <div className="bg-white dark:bg-gray-900 w-full max-w-sm rounded-[2.5rem] p-8 pointer-events-auto relative shadow-[0_-8px_32px_rgba(0,0,0,0.1)] transition-all animate-slide-up pb-safe">
+
+                <div className="flex items-center gap-4 mb-8">
+                    <button onClick={onClose} className="p-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all active:scale-90 shadow-sm group">
+                        <ArrowLeft size={22} strokeWidth={2.5} className="group-hover:-translate-x-0.5 transition-transform" />
+                    </button>
+                    <h3 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">{t.counterOffer}</h3>
+                </div>
+
+                <div className="relative group mb-8">
+                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-emerald-500 font-black text-3xl group-focus-within:scale-110 transition-transform">₹</span>
+                    <input
+                        type="number"
+                        value={counterInputAmount}
+                        onChange={(e) => setCounterInputAmount(e.target.value)}
+                        className="input-base !pl-14 !py-6 !text-2xl font-black text-emerald-600 dark:text-emerald-400 !bg-gray-50 dark:!bg-gray-800/50 !rounded-3xl border-transparent focus:!border-emerald-500/50 focus:!shadow-[0_0_20px_rgba(16,185,129,0.1)] transition-all text-center"
+                        placeholder="0"
+                        min="1"
+                    />
+                </div>
+
                 <button
                     onClick={handleSendCounter}
-                    className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg"
+                    className="btn btn-primary w-full !py-5 !rounded-2xl font-black uppercase tracking-[0.2em] shadow-[0_20px_40px_-10px_rgba(16,185,129,0.3)] hover:-translate-y-1 active:scale-95 transition-all text-sm"
                 >
                     {t.sendCounter}
                 </button>
