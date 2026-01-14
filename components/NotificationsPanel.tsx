@@ -1,50 +1,42 @@
 import React from 'react';
 import { XCircle, CheckCircle2, Bell, Trash2, CheckCheck, Inbox, ArrowRight } from 'lucide-react';
+import { useNotification } from '../contexts/NotificationContext';
+
 import { useUser } from '../contexts/UserContextDB';
 import { useJobs } from '../contexts/JobContextDB';
-import { supabase } from '../lib/supabase';
+import { Job, Notification } from '../types';
 
 interface NotificationsPanelProps {
     isOpen: boolean;
     onClose: () => void;
-    onJobClick: (job: any, notification: any) => void;
+    onJobClick: (job: Job, notif: Notification) => void;
 }
 
 export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ isOpen, onClose, onJobClick }) => {
-    const { user, notifications, setNotifications, t, language } = useUser();
+    const { user, t, language } = useUser();
+    const {
+        notifications,
+        markAllAsRead,
+        clearAll,
+        deleteNotification,
+        markAsRead
+    } = useNotification();
+
     const { jobs, getJobWithFullDetails } = useJobs();
 
     const handleMarkAllRead = async () => {
-        try {
-            const { safeRPC } = await import('../lib/supabase');
-            await safeRPC('mark_all_notifications_read');
-            setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-        } catch (error) {
-            console.error('Error marking all read:', error);
-        }
+        await markAllAsRead();
     };
 
     const handleClearAll = async () => {
-        if (!confirm(t.clearAllPrompt)) return;
-        try {
-            const { safeRPC } = await import('../lib/supabase');
-            await safeRPC('clear_all_notifications');
-            setNotifications(prev => prev.filter(n => n.userId !== user.id)); // Clear current user's notifs locally
-        } catch (error) {
-            console.error('Error clearing notifications:', error);
-        }
+        await clearAll();
     };
 
     const handleDelete = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        try {
-            const { safeRPC } = await import('../lib/supabase');
-            await safeRPC('soft_delete_notification', { p_notification_id: id });
-            setNotifications(prev => prev.filter(n => n.id !== id));
-        } catch (error) {
-            console.error('Error deleting notification:', error);
-        }
+        await deleteNotification(id);
     };
+
 
     if (!isOpen) return null;
 
@@ -111,8 +103,7 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ isOpen, 
                                     : 'bg-white dark:bg-gray-900 border-emerald-500/10 dark:border-emerald-500/20 shadow-xl shadow-emerald-500/5'}`}
                                 onClick={async () => {
                                     if (!notif.read) {
-                                        await supabase.from('notifications').update({ read: true }).eq('id', notif.id);
-                                        setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
+                                        await markAsRead(notif.id);
                                     }
                                     if (notif.relatedJobId) {
                                         onClose();

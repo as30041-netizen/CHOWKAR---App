@@ -31,7 +31,7 @@ const getTimeAgo = (timestamp: number) => {
   return `${Math.floor(hours / 24)}d ago`;
 };
 
-export const JobCard: React.FC<JobCardProps> = ({
+export const JobCard = React.memo<JobCardProps>(({
   job,
   currentUserId,
   userRole,
@@ -148,7 +148,7 @@ export const JobCard: React.FC<JobCardProps> = ({
           </div>
         );
       }
-      if (job.myBidLastNegotiationBy === UserRole.WORKER || job.hasNewCounter) {
+      if (job.myBidLastNegotiationBy === UserRole.WORKER) {
         return (
           <div className="badge badge-warning animate-pulse-subtle">
             <Handshake size={12} className="mr-1" /> {language === 'en' ? 'Worker countered - Your turn' : 'मज़दूर ने काउंटर किया - आपकी बारी'}
@@ -419,4 +419,4 @@ export const JobCard: React.FC<JobCardProps> = ({
       </div>
     </div >
   );
-};
+});

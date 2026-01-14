@@ -1,32 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useUser } from '../contexts/UserContextDB';
+import { useNotification } from '../contexts/NotificationContext';
 import { supabase, waitForSupabase } from '../lib/supabase';
 import { fetchJobMessages, blockUser, unblockUser, getRelationshipStatus } from '../services/chatService';
-import { fetchJobContact } from '../services/jobService';
+import { fetchJobFullDetails, fetchJobContact } from '../services/jobService';
 import { Job, ChatMessage, User } from '../types';
 import { Send, Phone, CheckCircle, ArrowLeft, LockKeyhole, Paperclip, MoreVertical, Check, CheckCheck, Languages, Mic, MicOff, Loader2, Sparkles, Lock, Volume2, Square, Trash2, ShieldAlert, FileText, Flag, ChevronRight, Pencil, Ban } from 'lucide-react';
 import { SafetyTipsModal, CommunityGuidelinesModal, TermsModal } from './InfoModals';
-import { ReportUserModal } from './ReportUserModal';
-import { UserProfileModal } from './UserProfileModal';
-
-interface ChatInterfaceProps {
-  job: Job;
-  currentUser: User;
-  onClose: () => void;
-  onBackToMessages?: () => void; // NEW: Navigate back to Messages panel
-  messages: ChatMessage[];
-  onSendMessage: (text: string) => void;
-  onIncomingMessage?: (msg: ChatMessage) => void;
-  onCompleteJob: (job?: Job) => void;
-  onTranslateMessage: (messageId: string, text: string) => void;
-  onDeleteMessage?: (messageId: string) => void;
-  onViewJobDetails?: () => void; // New prop optional
-  isPremium?: boolean;
-  remainingTries?: number;
-  onMessageUpdate?: (msg: ChatMessage) => void;
-  onEditMessage?: (messageId: string, text: string) => void;
-  receiverId?: string;
-}
-
 const QUICK_REPLIES_WORKER = [
   "I'm on my way",
   "I've arrived at the location",
@@ -43,37 +23,60 @@ const QUICK_REPLIES_POSTER = [
   "Ok, thanks"
 ];
 
-// ... CONSTANTS ...
+import { ReportUserModal } from './ReportUserModal';
+import { UserProfileModal } from './UserProfileModal';
 
-import { useUser } from '../contexts/UserContextDB';
+interface ChatInterfaceProps {
+  jobId: string;
+  currentUser: User;
+  onClose: () => void;
+  // REMOVED: messages prop (internalized)
+  onSendMessage: (text: string) => void;
+  onCompleteJob: (job?: Job) => void;
+  onTranslateMessage: (messageId: string, text: string) => void;
+  onDeleteMessage?: (messageId: string) => void;
+  onEditMessage?: (messageId: string, text: string) => void;
+  isPremium?: boolean;
+  remainingTries?: number;
+  receiverId: string;
+}
 
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({
-  job,
+  jobId,
   currentUser,
   onClose,
-  onBackToMessages,
-  messages: liveMessages,
   onSendMessage,
-  onIncomingMessage,
-  onCompleteJob,
   onTranslateMessage,
-  onDeleteMessage,
+  onCompleteJob,
   onEditMessage,
-  onViewJobDetails,
+  onDeleteMessage,
+  receiverId,
   isPremium,
-  remainingTries,
-  onMessageUpdate,
-  receiverId: externalReceiverId
+  remainingTries
 }) => {
-  const { markNotificationsAsReadForJob, setActiveChatId, setActiveJobId } = useUser();
+  const { isLoggedIn, t, language } = useUser();
+  const { markNotificationsAsReadForJob, setActiveChatId, setActiveJobId } = useNotification();
+
+  const [job, setJob] = useState<Job | null>(null);
+
+  // Fetch job details
+  useEffect(() => {
+    const fetchJobDetails = async () => {
+      try {
+        const { job: fetchedJob } = await fetchJobFullDetails(jobId);
+        if (fetchedJob) setJob(fetchedJob);
+      } catch (error) {
+        console.error('Error fetching job details:', error);
+      }
+    };
+    fetchJobDetails();
+  }, [jobId]);
+
   // Derived Constants
-  const isPoster = job.posterId === currentUser.id;
-  const acceptedBid = job.bids.find(b => b.id === job.acceptedBidId);
-
-  // Find agreed worker if not accepted yet (for handshake context)
-  const agreedBid = job.bids.find(b => b.negotiationHistory?.some((h: any) => h.agreed));
-
-  const otherPersonId = externalReceiverId || (isPoster ? (acceptedBid?.workerId || agreedBid?.workerId || '') : job.posterId);
+  const isPoster = job?.posterId === currentUser.id;
+  const acceptedBid = job?.bids.find(b => b.id === job.acceptedBidId);
+  const agreedBid = job?.bids.find(b => b.negotiationHistory?.some(h => h.agreed));
+  const otherPersonId = receiverId || (isPoster ? (acceptedBid?.workerId || agreedBid?.workerId || '') : job?.posterId);
 
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -93,49 +96,85 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [showProfileModal, setShowProfileModal] = useState(false);
   const typingTimeoutRef = useRef<any>(null);
 
-  // Local History State (Lazy Loaded)
-  const [historyMessages, setHistoryMessages] = useState<ChatMessage[]>([]);
+  // INTERNAL STATE: Single source of truth for THIS chat
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
-  // Merge and Deduplicate Messages
-  // Use a Map to ensure unique messages, with liveMessages taking precedence over history
-  const allMessages = React.useMemo(() => {
-    const map = new Map<string, ChatMessage>();
-    historyMessages.forEach(m => map.set(m.id, m));
-    liveMessages.forEach(m => map.set(m.id, m));
-    return Array.from(map.values()).sort((a, b) => a.timestamp - b.timestamp);
-  }, [historyMessages, liveMessages]);
+  // Helper to safely add/update messages (Deduplication & Replacement)
+  const upsertMessages = (newMsgs: ChatMessage[]) => {
+    setMessages(prev => {
+      const map = new Map(prev.map(m => [m.id, m]));
+
+      newMsgs.forEach(m => {
+        // DUPLICATE/OPTIMISTIC FIX:
+        // If we have a 'temp_' ID that matches the content/timestamp of this new 'real' message, replace it.
+        // (Heuristic: same text + timestamp within 2 seconds)
+        if (!m.id.startsWith('temp_')) {
+          for (const [existingId, existingMsg] of map.entries()) {
+            if (existingId.startsWith('temp_') &&
+              existingMsg.text === m.text &&
+              Math.abs(existingMsg.timestamp - m.timestamp) < 5000) {
+              map.delete(existingId); // Remove temp
+            }
+          }
+        }
+        map.set(m.id, m);
+      });
+
+      return Array.from(map.values()).sort((a, b) => a.timestamp - b.timestamp);
+    });
+  };
+
+  const loadMessages = async () => {
+    // Don't set loading true on background refresh
+    // setIsLoadingHistory(true); 
+    try {
+      const { messages: historyData } = await fetchJobMessages(job.id);
+
+      // Sort by timestamp
+      const sorted = (historyData || []).sort((a, b) => a.timestamp - b.timestamp);
+      console.log(`[Chat] Loaded ${sorted.length} messages from history`);
+
+      // Use upsert instead of set to preserve temp messages if any exist
+      upsertMessages(sorted);
+    } catch (error) {
+      console.error('Error loading chat history:', error);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  // Initial Load
+  useEffect(() => {
+    setIsLoadingHistory(true);
+    loadMessages();
+  }, [job.id]);
+
+  // HYBRID SYNC: Refetch on window focus to catch offline messages
+  useEffect(() => {
+    const handleFocus = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[Chat] App foregrounded, refreshing messages...');
+        loadMessages();
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleFocus);
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('visibilitychange', handleFocus);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [job.id]);
+
+  // We no longer merge props.messages. We use 'messages' state directly.
+  const allMessages = messages;
 
   // Blocking State
   const [blockingStatus, setBlockingStatus] = useState<{ iBlocked: boolean; theyBlockedMe: boolean }>({ iBlocked: false, theyBlockedMe: false });
 
   // Real-time Broadcast Channel
   const [channel, setChannel] = useState<any>(null);
-
-  // Fetch History on Mount
-  useEffect(() => {
-    const loadHistory = async () => {
-      if (!job?.id || !currentUser?.id) return;
-
-      setIsLoadingHistory(true);
-      try {
-        console.log(`[Chat] Fetching messages for job: ${job.id}`);
-        const { messages: historyData, error } = await fetchJobMessages(job.id);
-        if (error) throw error;
-
-        // Sort by timestamp
-        const sorted = (historyData || []).sort((a, b) => a.timestamp - b.timestamp);
-        console.log(`[Chat] Loaded ${sorted.length} messages from history`);
-        setHistoryMessages(sorted);
-      } catch (error) {
-        console.error('Error loading chat history:', error);
-      } finally {
-        setIsLoadingHistory(false);
-      }
-    };
-
-    loadHistory();
-  }, [job.id, currentUser?.id]);
 
   // Mark messages AND notifications as read when chat opens
   // Mark messages AND notifications as read when chat opens OR new messages arrive
@@ -202,9 +241,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         setIsOtherUserOnline(isOnline);
       })
       .on('broadcast', { event: 'new_message' }, ({ payload }) => {
-        if (payload.senderId !== currentUser.id && onIncomingMessage) {
-          onIncomingMessage(payload as ChatMessage);
+        if (payload.senderId !== currentUser.id) {
+          // 1. Update LOCAL state
+          upsertMessages([payload as ChatMessage]);
           setIsOtherTyping(false);
+
+          // 2. Notify Parent (REMOVED: Internalized state)
+          // if (onIncomingMessage) onIncomingMessage(payload as ChatMessage);
         }
       })
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
@@ -236,13 +279,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             readAt: newMsg.read_at ? new Date(newMsg.read_at).getTime() : undefined
           };
 
-          // Update local history state
-          setHistoryMessages(prev => prev.map(m => m.id === updated.id ? updated : m));
+          // Update local state
+          upsertMessages([updated]);
 
-          // Also notify parent component
-          if (onMessageUpdate) {
-            onMessageUpdate(updated);
-          }
+          // Also notify parent component for consistency
+          // if (onMessageUpdate) onMessageUpdate(updated);
         }
       })
       .subscribe(async (status) => {
@@ -327,7 +368,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       // 1. Persistence (DB)
       onSendMessage(text);
 
-      // 2. Broadcast (Instant UI for peer)
+      // 2. Broadcast (Instant UI for peer) & Optimistic UI for Self
       if (channel) {
         const tempMsg: ChatMessage = {
           id: `temp_${Date.now()}_${Math.random()}`,
@@ -336,6 +377,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           text: text,
           timestamp: Date.now()
         };
+
+        // Optimistic update
+        upsertMessages([tempMsg]);
+
         await channel.send({
           type: 'broadcast',
           event: 'new_message',
@@ -397,8 +442,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
       const finalTranslation = await translateText(msg.text, targetLang);
 
-      // 2. Update local history state directly (for historical messages)
-      setHistoryMessages(prev => prev.map(m =>
+      // 2. Update local state directly
+      setMessages(prev => prev.map(m =>
         m.id === msg.id ? { ...m, translatedText: finalTranslation } : m
       ));
 
@@ -471,9 +516,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl px-4 py-3 shadow-glass border-b border-gray-100 dark:border-gray-800 flex items-center justify-between z-10 pt-safe transition-all duration-300">
           <div className="flex items-center gap-3">
             <button
-              onClick={onBackToMessages || onClose}
+              onClick={onClose}
               className="btn-ghost !p-2 rounded-full !bg-gray-100 dark:!bg-gray-800 text-gray-500 dark:text-gray-400"
-              title={onBackToMessages ? "Back to Messages" : "Close"}
+              title="Close"
             >
               <ArrowLeft size={20} />
             </button>

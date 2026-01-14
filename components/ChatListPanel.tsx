@@ -1,18 +1,21 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { XCircle, Search, Filter, Phone, Briefcase, ChevronRight, MoreVertical, Archive, Trash2, FileText } from 'lucide-react';
+import { useNotification } from '../contexts/NotificationContext';
+import { Job } from '../types';
+
 import { useUser } from '../contexts/UserContextDB';
 import { useJobs } from '../contexts/JobContextDB';
-import { Job, ChatMessage } from '../types';
-import { supabase } from '../lib/supabase';
 
 interface ChatListPanelProps {
     isOpen: boolean;
     onClose: () => void;
-    onChatSelect: (job: Job, receiverId?: string) => void;
+    onChatSelect: (job: Job, receiverId: string) => void;
 }
 
 export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, onChatSelect }) => {
-    const { user, t, language, messages: liveMessages, notifications, setNotifications, clearNotificationsForJob } = useUser();
+    const { user, t, language } = useUser();
+    const { notifications, clearNotificationsForJob } = useNotification();
+
     const { jobs, getJobWithFullDetails } = useJobs();
     const [inboxChats, setInboxChats] = useState<import('../services/chatService').InboxChatSummary[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -172,7 +175,6 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
 
             // Update local state
             setDeletedChats(prev => new Set(prev).add(jobId));
-            setNotifications(prev => prev.filter(n => n.relatedJobId !== jobId));
             setActiveMenuId(null);
         } catch (error) {
             console.error('Error deleting chat:', error);
@@ -265,22 +267,11 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                         </div>
                     ) : (
                         filteredChats.map(chat => {
-                            // Determine latest message (Live vs DB)
-                            const liveLastMsg = liveMessages.filter(m => m.jobId === chat.jobId).slice(-1)[0];
                             const fetchedLastMsg = chat.lastMessage;
 
                             let lastMsgText = fetchedLastMsg?.text;
                             let lastMsgTime = fetchedLastMsg?.timestamp;
                             let lastMsgIsDeleted = false; // RPC doesn't support 'is_deleted' yet, assumed false for now or text is already replaced
-
-                            if (liveLastMsg) {
-                                // Live update wins if it exists and is newer
-                                if (!fetchedLastMsg || liveLastMsg.timestamp > fetchedLastMsg.timestamp) {
-                                    lastMsgText = liveLastMsg.text;
-                                    lastMsgTime = liveLastMsg.timestamp;
-                                    lastMsgIsDeleted = liveLastMsg.isDeleted;
-                                }
-                            }
 
                             const isPoster = chat.posterId === user.id;
                             const roleLabel = isPoster ? 'Hiring' : 'Job';

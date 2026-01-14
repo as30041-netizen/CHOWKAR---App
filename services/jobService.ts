@@ -2,8 +2,54 @@ import { supabase, waitForSupabase } from '../lib/supabase';
 import { safeFetch } from './fetchUtils';
 import { Job, Bid, JobStatus, Review } from '../types';
 
+interface DbJob {
+  id: string;
+  poster_id: string;
+  poster_name: string;
+  poster_phone: string;
+  poster_photo?: string;
+  title: string;
+  description: string;
+  category: string;
+  location: string;
+  latitude?: number;
+  longitude?: number;
+  job_date: string;
+  duration: string;
+  budget: number;
+  status: string;
+  accepted_bid_id?: string;
+  image?: string;
+  created_at: string;
+  bid_count?: number;
+  my_bid_id?: string;
+  my_bid_status?: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+  my_bid_amount?: number;
+  my_bid_last_negotiation_by?: any; // Enum/String
+  has_agreement?: boolean;
+}
+
+interface DbBid {
+  id: string;
+  job_id: string;
+  worker_id: string;
+  worker_name: string;
+  worker_phone: string;
+  worker_rating: number;
+  worker_location: string;
+  worker_latitude?: number;
+  worker_longitude?: number;
+  worker_photo?: string;
+  amount: number;
+  message: string;
+  status: string;
+  negotiation_history: any[];
+  created_at: string;
+  poster_id?: string;
+}
+
 // Helper to convert database job to app Job type
-const dbJobToApp = (dbJob: any, bids: Bid[] = []): Job => {
+const dbJobToApp = (dbJob: DbJob, bids: Bid[] = []): Job => {
   return {
     id: dbJob.id,
     posterId: dbJob.poster_id,
@@ -35,7 +81,7 @@ const dbJobToApp = (dbJob: any, bids: Bid[] = []): Job => {
 };
 
 // Helper to convert database bid to app Bid type
-const dbBidToApp = (dbBid: any): Bid => {
+const dbBidToApp = (dbBid: DbBid): Bid => {
   return {
     id: dbBid.id,
     jobId: dbBid.job_id,
@@ -81,54 +127,65 @@ const broadcastRefresh = async (eventType: 'job_updated' | 'bid_updated' | 'bid_
 export const fetchHomeFeed = async (
   userId: string,
   limit: number = 20,
-  offset: number = 0
-): Promise<{ jobs: Job[]; error?: string; hasMore?: boolean }> => {
-  console.log(`[JobService] Fetching home feed for user ${userId}...`);
+  offset: number = 0,
+  filters?: {
+    category?: string;
+    searchQuery?: string;
+  }
+): Promise<{ jobs: Job[]; hasMore: boolean }> => {
+  console.log(`[JobService] Fetching HOME FEED for user ${userId} (offset: ${offset}, filters: ${JSON.stringify(filters)})...`);
 
   try {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-    // Use standardized safeFetch with automatic auth injection
-    const jobsResponse = await safeFetch(
-      `${supabaseUrl}/rest/v1/jobs?status=eq.OPEN&poster_id=neq.${userId}&order=created_at.desc&offset=${offset}&limit=${limit}`
-    );
-
-    if (!jobsResponse.ok) {
-      throw new Error(`Jobs fetch failed: ${jobsResponse.status}`);
-    }
-
-    const jobsData = await jobsResponse.json();
-    console.log(`[JobService] Jobs fetched: ${jobsData?.length || 0}`);
-
-    // Fetch user's own bids to filter out jobs they already applied to
-    const bidsResponse = await safeFetch(
-      `${supabaseUrl}/rest/v1/bids?worker_id=eq.${userId}&select=job_id,id,status,amount,negotiation_history`
-    );
-
-    let bidsData: any[] = [];
-    if (bidsResponse.ok) {
-      bidsData = await bidsResponse.json();
-      console.log(`[JobService] User's bids fetched: ${bidsData?.length || 0}`, bidsData?.map(b => b.job_id));
-    } else {
-      console.warn(`[JobService] Bids fetch failed: ${bidsResponse.status}`);
-    }
-
-    const bidsByJobId = new Map(bidsData?.map(b => [b.job_id, b]) || []);
-
-    const jobs = (jobsData || []).map((row: any) => {
-      const myBid = bidsByJobId.get(row.id);
-      const appJob = dbJobToApp(row);
-      if (myBid) {
-        appJob.myBidId = myBid.id;
-        appJob.myBidStatus = myBid.status;
-        appJob.myBidAmount = myBid.amount;
-        appJob.myBidLastNegotiationBy = myBid.negotiation_history?.[myBid.negotiation_history.length - 1]?.by;
+    // Use RPC for efficient Server-Side Filtering
+    const response = await safeFetch(
+      `${supabaseUrl}/rest/v1/rpc/get_home_feed`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          p_user_id: userId,
+          p_limit: limit,
+          p_offset: offset,
+          p_category: filters?.category !== 'All' ? filters?.category : null,
+          p_search_query: filters?.searchQuery || null
+        })
       }
-      return appJob;
-    }).filter((job: Job) => !job.myBidId); // FIX: Exclude jobs user already bid on
+    );
 
-    console.log(`[JobService] ✅ Home feed complete: ${jobs.length} jobs found (filtered out bid-on jobs)`);
+    if (!response.ok) {
+      console.error(`[JobService] RPC get_home_feed failed: ${response.status}`);
+      throw new Error(`Feed fetch failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log(`[JobService] RPC Data received: ${data?.length || 0} rows`);
+
+    const jobs = (data || []).map((row: any) => ({
+      id: row.id,
+      posterId: row.poster_id,
+      posterName: row.poster_name || 'Unknown',
+      posterPhoto: row.poster_photo,
+      title: row.title,
+      description: row.description,
+      category: row.category,
+      location: row.location,
+      coordinates: row.latitude && row.longitude
+        ? { lat: row.latitude, lng: row.longitude }
+        : undefined,
+      jobDate: row.job_date,
+      duration: row.duration,
+      budget: row.budget,
+      status: row.status as JobStatus,
+      image: row.image,
+      createdAt: new Date(row.created_at).getTime(),
+      bidCount: row.bid_count || 0,
+      bids: [] // Bids are not needed for the card view, saved bandwidth
+    } as Job));
+
     return { jobs, hasMore: jobs.length === limit };
   } catch (error: any) {
     console.error('[JobService] fetchHomeFeed error:', error);
@@ -197,6 +254,8 @@ export const fetchMyJobsFeed = async (
       // Poster-specific fields from RPC
       myBidLastNegotiationBy: row.last_bid_negotiation_by,
       hasAgreement: row.has_agreement || false,
+      hasNewCounter: row.has_new_counter || false,
+      actionRequiredCount: row.action_required_count || 0,
       bids: [] // Will be populated when user clicks "View Bids"
     } as Job));
 
@@ -225,7 +284,7 @@ const fetchMyJobsFeedFallback = async (
   }
 
   const data = await response.json();
-  const jobs = (data || []).map((row: any) => dbJobToApp(row));
+  const jobs = Array.isArray(data) ? data.map((j: any) => dbJobToApp(j as DbJob)) : [];
   return { jobs, hasMore: jobs.length === limit };
 };
 
@@ -291,7 +350,7 @@ export const fetchMyApplicationsFeed = async (
     const jobs = visibleBids.map((bid: any) => {
       const dbJob = jobsMap.get(bid.job_id);
       if (!dbJob) return null;
-      const appJob = dbJobToApp(dbJob);
+      const appJob = dbJobToApp(dbJob as DbJob);
       appJob.myBidId = bid.id;
       appJob.myBidStatus = bid.status;
       appJob.myBidAmount = bid.amount;
@@ -334,14 +393,24 @@ export const fetchJobFullDetails = async (jobId: string): Promise<{ job: Job | n
       return { job: null, error: 'Job not found' };
     }
 
-    // Fetch bids for this job
-    const bidsResponse = await safeFetch(
-      `${supabaseUrl}/rest/v1/bids?job_id=eq.${jobId}&order=created_at.desc`
-    );
+    // Fetch bids for this job (Exclude REJECTED bids to match UI behavior)
+    // [FIX] Use RPC to fetch bids to avoid RLS recursion issues
+    const { safeRPC } = await import('../lib/supabase');
+    const { data: bidsRpcData, error: bidsRpcError } = await safeRPC('get_job_bids', { p_job_id: jobId });
 
     let bidsData: any[] = [];
-    if (bidsResponse.ok) {
-      bidsData = await bidsResponse.json();
+    if (!bidsRpcError && bidsRpcData) {
+      bidsData = bidsRpcData;
+      console.log(`[JobService] RPC get_job_bids success: ${bidsData.length} bids`);
+    } else {
+      console.warn(`[JobService] RPC get_job_bids failed:`, bidsRpcError);
+      // Fallback to legacy REST (just in case RPC isn't deployed yet)
+      const bidsUrl = `${supabaseUrl}/rest/v1/bids?job_id=eq.${jobId}&status=neq.REJECTED&order=created_at.desc`;
+      console.log(`[JobService] Fallback fetching bids from: ${bidsUrl}`);
+      const bidsResponse = await safeFetch(bidsUrl);
+      if (bidsResponse.ok) {
+        bidsData = await bidsResponse.json();
+      }
     }
 
     // Fetch reviews for this job
@@ -366,7 +435,7 @@ export const fetchJobFullDetails = async (jobId: string): Promise<{ job: Job | n
     }));
 
     const job: Job = {
-      ...dbJobToApp(jobData[0], bids),
+      ...dbJobToApp(jobData[0] as DbJob, bids),
       reviews,
       bidCount: bids.length
     };
@@ -664,13 +733,11 @@ export const createBid = async (bid: Bid): Promise<{ success: boolean; error?: s
 };
 
 // Update a bid (Smart Handler) - Direct REST API
-export const updateBid = async (bid: Bid, accessToken?: string): Promise<{ success: boolean; error?: string }> => {
+export const updateBid = async (bid: Bid, _accessToken?: string): Promise<{ success: boolean; error?: string }> => {
   try {
     console.log('[JobService] Updating bid:', bid.id, 'Status:', bid.status, 'Amount:', bid.amount);
 
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    const authHeader = accessToken ? `Bearer ${accessToken}` : `Bearer ${supabaseKey}`;
 
     // If status is ACCEPTED, use the Atomic RPC (use safeRPC to avoid blocking)
     if (bid.status === 'ACCEPTED') {
@@ -699,7 +766,7 @@ export const updateBid = async (bid: Bid, accessToken?: string): Promise<{ succe
       return { success: true };
     }
 
-    // For counter/negotiation: Use direct PATCH to REST API
+    // For counter/negotiation: Use safeFetch for robustness (handles token refresh automatically)
     console.log('[JobService] Sending counter-offer via REST API...');
 
     const updatePayload: any = {
@@ -715,13 +782,12 @@ export const updateBid = async (bid: Bid, accessToken?: string): Promise<{ succe
 
     console.log('[JobService] Update payload:', JSON.stringify(updatePayload));
 
-    const response = await fetch(
+    // Use safeFetch instead of manual fetch
+    const response = await safeFetch(
       `${supabaseUrl}/rest/v1/bids?id=eq.${bid.id}`,
       {
         method: 'PATCH',
         headers: {
-          'apikey': supabaseKey,
-          'Authorization': authHeader,
           'Content-Type': 'application/json',
           'Prefer': 'return=minimal'
         },

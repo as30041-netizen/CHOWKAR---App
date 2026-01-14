@@ -1,19 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { UserCircle, Loader2, MapPin, ArrowLeft, Camera, Plus, ChevronRight, Gift, CheckCircle2 as CheckCircle, Sparkles } from 'lucide-react';
 import { useUser } from '../contexts/UserContextDB';
+import { useNotification } from '../contexts/NotificationContext';
 import { uploadProfileImage, isBase64Image } from '../services/storageService';
-import { getDeviceLocation } from '../utils/geo';
-import { supabase } from '../lib/supabase';
+import { getDeviceLocation, reverseGeocode, forwardGeocode } from '../utils/geo';
+import { LeafletMap } from './LeafletMap';
 
 interface EditProfileModalProps {
     isOpen: boolean;
     onClose: () => void;
-    showAlert: (msg: string, type: 'success' | 'error' | 'info') => void;
+    showAlert: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
     isMandatory?: boolean;
 }
 
 export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose, showAlert, isMandatory = false }) => {
-    const { user, updateUserInDB, addNotification, t, language } = useUser();
+    const { user, updateUserInDB, t, language } = useUser();
+    const { addNotification } = useNotification();
+
 
     const [editProfileName, setEditProfileName] = useState('');
     const [editProfilePhone, setEditProfilePhone] = useState('');
@@ -137,36 +140,47 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
         reader.readAsDataURL(file);
     };
 
+    const [searchQuery, setSearchQuery] = useState('');
+
     const handleGetLocation = () => {
         setIsLocating(true);
         getDeviceLocation(
-            (coords) => {
+            async (coords) => {
                 setNewCoordinates(coords);
-                fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}`)
-                    .then(res => res.json())
-                    .then(data => {
-                        const addressParts = [];
-                        if (data.address.village) addressParts.push(data.address.village);
-                        else if (data.address.town) addressParts.push(data.address.town);
-                        else if (data.address.city) addressParts.push(data.address.city);
-                        else if (data.address.suburb) addressParts.push(data.address.suburb);
-                        if (data.address.state) addressParts.push(data.address.state);
-                        const fullLoc = addressParts.length > 0 ? addressParts.join(', ') : `${coords.lat.toFixed(2)}, ${coords.lng.toFixed(2)}`;
-                        setEditProfileLocation(fullLoc);
-                        setIsLocating(false);
-                        showAlert(language === 'en' ? "Location updated!" : "स्थान अपडेट किया गया!", "success");
-                    })
-                    .catch(e => {
-                        setEditProfileLocation(`${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`);
-                        setIsLocating(false);
-                        showAlert(language === 'en' ? "Location captured!" : "स्थान कैप्चर किया गया!", "success");
-                    });
+                const address = await reverseGeocode(coords.lat, coords.lng);
+                if (address) {
+                    setEditProfileLocation(address);
+                    showAlert(language === 'en' ? "Location captured!" : "स्थान कैप्चर किया गया!", "success");
+                }
+                setIsLocating(false);
             },
             () => {
                 showAlert(language === 'en' ? "Could not get location." : "स्थान प्राप्त नहीं कर सके।", "error");
                 setIsLocating(false);
             }
         );
+    };
+
+    const handleMapLocationSelect = async (lat: number, lng: number) => {
+        setNewCoordinates({ lat, lng });
+        // Optional: Auto-reverse geocode on drag end
+        const address = await reverseGeocode(lat, lng);
+        if (address) {
+            setEditProfileLocation(address);
+        }
+    };
+
+    const handleAddressSearch = async () => {
+        if (!searchQuery.trim()) return;
+        setIsLocating(true);
+        const result = await forwardGeocode(searchQuery);
+        if (result) {
+            setNewCoordinates({ lat: result.lat, lng: result.lng });
+            setEditProfileLocation(result.displayName);
+        } else {
+            showAlert("Location not found", "error");
+        }
+        setIsLocating(false);
     };
 
     return (
@@ -252,31 +266,55 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                                 />
                             </div>
 
-                            <div className="space-y-3 group">
+                            <div className="space-y-3 group md:col-span-2">
                                 <label className="text-[11px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.3em] ml-1 group-focus-within:text-emerald-500 transition-colors">
-                                    {language === 'en' ? 'Work Location' : 'स्थान'}
+                                    {language === 'en' ? 'Detailed Location' : 'विस्तृत स्थान'}
                                 </label>
-                                <div className="relative">
-                                    <input
-                                        value={editProfileLocation}
-                                        onChange={(e) => setEditProfileLocation(e.target.value)}
-                                        placeholder={language === 'en' ? "Enter city/village or use GPS" : "शहर/गाँव दर्ज करें या GPS उपयोग करें"}
-                                        maxLength={100}
-                                        className="w-full bg-gray-50 dark:bg-gray-900/50 border-4 border-white dark:border-gray-800 rounded-3xl px-6 py-5 text-lg font-black text-gray-900 dark:text-white outline-none focus:border-emerald-500/30 transition-all shadow-glass pr-16"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={handleGetLocation}
-                                        disabled={isLocating}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 p-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl shadow-lg active:scale-90 transition-all disabled:opacity-50"
-                                        title={language === 'en' ? "Use GPS Location" : "जीपीएस स्थान उपयोग करें"}
-                                    >
-                                        {isLocating ? <Loader2 size={18} className="animate-spin" /> : <MapPin size={18} strokeWidth={3} />}
-                                    </button>
+                                <div className="space-y-4">
+                                    {/* Search Bar */}
+                                    <div className="flex gap-2">
+                                        <div className="relative flex-1">
+                                            <input
+                                                value={searchQuery}
+                                                onChange={(e) => setSearchQuery(e.target.value)}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleAddressSearch()}
+                                                placeholder={language === 'en' ? "Search city..." : "शहर खोजें..."}
+                                                className="w-full bg-gray-50 dark:bg-gray-900/50 border-4 border-white dark:border-gray-800 rounded-2xl px-4 py-3 text-sm font-bold text-gray-900 dark:text-white outline-none focus:border-emerald-500/30 transition-all"
+                                            />
+                                            <button
+                                                onClick={handleAddressSearch}
+                                                className="absolute right-2 top-2 p-1.5 bg-emerald-100 text-emerald-600 rounded-lg hover:bg-emerald-200 transition-colors"
+                                            >
+                                                <Sparkles size={16} />
+                                            </button>
+                                        </div>
+                                        <button
+                                            onClick={handleGetLocation}
+                                            disabled={isLocating}
+                                            className="px-4 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                        >
+                                            {isLocating ? <Loader2 size={16} className="animate-spin" /> : <MapPin size={16} />}
+                                            {language === 'en' ? 'Locate Me' : 'मुझे ढूंढें'}
+                                        </button>
+                                    </div>
+
+                                    {/* Interactive Map */}
+                                    <div className="rounded-3xl overflow-hidden border-4 border-white dark:border-gray-800 shadow-sm h-64 relative z-0">
+                                        <LeafletMap
+                                            lat={newCoordinates?.lat || 20.5937} // Default to India center if null
+                                            lng={newCoordinates?.lng || 78.9629}
+                                            popupText={editProfileLocation || "Drag marker to set location"}
+                                            editable
+                                            onLocationSelect={handleMapLocationSelect}
+                                            height="h-full"
+                                        />
+                                    </div>
+
+                                    {/* Read-only Display of Selected Address */}
+                                    <div className="px-4 py-2 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-dashed border-gray-200 dark:border-gray-800 text-xs text-gray-500 font-mono break-all">
+                                        📍 {editProfileLocation || "No location selected"}
+                                    </div>
                                 </div>
-                                <p className="text-[9px] text-gray-400 dark:text-gray-500 ml-1 font-medium">
-                                    {language === 'en' ? 'Type manually or click GPS button →' : 'मैन्युअल टाइप करें या GPS बटन क्लिक करें →'}
-                                </p>
                             </div>
                         </div>
 
@@ -324,6 +362,39 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                         </div>
 
                     </div>
+                </div>
+
+                {/* DANGER ZONE - Delete Account */}
+                <div className="mx-8 mt-12 p-6 rounded-[2rem] bg-red-50 dark:bg-red-900/10 border-2 border-red-100 dark:border-red-900/20">
+                    <h3 className="text-red-600 dark:text-red-400 font-black uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                        {language === 'en' ? 'Danger Zone' : 'खतरा क्षेत्र'}
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-400 text-sm mb-6 font-medium leading-relaxed">
+                        {language === 'en'
+                            ? 'Once you delete your account, there is no going back. Please be certain.'
+                            : 'एक बार जब आप अपना खाता हटा देते हैं, तो वापस नहीं जा सकते। कृपया सुनिश्चित हों।'}
+                    </p>
+                    <button
+                        onClick={async () => {
+                            if (window.confirm(language === 'en' ? 'Are you sure you want to PERMANENTLY delete your account?' : 'क्या आप वाकई अपना खाता स्थायी रूप से हटाना चाहते हैं?')) {
+                                const { deleteAccount } = await import('../services/authService');
+                                setIsSaving(true);
+                                const { success, error } = await deleteAccount();
+                                if (success) {
+                                    onClose();
+                                    window.location.reload();
+                                } else {
+                                    showAlert(error || 'Failed to delete', 'error');
+                                    setIsSaving(false);
+                                }
+                            }
+                        }}
+                        disabled={isSaving}
+                        className="w-full py-4 rounded-xl bg-white dark:bg-red-950/30 border-2 border-red-200 dark:border-red-900/50 text-red-500 font-bold text-xs uppercase tracking-[0.2em] hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                    >
+                        {isSaving ? 'Processing...' : (language === 'en' ? 'Delete Account' : 'खाता हटाएं')}
+                    </button>
                 </div>
 
                 {/* Footer Save Button */}

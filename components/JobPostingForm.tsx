@@ -1,24 +1,27 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useNotification } from '../contexts/NotificationContext';
+
 import { useUser } from '../contexts/UserContextDB';
 import { useJobs } from '../contexts/JobContextDB';
-import { Job, JobStatus, Coordinates } from '../types';
-import { CATEGORIES, CATEGORY_TRANSLATIONS, FREE_AI_USAGE_LIMIT } from '../constants';
-import { enhanceJobDescriptionStream, estimateWage, analyzeImageForJob } from '../services/geminiService';
-import { getDeviceLocation, reverseGeocode } from '../utils/geo';
-import { Mic, MicOff, Sparkles, Lock, Loader2, Calculator, MapPin, ChevronRight, ArrowDownWideNarrow, Camera, X } from 'lucide-react';
+import { Job, Coordinates, JobStatus } from '../types';
+import { CATEGORIES, FREE_AI_USAGE_LIMIT, DRAFT_STORAGE_KEY, CATEGORY_TRANSLATIONS } from '../constants';
 import { uploadJobImage, isBase64Image } from '../services/storageService';
-
-const DRAFT_STORAGE_KEY = 'chowkar_job_draft';
+import { getDeviceLocation, reverseGeocode, forwardGeocode } from '../utils/geo';
+import { enhanceJobDescriptionStream, estimateWage, analyzeImageForJob } from '../services/geminiService';
+import { LeafletMap } from './LeafletMap';
+import { Sparkles, MapPin, Calendar, Clock, Image as ImageIcon, IndianRupee, Loader2, X, Plus, ChevronRight, AlertCircle, Wand2, Lightbulb, Map as MapIcon, Languages, CheckCircle2, ArrowDownWideNarrow, Calculator, Mic, MicOff, Camera, Lock } from 'lucide-react';
 
 interface JobPostingFormProps {
     onSuccess: () => void;
-    onCancel?: () => void;
+    onCancel: () => void;
     initialJob?: Job;
 }
 
 export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCancel, initialJob }) => {
-    const { user, t, language, checkFreeLimit, incrementAiUsage, addNotification, showAlert, refreshUser } = useUser();
+    const { user, t, language, checkFreeLimit, incrementAiUsage, showAlert, refreshUser } = useUser();
+    const { addNotification } = useNotification();
     const { addJob, updateJob } = useJobs();
+
 
     const [newJobTitle, setNewJobTitle] = useState('');
     const [newJobDesc, setNewJobDesc] = useState('');
@@ -410,6 +413,28 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
         fileInputRef.current?.click();
     };
 
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const handleMapLocationSelect = async (lat: number, lng: number) => {
+        setNewJobCoords({ lat, lng });
+        const address = await reverseGeocode(lat, lng);
+        if (address) {
+            setNewJobLocation(address);
+        }
+    };
+
+    const handleAddressSearch = async () => {
+        if (!searchQuery.trim()) return;
+        // Search logic
+        const result = await forwardGeocode(searchQuery);
+        if (result) {
+            setNewJobCoords({ lat: result.lat, lng: result.lng });
+            setNewJobLocation(result.displayName);
+        } else {
+            showAlert("Location not found", "error");
+        }
+    };
+
     const [showEditForm, setShowEditForm] = useState(false);
 
     if (isEditing && !showEditForm) {
@@ -592,21 +617,62 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                 </div>
 
                 <div className="group/field">
-                    <label className="text-[11px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-3 block px-2 group-focus-within/field:text-emerald-500 transition-colors">Location</label>
-                    <div className="flex flex-col gap-3">
-                        <input
-                            type="text"
-                            placeholder="e.g. Sector 15, Noida"
-                            className="w-full bg-gray-50/50 dark:bg-gray-800/30 border-2 border-gray-100 dark:border-gray-800 rounded-[1.5rem] px-6 py-4.5 font-bold text-gray-900 dark:text-white focus:border-emerald-500/50 focus:bg-white dark:focus:bg-gray-800 outline-none transition-all shadow-sm group-focus-within/field:shadow-emerald-500/5"
-                            value={newJobLocation}
-                            onChange={(e) => setNewJobLocation(e.target.value)}
-                        />
-                        <button type="button" onClick={() => getDeviceLocation(async (coords) => {
-                            setNewJobCoords(coords);
-                            const address = await reverseGeocode(coords.lat, coords.lng);
-                            if (address) setNewJobLocation(address);
-                            showAlert(t.locationCaptured || "Location Captured", 'success');
-                        }, () => showAlert(t.alertGeoPermission, 'error'))} className={`w-full py-5 rounded-[1.5rem] font-black uppercase tracking-widest flex items-center justify-center gap-3 transition-all active:scale-95 border-2 ${newJobCoords ? 'bg-emerald-50/50 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 shadow-lg shadow-emerald-500/5' : 'bg-gray-50/50 border-gray-100 dark:border-gray-800 text-gray-500 hover:bg-white dark:hover:bg-gray-800'}`}><MapPin size={20} className={newJobCoords ? 'animate-bounce' : ''} /> {newJobCoords ? t.locationCaptured : t.attachLocation}</button>
+                    <label className="text-[11px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-3 block px-2 group-focus-within/field:text-emerald-500 transition-colors">
+                        {language === 'en' ? 'Work Location (Search or Drag)' : 'कार्य स्थान (खोजें या चुनें)'}
+                    </label>
+                    <div className="space-y-4">
+                        {/* Search & Detect */}
+                        <div className="flex gap-2">
+                            <div className="relative flex-1">
+                                <input
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleAddressSearch()}
+                                    placeholder={language === 'en' ? "Search area..." : "क्षेत्र खोजें..."}
+                                    className="w-full bg-gray-50/50 dark:bg-gray-800/30 border-2 border-gray-100 dark:border-gray-800 rounded-2xl px-4 py-3 text-sm font-bold text-gray-900 dark:text-white outline-none focus:border-emerald-500/50 transition-all shadow-sm"
+                                />
+                                <button
+                                    onClick={handleAddressSearch}
+                                    type="button"
+                                    className="absolute right-2 top-2 p-1.5 bg-emerald-100 text-emerald-600 rounded-lg hover:bg-emerald-200 transition-colors"
+                                >
+                                    <Sparkles size={16} />
+                                </button>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => getDeviceLocation(async (coords) => {
+                                    setNewJobCoords(coords);
+                                    const address = await reverseGeocode(coords.lat, coords.lng);
+                                    if (address) setNewJobLocation(address);
+                                    showAlert(t.locationCaptured || "Location Captured", 'success');
+                                }, () => showAlert(t.alertGeoPermission, 'error'))}
+                                className={`px-4 py-3 rounded-2xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all active:scale-95 border-2 ${newJobCoords ? 'bg-emerald-50/50 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 shadow-lg shadow-emerald-500/5' : 'bg-gray-50/50 border-gray-100 dark:border-gray-800 text-gray-500 hover:bg-white dark:hover:bg-gray-800'}`}
+                            >
+                                <MapPin size={16} className={newJobCoords ? 'animate-bounce' : ''} />
+                                {language === 'en' ? 'Detect' : 'ढूंढें'}
+                            </button>
+                        </div>
+
+                        {/* Map */}
+                        <div className="rounded-[2rem] overflow-hidden border-4 border-white dark:border-gray-800 shadow-sm h-56 relative z-0">
+                            <LeafletMap
+                                lat={newJobCoords?.lat || 20.5937}
+                                lng={newJobCoords?.lng || 78.9629}
+                                popupText={newJobLocation || "Set Job Location"}
+                                editable
+                                onLocationSelect={handleMapLocationSelect}
+                                height="h-full"
+                            />
+                        </div>
+
+                        {/* Read-only Address Display */}
+                        <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900/30 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 flex items-start gap-3">
+                            <MapPin size={16} className="text-emerald-500 mt-0.5 shrink-0" />
+                            <p className="text-xs text-gray-600 dark:text-gray-400 font-medium leading-relaxed">
+                                {newJobLocation || (language === 'en' ? "No location selected yet" : "अभी तक कोई स्थान नहीं चुना गया")}
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>

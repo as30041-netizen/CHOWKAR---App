@@ -774,3 +774,5 @@ export const POSTER_FEE = 0; // Free for now
 export const WORKER_COMMISSION_RATE = 0; // 0% commission
 export const FREE_AI_USAGE_LIMIT = 2; // Number of free AI uses allowed
 
+export const DRAFT_STORAGE_KEY = 'chowkar_job_draft';
+

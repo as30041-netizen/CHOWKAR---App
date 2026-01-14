@@ -1,16 +1,18 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { useUser } from '../contexts/UserContextDB';
 import { useJobs } from '../contexts/JobContextDB';
 import { JobCard } from '../components/JobCard';
+// Lazy load map to avoid loading Leaflet until needed
+const JobMap = React.lazy(() => import('../components/JobMap').then(m => ({ default: m.JobMap })));
 import { JobCardSkeleton } from '../components/Skeleton';
 import { Job, UserRole, JobStatus } from '../types';
 import { calculateDistance } from '../utils/geo';
 import { CATEGORIES, CATEGORY_TRANSLATIONS } from '../constants';
 import {
-    Search, SlidersHorizontal, Mic, MicOff,
     Briefcase, RotateCw, Loader2, ArrowUpDown, Plus,
     Sparkles, MapPin, Zap, Clock, History, LayoutDashboard,
-    ChevronRight, ArrowRight, Bell, Star, XCircle
+    ChevronRight, ArrowRight, Bell, Star, XCircle, Map as MapIcon, List as ListIcon,
+    Search, Mic, MicOff, SlidersHorizontal, LayoutGrid, Filter, IndianRupee, Calendar, CheckCircle2, X, MessageCircle, AlertCircle
 } from 'lucide-react';
 import { FilterModal } from '../components/FilterModal';
 import { useNavigate } from 'react-router-dom';
@@ -29,13 +31,17 @@ interface HomeProps {
     showAlert: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
+import { useNotification } from '../contexts/NotificationContext';
+
 export const Home: React.FC<HomeProps> = ({
     onBid, onViewBids, onChat, onEdit, onClick, onReplyToCounter, onWithdrawBid,
     setShowFilterModal: _setShowFilterModal, showAlert
 }) => {
-    const { user, role, setRole, t, language, notifications, isAuthLoading } = useUser();
+    const { user, role, setRole, t, language, isAuthLoading } = useUser();
+    const { notifications } = useNotification();
     const { jobs, loading, isRevalidating, refreshJobs, fetchMoreJobs, hasMore, isLoadingMore, loadFeed, hideJob, error: jobsError } = useJobs();
     const [posterTab, setPosterTab] = useState<'ACTIVE' | 'HISTORY'>('ACTIVE');
+
     const [dashboardTab, setDashboardTab] = useState<'ALL' | 'OPEN' | 'IN_PROGRESS' | 'COMPLETED'>('ALL');
     const [workerTab, setWorkerTab] = useState<'FIND' | 'ACTIVE' | 'HISTORY'>('FIND');
     const navigate = useNavigate();
@@ -50,6 +56,7 @@ export const Home: React.FC<HomeProps> = ({
     const [showFilters, setShowFilters] = useState(false);
     const [sortBy, setSortBy] = useState<SortOption>('NEWEST');
     const [showSortMenu, setShowSortMenu] = useState(false);
+    const [viewMode, setViewMode] = useState<'LIST' | 'MAP'>('LIST');
 
     // Track if this is the first load (page refresh scenario)
     const isFirstLoadRef = React.useRef(true);
@@ -90,18 +97,18 @@ export const Home: React.FC<HomeProps> = ({
     ];
 
     const toggleVoiceInput = () => {
-        const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) { showAlert("Voice input not supported", 'error'); return; }
         if (isSearchingVoice) {
             setIsSearchingVoice(false);
-            try { (window as any).recognition?.stop(); } catch (e) { }
+            try { window.recognition?.stop(); } catch (e) { }
             return;
         }
 
         setIsSearchingVoice(true);
         try {
             const recognition = new SpeechRecognition();
-            (window as any).recognition = recognition;
+            window.recognition = recognition;
             recognition.continuous = false;
             recognition.interimResults = false;
             recognition.lang = language === 'hi' ? 'hi-IN' : 'en-IN';
@@ -313,17 +320,27 @@ export const Home: React.FC<HomeProps> = ({
                         </button>
                     </div>
 
-                    <button
-                        onClick={() => setShowFilters(true)}
-                        className={`w-20 h-20 grow-0 shrink-0 rounded-[2rem] flex items-center justify-center transition-all active:scale-95 border-4 shadow-glass ${filterLocation || filterMinBudget || filterMaxDistance || selectedCategory !== 'All' ? 'bg-emerald-600 text-white border-white dark:border-gray-700' : 'bg-white dark:bg-gray-900 text-gray-500 border-white dark:border-gray-800'}`}
-                    >
-                        <div className="relative">
-                            <SlidersHorizontal size={24} strokeWidth={3} />
-                            {(filterLocation || filterMinBudget || filterMaxDistance || selectedCategory !== 'All') && (
-                                <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 border-2 border-white rounded-full animate-bounce" />
-                            )}
-                        </div>
-                    </button>
+                    <div className="flex gap-2 shrink-0">
+                        {/* View Toggle */}
+                        <button
+                            onClick={() => setViewMode(prev => prev === 'LIST' ? 'MAP' : 'LIST')}
+                            className="w-20 h-20 rounded-[2rem] flex items-center justify-center transition-all active:scale-95 border-4 shadow-glass bg-white dark:bg-gray-900 border-white dark:border-gray-800 text-gray-500 hover:text-emerald-500"
+                        >
+                            {viewMode === 'LIST' ? <MapIcon size={24} strokeWidth={3} /> : <ListIcon size={24} strokeWidth={3} />}
+                        </button>
+
+                        <button
+                            onClick={() => setShowFilters(true)}
+                            className={`w-20 h-20 rounded-[2rem] flex items-center justify-center transition-all active:scale-95 border-4 shadow-glass ${filterLocation || filterMinBudget || filterMaxDistance || selectedCategory !== 'All' ? 'bg-emerald-600 text-white border-white dark:border-gray-700' : 'bg-white dark:bg-gray-900 text-gray-500 border-white dark:border-gray-800'}`}
+                        >
+                            <div className="relative">
+                                <SlidersHorizontal size={24} strokeWidth={3} />
+                                {(filterLocation || filterMinBudget || filterMaxDistance || selectedCategory !== 'All') && (
+                                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 border-2 border-white rounded-full animate-bounce" />
+                                )}
+                            </div>
+                        </button>
+                    </div>
                 </div>
 
                 <div className="flex flex-col gap-6">
@@ -411,25 +428,44 @@ export const Home: React.FC<HomeProps> = ({
                             </div>
                         ) : filteredJobs.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-                                {filteredJobs.map(job => (
-                                    <div key={job.id} className="h-full transform hover:-translate-y-2 transition-transform duration-500">
-                                        <JobCard
-                                            job={job}
-                                            currentUserId={user.id}
-                                            userRole={role}
-                                            distance={job.distance}
-                                            language={language}
-                                            onBid={onBid}
-                                            onViewBids={onViewBids}
-                                            onChat={onChat}
-                                            onEdit={onEdit}
-                                            onClick={() => onClick(job)}
-                                            onReplyToCounter={onReplyToCounter}
-                                            onWithdrawBid={onWithdrawBid}
-                                            onHide={hideJob}
-                                        />
+                                {viewMode === 'LIST' ? (
+                                    filteredJobs.map(job => (
+                                        <div key={job.id} className="h-full transform hover:-translate-y-2 transition-transform duration-500">
+                                            <JobCard
+                                                job={job}
+                                                currentUserId={user.id}
+                                                userRole={role}
+                                                distance={job.distance}
+                                                language={language}
+                                                onBid={onBid}
+                                                onViewBids={onViewBids}
+                                                onChat={onChat}
+                                                onEdit={onEdit}
+                                                onClick={() => onClick(job)}
+                                                onReplyToCounter={onReplyToCounter}
+                                                onWithdrawBid={onWithdrawBid}
+                                                onHide={hideJob}
+                                            />
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="col-span-full">
+                                        <Suspense fallback={
+                                            <div className="h-[500px] w-full bg-gray-100 dark:bg-gray-800 rounded-3xl flex items-center justify-center">
+                                                <Loader2 className="animate-spin text-emerald-500" size={48} />
+                                            </div>
+                                        }>
+                                            <JobMap
+                                                jobs={filteredJobs}
+                                                onJobClick={onClick}
+                                                userLocation={user.coordinates}
+                                            />
+                                        </Suspense>
+                                        <p className="text-center text-gray-400 text-xs mt-4 font-bold uppercase tracking-widest animate-pulse">
+                                            Showing {filteredJobs.length} jobs on map
+                                        </p>
                                     </div>
-                                ))}
+                                )}
                             </div>
                         ) : jobsError ? (
                             <div className="flex flex-col items-center justify-center py-20 px-10 bg-red-50/50 dark:bg-red-900/10 rounded-[3rem] border-4 border border-red-100 dark:border-red-900/30 animate-pop">
@@ -490,17 +526,19 @@ export const Home: React.FC<HomeProps> = ({
             </div>
 
             {/* FLOATING ACTION BUTTONS */}
-            {role === UserRole.POSTER && (
-                <button
-                    onClick={() => navigate('/post')}
-                    className="fixed bottom-32 right-8 w-18 h-18 bg-blue-600 text-white rounded-[2rem] shadow-[0_20px_40px_-10px_rgba(37,99,235,0.4)] flex items-center justify-center active:scale-90 transition-all z-[60] md:hidden border-4 border-white dark:border-gray-900 group"
-                >
-                    <Plus size={36} strokeWidth={3} className="group-hover:rotate-90 transition-transform duration-500" />
-                    <div className="absolute right-full mr-4 bg-gray-900 text-white text-[10px] font-black px-4 py-2 rounded-xl opacity-0 translate-x-4 pointer-events-none group-hover:opacity-100 group-hover:translate-x-0 transition-all whitespace-nowrap shadow-xl">
-                        {language === 'en' ? 'POST A NEW JOB' : 'नया काम पोस्ट करें'}
-                    </div>
-                </button>
-            )}
-        </div>
+            {
+                role === UserRole.POSTER && (
+                    <button
+                        onClick={() => navigate('/post')}
+                        className="fixed bottom-32 right-8 w-18 h-18 bg-blue-600 text-white rounded-[2rem] shadow-[0_20px_40px_-10px_rgba(37,99,235,0.4)] flex items-center justify-center active:scale-90 transition-all z-[60] md:hidden border-4 border-white dark:border-gray-900 group"
+                    >
+                        <Plus size={36} strokeWidth={3} className="group-hover:rotate-90 transition-transform duration-500" />
+                        <div className="absolute right-full mr-4 bg-gray-900 text-white text-[10px] font-black px-4 py-2 rounded-xl opacity-0 translate-x-4 pointer-events-none group-hover:opacity-100 group-hover:translate-x-0 transition-all whitespace-nowrap shadow-xl">
+                            {language === 'en' ? 'POST A NEW JOB' : 'नया काम पोस्ट करें'}
+                        </div>
+                    </button>
+                )
+            }
+        </div >
     );
 };

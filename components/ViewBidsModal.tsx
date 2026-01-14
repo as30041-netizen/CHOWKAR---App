@@ -1,23 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, XCircle, UserCircle, Star, ExternalLink, Loader2 } from 'lucide-react';
-import { Job, UserRole } from '../types';
-import { useUser } from '../contexts/UserContextDB';
+import { Job, UserRole, Bid } from '../types';
+import { useNotification } from '../contexts/NotificationContext';
 import { supabase } from '../lib/supabase';
-import { useJobs } from '../contexts/JobContextDB';
 
+import { useUser } from '../contexts/UserContextDB';
+import { useJobs } from '../contexts/JobContextDB';
 
 interface ViewBidsModalProps {
     isOpen: boolean;
     onClose: () => void;
     job: Job | null;
     onCounter: (bidId: string, amount: number) => void;
-    onViewProfile: (userId: string, name?: string) => void;
-    showAlert: (msg: string, type: 'success' | 'error' | 'info') => void;
+    onViewProfile: (userId: string, name: string) => void;
+    showAlert: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 }
 
 export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, job, onCounter, onViewProfile, showAlert }) => {
-    const { user, t, addNotification, language } = useUser();
+    const { user, t, language } = useUser();
+    const { addNotification } = useNotification();
     const [isAcceptingBid, setIsAcceptingBid] = useState(false);
+
 
     const [localJob, setLocalJob] = useState<Job | null>(job);
 
@@ -62,6 +65,28 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
             setLocalJob(job);
         }
     }, [job]);
+
+    // HYBRID SYNC: Refetch bids when app comes to foreground or reconnects
+    useEffect(() => {
+        if (!isOpen || !job?.id) return;
+
+        const handleFocus = () => {
+            if (!document.hidden && job?.id) {
+                console.log('[ViewBidsModal] 📱 App foregrounded - Triggering Hybrid Focus Refetch...');
+                getJobWithFullDetails(job.id, true);
+            }
+        };
+
+        window.addEventListener('focus', handleFocus);
+        document.addEventListener('visibilitychange', handleFocus);
+        window.addEventListener('online', handleFocus);
+
+        return () => {
+            window.removeEventListener('focus', handleFocus);
+            document.removeEventListener('visibilitychange', handleFocus);
+            window.removeEventListener('online', handleFocus);
+        };
+    }, [isOpen, job?.id, getJobWithFullDetails]);
 
     // Use a ref to store a debounce timer for real-time updates
     const realtimeTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);

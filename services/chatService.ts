@@ -18,8 +18,9 @@ export const fetchJobMessages = async (jobId: string, page: number = 0) => {
 
         console.log(`[ChatService] Fetching messages for job ${jobId}...`);
 
+        // Use the SECURE VIEW (view_chat_messages) to handle masked deletion
         const response = await safeFetch(
-            `${supabaseUrl}/rest/v1/chat_messages?job_id=eq.${jobId}&order=created_at.desc&offset=${from}&limit=${ITEMS_PER_PAGE}`
+            `${supabaseUrl}/rest/v1/view_chat_messages?job_id=eq.${jobId}&order=created_at.desc&offset=${from}&limit=${ITEMS_PER_PAGE}`
         );
 
         if (!response.ok) {
@@ -55,18 +56,23 @@ export const fetchJobMessages = async (jobId: string, page: number = 0) => {
 
 /**
  * Fetches the latest message for a job (for Inbox preview).
+ * [OPTIMIZED] Uses safeFetch to prevent hangs.
  */
 export const fetchLastMessage = async (jobId: string) => {
     try {
-        const { data, error } = await supabase
-            .from('chat_messages')
-            .select('*')
-            .eq('job_id', jobId)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const { safeFetch } = await import('./fetchUtils');
 
-        if (error) return null;
+        const response = await safeFetch(
+            `${supabaseUrl}/rest/v1/view_chat_messages?job_id=eq.${jobId}&order=created_at.desc&limit=1`,
+            {
+                headers: { 'Prefer': 'return=representation', 'Accept': 'application/vnd.pgrst.object+json' }
+            }
+        );
+
+        if (!response.ok) return null;
+
+        const data = await response.json();
 
         return {
             id: data.id,
@@ -163,14 +169,30 @@ export const fetchInboxSummaries = async (userId: string): Promise<{ chats: Inbo
 
 export const editMessage = async (messageId: string, newText: string): Promise<{ success: boolean; error?: any }> => {
     try {
-        const { error } = await waitForSupabase(async () => {
-            return await supabase
-                .from('chat_messages')
-                .update({ text: newText })
-                .eq('id', messageId);
-        });
+        // Use safeRPC instead of direct update to avoid client hangs
+        const { safeRPC } = await import('../lib/supabase');
 
-        if (error) throw error;
+        // Note: We don't have an 'edit_message' RPC, but a direct UPDATE via safeFetch is better.
+        // Or if we must use current client, at least use safeFetch if possible.
+        // Ideally we should make an RPC, but for now let's use the REST API via safeFetch.
+
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const { safeFetch } = await import('./fetchUtils');
+
+        const response = await safeFetch(
+            `${supabaseUrl}/rest/v1/chat_messages?id=eq.${messageId}`,
+            {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify({ text: newText })
+            }
+        );
+
+        if (!response.ok) throw new Error(`Edit failed: ${response.status}`);
+
         return { success: true };
     } catch (error) {
         console.error('Error editing message:', error);
@@ -186,13 +208,7 @@ export const deleteMessage = async (messageId: string): Promise<{ success: boole
         const { error: rpcError } = await safeRPC('soft_delete_chat_message', { p_message_id: messageId });
 
         if (rpcError) {
-            // Fallback: Direct table update (if RPC missing)
-            console.warn('RPC soft_delete_chat_message failed, using direct update:', rpcError.message);
-            const { error: updateError } = await supabase
-                .from('chat_messages')
-                .update({ is_deleted: true, text: 'This message was deleted' })
-                .eq('id', messageId);
-            if (updateError) throw updateError;
+            throw rpcError;
         }
 
         return { success: true };

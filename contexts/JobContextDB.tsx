@@ -14,7 +14,7 @@ interface JobContextType {
   refreshJobs: (userId?: string) => Promise<void>;
   fetchMoreJobs: () => Promise<void>;
   getJobWithFullDetails: (jobId: string, force?: boolean) => Promise<Job | null>; // NEW: Lazy load full details
-  loadFeed: (type: 'HOME' | 'POSTER' | 'WORKER_APPS', offset?: number, userIdOverride?: string) => Promise<void>; // NEW: Optimized feeds
+  loadFeed: (type: 'HOME' | 'POSTER' | 'WORKER_APPS', offset?: number, userIdOverride?: string, filters?: { category?: string; searchQuery?: string }) => Promise<void>; // NEW: Optimized feeds
   clearJobs: () => void; // NEW: Clear jobs on logout
   hideJob: (jobId: string) => Promise<{ success: boolean; error?: string }>;
   loading: boolean;
@@ -214,7 +214,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             myBidStatus: isMyBid ? updatedBid.status : j.myBidStatus,
             myBidAmount: isMyBid ? updatedBid.amount : j.myBidAmount,
             myBidLastNegotiationBy: isMyBid ? lastTurn : j.myBidLastNegotiationBy,
-            hasNewCounter: !isMyBid && currentUserId && j.posterId && j.posterId.toLowerCase() === currentUserId.toLowerCase() ? true : j.hasNewCounter
+            hasNewCounter: !isMyBid && currentUserId && j.posterId && j.posterId.toLowerCase() === currentUserId.toLowerCase() && lastTurn === 'WORKER' ? true : j.hasNewCounter
           };
         }
       } else if (eventType === 'DELETE' && payload.old) {
@@ -346,36 +346,26 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const feedCache = useRef<Record<string, any>>(getEmptyCache());
 
-  // CRITICAL: Clear cache when user changes to prevent data leaks between accounts
-  // Using a short delay to prevent clearing during transient null states (e.g. session refreshes)
-  useEffect(() => {
-    if (!currentUserId) {
-      const timer = setTimeout(() => {
-        console.log(`[JobContext] 🔄 User is null for >500ms. Clearing cache definitively.`);
-        feedCache.current = getEmptyCache();
-        setJobs([]);
-        setHasMore(true);
-        setLoading(true);
-      }, 500);
-      return () => clearTimeout(timer);
-    } else {
-      console.log(`[JobContext] 🔄 User changed to: ${currentUserId}. Keeping cache if applicable.`);
-      // We don't automatically clear cache if switching between valid users 
-      // because getEmptyCache() is called inside if needed, 
-      // but usually this happens on login/logout.
-      // If the ID changes to a DIFFERENT valid ID, we should clear.
-    }
-  }, [currentUserId]);
 
-  const loadFeed = useCallback(async (type: 'HOME' | 'POSTER' | 'WORKER_APPS', offset: number = 0, userIdOverride?: string) => {
+
+  // Store current filters to support pagination (fetchMoreJobs)
+  const currentFiltersRef = useRef<{ category?: string; searchQuery?: string }>({});
+
+  const loadFeed = useCallback(async (type: 'HOME' | 'POSTER' | 'WORKER_APPS', offset: number = 0, userIdOverride?: string, filters?: { category?: string; searchQuery?: string }) => {
     const isInitial = offset === 0;
     const now = Date.now();
-    const CACHE_EXPIRY = 120000; // 2 minutes cache validity for absolute fresh re-fetch
+
+    // Update filter ref if provided (usually on initial load/filter change)
+    if (filters) {
+      currentFiltersRef.current = filters;
+    }
 
     try {
-      // 1. Instant Cache Retrieval
-      // If user is asking for page 1 (refresh or tab switch), check if we have valid cache
-      if (isInitial) {
+      // 1. Instant Cache Retrieval (Only if NO filters are active - simple cache strategy)
+      // If filtering, we should generally hit the server unless we implement complex caching
+      const hasActiveFilters = currentFiltersRef.current.searchQuery || (currentFiltersRef.current.category && currentFiltersRef.current.category !== 'All');
+
+      if (isInitial && !hasActiveFilters) {
         const cached = feedCache.current[type];
         if (cached.jobs.length > 0) {
           console.log(`[JobContext] ⚡ Instant Cache Hit for ${type}. Showing ${cached.jobs.length} items.`);
@@ -383,53 +373,42 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           setHasMore(cached.hasMore);
           setCurrentFeedType(type);
 
-          // If the cache is very fresh, skip the network call entirely to save DB load
-          // ALWAYS REVALIDATE IN BACKGROUND
-          // We removed the "early return" here to ensure we always fetch fresh data 
-          // even if cache exists. This implements true "Stale-While-Revalidate".
+          // Revalidate in background
           console.log(`[JobContext] 🔄 Using cache for speed, but revalidating ${type} in background...`);
           setIsRevalidating(true);
-
-          // If cache is stale but exists, we show it (instant UI) but re-fetch in background
-          console.log(`[JobContext] 🔄 Cache stale. Revalidating ${type} in background...`);
-          setIsRevalidating(true);
-          // We don't set global loading=true here because we already have valid items to show
         } else {
           setLoading(true);
         }
+      } else if (isInitial && hasActiveFilters) {
+        // Reset state for new filter search
+        setLoading(true);
+        setJobs([]);
       } else {
         setIsLoadingMore(true);
       }
 
       // 2. Prevent concurrent duplicate fetches
       const lastTypeTime = lastLoadAttemptRef.current[type] || 0;
-      if (isInitial && (now - lastTypeTime) < 2000) return; // Debounce re-fetches
+      if (isInitial && (now - lastTypeTime) < 1000) return; // Debounce
 
       lastLoadAttemptRef.current[type] = now;
       lastLoadTypeRef.current = type;
       setCurrentFeedType(type);
       setError(null);
 
-      // 3. Get User ID - prefer the override, then try session
+      // 3. Get User ID
       let userId = userIdOverride;
-
       if (!userId) {
-        // Simple session check
         const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user?.id) {
-          userId = session.user.id;
-        } else {
-          console.warn('[JobContext] No user ID available. Aborting load.');
+        if (session?.user?.id) userId = session.user.id;
+        else {
           setLoading(false);
           setIsLoadingMore(false);
           return;
         }
       }
 
-      console.log(`[JobContext] Loading ${type} feed for user: ${userId}`);
-
-      // Note: Access token handling is now done automatically inside the service functions via safeFetch
-      console.log(`[JobContext] Loading ${type} feed for user: ${userId}`);
+      console.log(`[JobContext] Loading ${type} feed for user: ${userId} with filters:`, currentFiltersRef.current);
 
       // 4. Execute RPC
       const resultTypeOnStart = type;
@@ -438,49 +417,36 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       switch (type) {
         case 'POSTER': result = await fetchMyJobsFeed(userId, 20, offset); break;
         case 'WORKER_APPS': result = await fetchMyApplicationsFeed(userId, 20, offset); break;
-        default: result = await fetchHomeFeed(userId, 20, offset); break;
+        default: result = await fetchHomeFeed(userId, 20, offset, currentFiltersRef.current); break;
       }
 
       console.log(`[JobContext] ✅ ${type} feed loaded: ${result.jobs.length} jobs, hasMore: ${result.hasMore}`);
 
-      // 5. Race condition check
-      if (lastLoadTypeRef.current !== resultTypeOnStart) {
-        console.log(`[JobContext] ⚠️ Race condition: Expected ${resultTypeOnStart} but current is ${lastLoadTypeRef.current}. Discarding result.`);
-        return;
-      }
+      if (lastLoadTypeRef.current !== resultTypeOnStart) return;
 
       // 6. Update State & Cache
       if (isInitial) {
-        console.log(`[JobContext] Setting ${result.jobs.length} jobs to state`);
         setJobs(result.jobs);
-        feedCache.current[type] = {
-          jobs: result.jobs,
-          hasMore: result.hasMore || false,
-          offset: result.jobs.length,
-          lastUpdated: Date.now()
-        };
+        // Only update cache if no filters (we only cache the "default" view)
+        if (!hasActiveFilters) {
+          feedCache.current[type] = {
+            jobs: result.jobs,
+            hasMore: result.hasMore || false,
+            offset: result.jobs.length,
+            lastUpdated: Date.now()
+          };
+        }
       } else {
         setJobs(prev => {
           const existingIds = new Set(prev.map(j => j.id));
           const uniqueNewJobs = result.jobs.filter(j => !existingIds.has(j.id));
-          const merged = [...prev, ...uniqueNewJobs];
-
-          feedCache.current[type] = {
-            jobs: merged,
-            offset: merged.length,
-            hasMore: result.hasMore || false,
-            lastUpdated: Date.now()
-          };
-
-          return merged;
+          return [...prev, ...uniqueNewJobs];
         });
       }
       setHasMore(result.hasMore || false);
     } catch (err: any) {
       console.error(`[JobContext] Error loading ${type} feed:`, err);
-      if (lastLoadTypeRef.current === type) {
-        setError(`Failed to load ${type} feed: ${err.message || 'Unknown error'}`);
-      }
+      if (lastLoadTypeRef.current === type) setError(`Failed: ${err.message || 'Unknown error'}`);
     } finally {
       if (lastLoadTypeRef.current === type) {
         setLoading(false);
@@ -495,6 +461,44 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     feedCache.current[currentFeedType].lastUpdated = 0;
     await loadFeed(currentFeedType, 0, userIdOverride);
   }, [loadFeed, currentFeedType]);
+
+  // CRITICAL: Clear cache when user changes to prevent data leaks between accounts
+  // Using a short delay to prevent clearing during transient null states (e.g. session refreshes)
+  useEffect(() => {
+    if (!currentUserId) {
+      const timer = setTimeout(() => {
+        console.log(`[JobContext] 🔄 User is null for >500ms. Clearing cache definitively.`);
+        feedCache.current = getEmptyCache();
+        setJobs([]);
+        setHasMore(true);
+        setLoading(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    } else {
+      console.log(`[JobContext] 🔄 User changed to: ${currentUserId}. Keeping cache if applicable.`);
+    }
+
+    // HYBRID SYNC: Re-fetch feed when app comes to foreground or reconnects
+    // This handles "App Backgrounded" and "Network Restoration" scenarios
+    const handleFocus = () => {
+      if (!document.hidden && currentUserId) {
+        console.log('[JobContext] 📱 App foregrounded - Triggering Hybrid Focus Refetch...');
+        // We use refreshJobs but preserve the offset to just "update what's visible" + check for new items at top
+        // For simplicity in this feed version, we just re-fetch page 1 to check for new headers
+        loadFeed(currentFeedType, 0);
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+    window.addEventListener('online', handleFocus);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+      window.removeEventListener('online', handleFocus);
+    };
+  }, [currentUserId, currentFeedType, loadFeed]);
 
   // Listen for auth changes to clear state immediately on logout/switch
   useEffect(() => {
@@ -528,6 +532,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const fetchMoreJobs = useCallback(async () => {
     if (isLoadingMore || !hasMore) return;
+    // Filters are pulled from currentFiltersRef inside loadFeed automatically
     await loadFeed(currentFeedType, jobs.length);
   }, [loadFeed, currentFeedType, isLoadingMore, hasMore, jobs.length]);
 
@@ -671,7 +676,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return j;
       }));
 
-      const { success, error } = await updateBidDB(bid, (await supabase.auth.getSession()).data.session?.access_token);
+      const { success, error } = await updateBidDB(bid);
 
       if (!success || error) {
         refreshJobs();
@@ -690,9 +695,9 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const now = Date.now();
     const lastFetch = fetchCache.current.get(jobId) || 0;
 
-    // 1. Hard throttle: Even if forced, don't fetch more than once every 2 seconds
-    if (now - lastFetch < 2000) {
-      console.log(`[JobContext] ⏹️ getJobWithFullDetails hard throttled for ${jobId}`);
+    // 1. Hard throttle: Reduced to 500ms for responsiveness during debug
+    if (now - lastFetch < 500) {
+      console.log(`[JobContext] ⏹️ getJobWithFullDetails throttled for ${jobId}`);
       return jobs.find(j => j.id === jobId) || null;
     }
 

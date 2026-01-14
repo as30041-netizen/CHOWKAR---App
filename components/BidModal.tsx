@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, XCircle, LayoutGrid, IndianRupee } from 'lucide-react';
 import { useUser } from '../contexts/UserContextDB';
+import { useWallet } from '../contexts/WalletContext';
 import { useJobs } from '../contexts/JobContextDB';
 import { Bid, UserRole } from '../types';
 import { enhanceBidMessageStream } from '../services/geminiService';
@@ -20,9 +21,9 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
         t: contextT,
         checkFreeLimit: contextCheckFreeLimit,
         incrementAiUsage: contextIncrementAiUsage,
-        language: contextLanguage,
-        addNotification: contextAddNotification
+        language: contextLanguage
     } = useUser();
+    const { walletBalance, refreshWallet } = useWallet();
     const { jobs, addBid } = useJobs();
 
     const [bidAmount, setBidAmount] = useState('');
@@ -113,6 +114,17 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
         const currentJob = jobs.find(j => j.id === jobId);
         if (!currentJob) return;
 
+        // VALIDATION 0: Check Wallet Balance
+        if (walletBalance < 1) {
+            showAlert(
+                contextLanguage === 'en'
+                    ? 'Insufficient coins to place a bid. Cost: 1 Coin.'
+                    : 'बोली लगाने के लिए अपर्याप्त सिक्के। लागत: 1 सिक्का।',
+                'error'
+            );
+            return;
+        }
+
         // VALIDATION 1: Check for duplicate bid (using fresh API check)
         if (existingBid) {
             showAlert(
@@ -168,6 +180,8 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
 
             onSuccess();
             onClose();
+            // Refresh wallet to visually deduct the coin
+            refreshWallet();
             // Reset state
             setBidAmount('');
             setBidMessage('');
@@ -176,8 +190,7 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
             const msg = err.message || '';
             if (msg.includes('Job is closed') || msg.includes('no longer accepting')) {
                 showAlert(contextLanguage === 'en' ? 'Job is closed or no longer accepting bids.' : 'यह जॉब बंद हो गया है।', 'error');
-            } else {
-                showAlert('Failed to place bid. Please try again.', 'error');
+                showAlert(msg, 'error');
             }
         }
     };
@@ -253,17 +266,21 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
                             <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">{bidMessage.length}/500</span>
                         </div>
                     </div>
-                    <div className="bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100/50 dark:border-blue-900/30 p-4 rounded-2xl">
-                        <p className="text-[11px] font-bold text-blue-700/80 dark:text-blue-400/80 leading-relaxed">
+                    <div className="bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100/50 dark:border-blue-900/30 p-4 rounded-2xl flex justify-between items-center">
+                        <p className="text-[11px] font-bold text-blue-700/80 dark:text-blue-400/80 leading-relaxed max-w-[70%]">
                             {contextLanguage === 'en'
-                                ? `Bidding is 100% FREE! Once your bid is accepted, you can connect with the employer directly via chat.`
-                                : `बोली लगाना 100% मुफ्त है! जब आपकी बोली स्वीकार हो जाएगी, आप सीधे नियोक्ता से चैट के माध्यम से जुड़ सकते हैं।`}
+                                ? `Bidding costs 1 Coin. Once accepted, you can chat directly.`
+                                : `बोली लगाने की लागत 1 सिक्का है। स्वीकार होने पर आप चैट कर सकते हैं।`}
                         </p>
+                        <div className={`text-xs font-black px-3 py-1.5 rounded-lg border flex items-center gap-1 ${walletBalance < 1 ? 'bg-red-50 text-red-600 border-red-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
+                            <span>🪙</span>
+                            <span>{walletBalance}</span>
+                        </div>
                     </div>
 
                     <button
                         onClick={handlePlaceBid}
-                        disabled={!!existingBid}
+                        disabled={!!existingBid || walletBalance < 1}
                         className={`btn w-full mt-4 !py-5 !rounded-2xl font-black uppercase tracking-[0.2em] transition-all text-sm shadow-xl ${existingBid
                             ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
                             : 'btn-primary shadow-emerald-500/20 hover:shadow-emerald-500/40 hover:-translate-y-1 active:scale-95'

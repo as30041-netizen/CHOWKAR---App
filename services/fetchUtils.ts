@@ -38,6 +38,9 @@ export const safeFetch = async (
                 token = (await getAccessToken()) || null;
             }
 
+            // Fallback to ANON key ONLY if token is explicitly null (i.e., truly unauthenticated)
+            // But if we are calling an authenticated endpoint, this might still fail.
+            // For now, consistent behavior: use token if exists, else Anon Key.
             const finalToken = token || import.meta.env.VITE_SUPABASE_ANON_KEY;
 
             // Cast to any to allow indexed access since HeadersInit is strict
@@ -116,4 +119,48 @@ export const ensureSession = async (): Promise<string | null> => {
     const { data: { session }, error } = await supabase.auth.getSession();
     if (error || !session) return null;
     return session.access_token;
+};
+
+/**
+ * Safe wrapper for Supabase RPC calls with timeout and automatic token handling.
+ */
+export const safeRPC = async <T = any>(
+    functionName: string,
+    params: Record<string, any> = {},
+    options: SafeFetchOptions = {}
+): Promise<{ data: T | null; error: any }> => {
+    try {
+        const { timeout = DEFAULT_TIMEOUT_MS } = options;
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+        // Construct RPC URL
+        const rpcUrl = `${supabaseUrl}/rest/v1/rpc/${functionName}`;
+
+        const response = await safeFetch(rpcUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation' // Standard Supabase RPC header
+            },
+            body: JSON.stringify(params),
+            timeout
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            let errorJson;
+            try { errorJson = JSON.parse(errorText); } catch { errorJson = { message: errorText }; }
+            return { data: null, error: errorJson };
+        }
+
+        // Handle void returns (204 No Content)
+        if (response.status === 204) {
+            return { data: null, error: null };
+        }
+
+        const data = await response.json();
+        return { data, error: null };
+    } catch (error: any) {
+        return { data: null, error };
+    }
 };

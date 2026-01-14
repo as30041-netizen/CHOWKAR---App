@@ -1,7 +1,12 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect, Suspense, lazy, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { UserProvider, useUser } from './contexts/UserContextDB';
+import { NotificationProvider, useNotification } from './contexts/NotificationContext';
 import { JobProvider, useJobs } from './contexts/JobContextDB';
+import { WalletProvider, useWallet } from './contexts/WalletContext';
+import { ThemeProvider } from './contexts/ThemeContext';
+import { LanguageProvider } from './contexts/LanguageContext';
+import { ToastProvider } from './contexts/ToastContext';
 import { ChatMessage, Coordinates, Job, JobStatus, UserRole } from './types';
 import {
   MapPin, UserCircle, ArrowLeftRight, Bell, MessageCircle, Languages, Loader2
@@ -13,7 +18,9 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 const Home = lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
 const Profile = lazy(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
 const PostJob = lazy(() => import('./pages/PostJob').then(m => ({ default: m.PostJob })));
+
 const Analytics = lazy(() => import('./pages/Analytics').then(m => ({ default: m.Analytics })));
+const WalletPage = lazy(() => import('./pages/WalletPage').then(m => ({ default: m.WalletPage })));
 
 // --- Lazy loaded Components ---
 const Confetti = lazy(() => import('./components/Confetti').then(m => ({ default: m.Confetti })));
@@ -37,6 +44,8 @@ import { BottomNav } from './components/BottomNav';
 // Services
 import { signInWithGoogle } from './services/authService';
 import { useDeepLinkHandler } from './hooks/useDeepLinkHandler';
+import { useJobActions } from './hooks/useJobActions';
+import { useChatHandlers } from './hooks/useChatHandlers';
 import { cancelJob } from './services/jobService';
 import { setupPushListeners, removePushListeners, isPushSupported } from './services/pushService';
 import { handleNotificationNavigation, parseNotificationData } from './services/notificationNavigationService';
@@ -47,15 +56,67 @@ const AppContent: React.FC = () => {
   const {
     user, setUser, role, setRole, language, setLanguage, isLoggedIn, setIsLoggedIn, isAuthLoading,
     loadingMessage, retryAuth,
-    notifications, messages, setMessages,
-    addNotification, logout, t,
+    logout, t,
     showSubscriptionModal, setShowSubscriptionModal,
-    showAlert, currentAlert, updateUserInDB, refreshUser, setActiveChatId,
-    markNotificationsAsReadForJob, setActiveJobId, deleteNotification, clearNotificationsForJob,
+    showAlert, currentAlert, updateUserInDB, refreshUser,
     showEditProfile, setShowEditProfile
   } = useUser();
 
-  const { jobs, updateJob, deleteJob, updateBid, getJobWithFullDetails, refreshJobs } = useJobs();
+  const {
+    notifications,
+    addNotification,
+    setActiveChatId,
+    setActiveJobId,
+    markNotificationsAsReadForJob,
+    deleteNotification,
+    clearNotificationsForJob
+  } = useNotification();
+
+  const { walletBalance, refreshWallet } = useWallet();
+  const { completeJob, cancelJob, withdrawBid, replyToCounter, editJobLink } = useJobActions();
+
+
+  const { jobs, updateJob, deleteJob, updateBid, getJobWithFullDetails, refreshJobs, loading } = useJobs();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // --- Deep Linking Logic ---
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const linkedJobId = params.get('jobId');
+    const linkedAction = params.get('action'); // 'view', 'bid', 'chat'
+
+    if (linkedJobId && !loading && jobs.length > 0) {
+      console.log('[DeepLink] Found jobId in URL:', linkedJobId, linkedAction);
+
+      const processLink = async () => {
+        // 1. Try finding in current feed
+        let job = jobs.find(j => j.id === linkedJobId);
+
+        // 2. If not found, fetch it specifically
+        if (!job) {
+          console.log('[DeepLink] Job not in feed, fetching...', linkedJobId);
+          job = await getJobWithFullDetails(linkedJobId, true);
+        }
+
+        if (job) {
+          // Remove param from URL without reload
+          window.history.replaceState({}, '', window.location.pathname);
+
+          // Open appropriate modal
+          if (linkedAction === 'chat') {
+            handleChatOpen(job);
+          } else if (linkedAction === 'bid') {
+            setBidModalOpen({ isOpen: true, jobId: job.id });
+          } else {
+            setSelectedJob(job);
+          }
+        }
+      };
+
+      processLink();
+    }
+  }, [location.search, loading, jobs.length]);
 
   // Handle deep links for OAuth callback
   useDeepLinkHandler(() => {
@@ -76,9 +137,15 @@ const AppContent: React.FC = () => {
   const [showChatList, setShowChatList] = useState(false);
   const [showFilterModal, setShowFilterModal] = useState(false); // Used in Home Page
 
+  const {
+    chatState, openChat, closeChat,
+    sendMessage, updateMessage,
+    editMessage, deleteMessage, translateMessage
+  } = useChatHandlers(setShowEditProfile, setShowChatList);
+
   // --- Global Modals State ---
-  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
-  const [chatOpen, setChatOpen] = useState<{ isOpen: boolean; job: Job | null; receiverId?: string }>({ isOpen: false, job: null });
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null); // Modal & UI State
+  // const [chatOpen, setChatOpen] = useState<{ isOpen: boolean, job: Job | null, receiverId?: string }>({ isOpen: false, job: null }); // REPLACED BY HOOK
   const [bidModalOpen, setBidModalOpen] = useState<{ isOpen: boolean; jobId: string | null }>({ isOpen: false, jobId: null });
   const [reviewModalData, setReviewModalData] = useState<{ isOpen: boolean, revieweeId: string, revieweeName: string, jobId: string } | null>(null);
   const [viewBidsModal, setViewBidsModal] = useState<{ isOpen: boolean; job: Job | null }>({ isOpen: false, job: null });
@@ -87,10 +154,6 @@ const AppContent: React.FC = () => {
   const [profileModal, setProfileModal] = useState<{ isOpen: boolean; userId: string; userName?: string }>({ isOpen: false, userId: '' });
 
   // --- UI State ---
-
-  // Update: I will just use `useNavigate` to go to ` / post` with state.
-  const navigate = useNavigate();
-  const location = useLocation();
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   // Check onboarding status
@@ -184,7 +247,7 @@ const AppContent: React.FC = () => {
           getJobWithFullDetails(id, true);
           break;
         case 'chat':
-          setChatOpen({ isOpen: true, job });
+          openChat(job);
           setActiveChatId(id);
           getJobWithFullDetails(id, true);
           break;
@@ -270,7 +333,7 @@ const AppContent: React.FC = () => {
 
   // Close chat on navigation to prevent stuck active state
   useEffect(() => {
-    setChatOpen({ isOpen: false, job: null });
+    closeChat();
     setActiveChatId(null);
     setActiveJobId(null);
   }, [location.pathname]);
@@ -291,372 +354,76 @@ const AppContent: React.FC = () => {
     }
   }, [selectedJob?.id]);
 
-  const handleLogout = async () => { await logout(); };
-
-  const handleChatOpen = async (job: Job, receiverId?: string) => {
-    // 0. CHECK PROFILE COMPLETION (Source of Truth)
+  // --- Memoized Handlers for Performance ---
+  const handleOnBid = useCallback((id: string) => {
     if (!user.phone || !user.location || user.location === 'Not set') {
       setShowEditProfile(true);
       showAlert(language === 'en'
-        ? 'Please complete your profile (Phone & Location) to start chatting.'
-        : 'चैटिंग शुरू करने के लिए कृपया अपनी प्रोफ़ाइल (फ़ोन और स्थान) पूरी करें।', 'info');
+        ? 'Please complete your profile (Phone & Location) before bidding.'
+        : 'बोली लगाने से पहले कृपया अपनी प्रोफ़ाइल (फ़ोन और स्थान) पूरी करें।', 'info');
       return;
     }
+    setBidModalOpen({ isOpen: true, jobId: id });
+  }, [user.phone, user.location, language, showAlert, setShowEditProfile]);
 
-    // 1. SURGICAL LOADING: If this job came from a lightweight feed (no bids), fetch full details
-    let jobWithBids = job;
-    if (job.bids.length === 0 || (job.acceptedBidId && !job.bids.find(b => b.id === job.acceptedBidId))) {
-      const fetched = await getJobWithFullDetails(job.id);
-      if (fetched) jobWithBids = fetched;
-    }
-
-    // 2. CHECK STATUS
-    const isHired = jobWithBids.status === JobStatus.IN_PROGRESS || jobWithBids.status === JobStatus.COMPLETED;
-    const acceptedBid = jobWithBids.bids.find(b => b.id === jobWithBids.acceptedBidId);
-
-    // VALIDATE: Chat only for IN_PROGRESS or COMPLETED jobs
-    if (!isHired) {
-      showAlert(language === 'en'
-        ? 'Chat is only available after you hire a worker'
-        : 'चैट केवल कामगार को नियुक्त करने के बाद ही उपलब्ध है', 'info');
-      return;
-    }
-
-    // 3. VALIDATE PARTICIPANT: Only poster or accepted worker can chat
-    const isParticipant = user.id === jobWithBids.posterId || user.id === acceptedBid?.workerId;
-
-    if (!isParticipant) {
-      showAlert(language === 'en'
-        ? 'You are not a participant in this job'
-        : 'आप इस जॉब में भागीदार नहीं हैं', 'error');
-      return;
-    }
-
-    // Open chat immediately - no payment required
-    setChatOpen({ isOpen: true, job: jobWithBids, receiverId });
-    setActiveChatId(jobWithBids.id);
-    setActiveJobId(jobWithBids.id);
-    markNotificationsAsReadForJob(jobWithBids.id);
-    setShowChatList(false);
-  };
-
-  const handleMessageUpdate = (updatedMsg: ChatMessage) => {
-    setMessages(prev => prev.map(m => m.id === updatedMsg.id ? updatedMsg : m));
-  };
-
-  const handleSendMessage = async (text: string) => {
-    if (!chatOpen.job) return;
-
-    // Derive receiver ID
-    const job = chatOpen.job;
-    const isPoster = user.id === job.posterId;
-
-    let receiverId = chatOpen.receiverId;
-
-    if (!receiverId) {
-      // Fallback logic
-      const acceptedBid = job.bids?.find(b => b.id === job.acceptedBidId);
-      const agreedBid = job.bids?.find(b => b.negotiationHistory?.some((h: any) => h.agreed));
-
-      if (isPoster) {
-        receiverId = acceptedBid?.workerId || agreedBid?.workerId;
-      } else {
-        receiverId = job.posterId;
-      }
-    }
-
-    // Failsafe for Worker roles
-    if (!receiverId && !isPoster) {
-      receiverId = job.posterId;
-      console.log('[Chat] Using job.posterId as failsafe receiverId');
-    }
-
-    if (!receiverId) {
-      console.error('Cannot determine chat receiver', { isPoster, jobId: job.id });
-      showAlert('Could not find receiver. Please refresh.', 'error');
-      return;
-    }
-
-    const tempId = `temp_${Date.now()}_${Math.random()} `;
-    const msg: ChatMessage = {
-      id: tempId,
-      jobId: job.id,
-      senderId: user.id,
-      text,
-      timestamp: Date.now()
-    };
-
-    // Optimistic update
-    setMessages(prev => [...prev, msg]);
-
-    // Save to database
+  const handleOnViewBids = useCallback((j: Job) => {
+    console.log('[App] onViewBids handler called', j.id);
     try {
-      const { data, error } = await waitForSupabase(async () => {
-        return await supabase
-          .from('chat_messages')
-          .insert({
-            job_id: msg.jobId,
-            sender_id: msg.senderId,
-            receiver_id: receiverId,
-            text: msg.text
-          })
-          .select()
-          .single();
-      });
-
-      if (error) {
-        console.error('Failed to save message:', error);
-        setMessages(prev => prev.filter(m => m.id !== tempId));
-      } else if (data) {
-        setMessages(prev => prev.map(m =>
-          m.id === tempId
-            ? { ...m, id: data.id, timestamp: new Date(data.created_at).getTime() }
-            : m
-        ));
-      }
+      setViewBidsModal({ isOpen: true, job: j });
+      getJobWithFullDetails(j.id, true);
     } catch (err) {
-      console.error('Error sending message:', err);
-      setMessages(prev => prev.filter(m => m.id !== tempId));
+      console.error('[App] Error in onViewBids handler', err);
     }
+  }, [getJobWithFullDetails]);
+
+  const handleCardClick = useCallback((j: Job) => {
+    setSelectedJob(j);
+    getJobWithFullDetails(j.id, true); // Proactively fetch latest
+  }, [getJobWithFullDetails]);
+
+  const handleLogout = async () => { await logout(); };
+
+  // --- Handlers Replaced by Hooks ---
+  // handleChatOpen, handleSendMessage, etc. are now in useChatHandlers
+  const handleMessageUpdate = (updatedMsg: ChatMessage) => {
+    updateMessage(updatedMsg);
   };
+
+  // Kept for prop drilling
+  const handleChatOpen = (job: Job, receiverId?: string) => openChat(job, receiverId);
 
   const handleCompleteJob = async (job?: Job) => {
-    // Allow passing job explicitly (from JobDetailsModal) or use chatOpen.job (from ChatInterface)
-    const currentJob = job || chatOpen.job;
-    if (!currentJob) {
-      console.error('[App] handleCompleteJob: No job provided');
-      return;
-    }
+    const currentJob = job || selectedJob;
+    if (!currentJob) return;
 
-    try {
-      console.log('[App] Marking job as completed:', currentJob.id);
-      const updatedJob = { ...currentJob, status: JobStatus.COMPLETED };
+    if (!confirm(t.completeJobPrompt)) return;
 
-      // Update DB and wait for response
-      await updateJob(updatedJob);
+    const success = await completeJob(currentJob, (reviewData) => {
+      setReviewModalData(reviewData);
+    });
 
-      // Prompt for review if there's an accepted worker
-      const acceptedBid = currentJob.bids.find(b => b.id === currentJob.acceptedBidId);
-      if (acceptedBid) {
-        setReviewModalData({
-          isOpen: true,
-          revieweeId: acceptedBid.workerId,
-          revieweeName: acceptedBid.workerName,
-          jobId: currentJob.id
-        });
-
-        try {
-          // DB trigger on Job Completion will handle this
-          // await addNotification(acceptedBid.workerId, "Job Completed", `Job "${currentJob.title}" marked as completed!`, 'SUCCESS', currentJob.id);
-        } catch (notifErr) {
-          console.warn('[App] Failed to send completion notification:', notifErr);
-        }
-      }
-
-      setChatOpen({ isOpen: false, job: null });
+    if (success) {
+      closeChat();
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), 3000);
-      showAlert(t.jobCompletedAlert, 'success');
-    } catch (err: any) {
-      console.error('[App] Error in handleCompleteJob:', err);
-      showAlert(`${t.jobCompletionError}: ${err.message || 'Unknown error'}`, 'error');
-    }
-  };
-
-  const handleTranslateMessage = async (messageId: string, text: string) => {
-    try {
-      const { translateText } = await import('./services/geminiService');
-      const translated = await translateText(text, language === 'en' ? 'hi' : 'en');
-      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, translatedText: translated } : m));
-    } catch (err) {
-      console.error('Translation error:', err);
     }
   };
 
   const handleWorkerReplyToCounter = async (jobId: string, bidId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', amount?: number) => {
-    let job = jobs.find(j => j.id === jobId);
-
-    // Robost Fetch: If job not loaded, fetch it
-    if (!job) {
-      try {
-        const fetched = await getJobWithFullDetails(jobId, true);
-        if (fetched) job = fetched;
-      } catch (e) {
-        console.error("Failed to fetch job for reply", e);
-      }
-    }
-
-    if (!job) {
-      showAlert(t.jobNotFound || "Job not found", 'error');
-      return;
-    }
-
-    try {
-      let bid = job.bids.find(b => b.id === bidId);
-
-      // Robust Fetch: If bid not loaded (e.g. valid job but unloaded bids), reload job
-      if (!bid) {
-        const fetched = await getJobWithFullDetails(jobId, true);
-        if (fetched) {
-          job = fetched;
-          bid = fetched.bids.find(b => b.id === bidId);
-        }
-      }
-
-      if (!bid) {
-        showAlert(t.bidNotFound || "Bid not found", 'error');
-        return;
-      }
-
-      if (action === 'ACCEPT') {
-        // NEW FLOW: Worker AGREES to poster's terms, but Poster must Finalize
-        // This prevents the job from immediately moving to IN_PROGRESS without poster's final check
-
-        const updatedBid = {
-          ...bid,
-          status: 'PENDING' as const,
-          negotiationHistory: [...(bid.negotiationHistory || []), {
-            amount: bid.amount,
-            by: UserRole.WORKER,
-            timestamp: Date.now(),
-            agreed: true
-          }]
-        };
-
-        await updateBid(updatedBid);
-
-        // Notify Poster (DB trigger will also likely fire when bid is updated)
-        showAlert(t.waitingForPosterFinalize || "Offer accepted! Waiting for Employer to finalize.", 'success');
-
-      } else if (action === 'REJECT') {
-        // Confirmation dialog
-        if (!confirm(t.declineCounterPrompt)) return;
-
-        const updatedJob = { ...job, bids: job.bids.filter(b => b.id !== bidId) };
-        await updateJob(updatedJob);
-        // DB triggers on bids table will handle notifications
-        // await addNotification(job.posterId, "Offer Declined", `${bid.workerName} declined your offer for "${job.title}". You can try other workers!`, "WARNING", jobId);
-        // Note: addNotification now handles push automatically
-
-        showAlert(t.counterDeclined, 'info');
-
-      } else if (action === 'COUNTER' && amount) {
-        const updatedBid = { ...bid, amount, negotiationHistory: [...(bid.negotiationHistory || []), { amount, by: UserRole.WORKER, timestamp: Date.now() }] };
-        await updateBid(updatedBid);
-        // DB triggers on bids table will handle notifications
-        // await addNotification(job.posterId, "New Counter Offer 💰", `${bid.workerName} proposed ₹${amount} for "${job.title}". Tap to respond!`, "INFO", jobId);
-        // Note: addNotification now handles push automatically
-      }
-    } catch (err: any) {
-      console.error('[WorkerReply] Error:', err);
-      showAlert(`${t.genericError}${err.message || 'Unknown error'}`, 'error');
-    }
+    await replyToCounter(jobId, bidId, action, amount);
   };
 
   const handleWithdrawBid = async (jobId: string, bidId: string) => {
-    if (!confirm(t.withdrawBidPrompt)) return;
-    try {
-      const job = jobs.find(j => j.id === jobId); if (!job) return;
-      const bid = job.bids.find(b => b.id === bidId);
-      if (!bid) return;
-
-      // Persist withdrawal to DB by marking as REJECTED (using RPC for safety)
-      const { safeRPC } = await import('./lib/supabase');
-      const { data, error } = await safeRPC('withdraw_from_job', { p_job_id: jobId, p_bid_id: bidId });
-
-      if (error || (data && !data.success)) {
-        throw new Error(error?.message || data?.error || 'Failed to withdraw bid');
-      }
-
-      // Local update (Optimistic)
-      const updatedJob = { ...job, bids: job.bids.filter(b => b.id !== bidId) };
-      await updateJob(updatedJob);
-
-      // Notify poster that worker withdrew their bid
-      // DB trigger for bid withdrawal (rejection/deletion) should handle this
-      /*
-      if (bid) {
-        await addNotification(
-          job.posterId,
-          "Bid Update",
-          `${bid.workerName} is no longer available for "${job.title}". Check other bids!`,
-          "INFO",
-          jobId
-        );
-      }
-      */  // Note: addNotification now handles push automatically
-
-      showAlert(t.bidWithdrawn, 'info');
-    } catch { showAlert(t.withdrawBidError, 'error'); }
+    await withdrawBid(jobId, bidId);
   };
 
   const handleEditJobLink = async (job: Job) => {
-    // Normal Edit Logic
-    if (job.bids.length > 0) {
-      showAlert(t.alertCantEdit, 'error');
-      return;
-    }
-    // Navigate to post page with state to potentially populate it
-    navigate('/post', { state: { jobToEdit: job } });
+    editJobLink(job);
   };
 
   const handleCancelJob = async (jobId: string) => {
-    try {
-      setSelectedJob(null); // Close modal immediately
-
-      const result = await cancelJob(jobId);
-
-      if (result.success) {
-        showAlert(t.jobCancelledRefunded || 'Job cancelled successfully.', 'success');
-        // Refresh jobs to update the UI
-        await refreshJobs(user.id);
-      } else {
-        showAlert(result.error || 'Failed to cancel job', 'error');
-      }
-    } catch (error: any) {
-      console.error('[App] Cancel job error:', error);
-      showAlert(`${t.cancellationError || 'Error during cancellation'}: ${error.message || 'Unknown error'}`, 'error');
-    }
-  };
-
-  const handleEditMessage = async (messageId: string, newText: string) => {
-    try {
-      const result = await editMessage(messageId, newText);
-      if (result.success) {
-        setMessages(prev => prev.map(m =>
-          m.id === messageId
-            ? { ...m, text: newText }
-            : m
-        ));
-      } else {
-        showAlert('Failed to edit message', 'error');
-      }
-    } catch (error) {
-      console.error('Error editing message:', error);
-      showAlert('Error editing message', 'error');
-    }
-  };
-
-  const handleDeleteMessage = async (messageId: string) => {
-    try {
-      // Use service function for direct update (triggering Realtime UPDATE event)
-      // The RPC 'soft_delete_chat_message' currently performs a HARD DELETE which breaks sync
-      const { deleteMessage } = await import('./services/chatService');
-      const result = await deleteMessage(messageId);
-
-      if (result.success) {
-        // Optimistic UI update
-        setMessages(prev => prev.map(m =>
-          m.id === messageId
-            ? { ...m, text: 'This message was deleted', translatedText: undefined, isDeleted: true }
-            : m
-        ));
-      } else {
-        console.error('Failed to delete message:', result.error);
-      }
-    } catch (error) {
-      console.error('Error deleting message:', error);
-    }
+    setSelectedJob(null);
+    await cancelJob(jobId);
   };
 
 
@@ -755,6 +522,14 @@ const AppContent: React.FC = () => {
           </nav>
 
           <div className="flex items-center gap-4">
+            {/* Wallet Balance Badge (Clickable) */}
+            <button
+              onClick={() => navigate('/wallet')}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 rounded-xl border border-amber-100 dark:border-amber-800/30 text-xs font-bold shadow-sm hover:scale-105 active:scale-95 transition-all cursor-pointer"
+            >
+              <span className="text-sm">🪙</span>
+              <span>{walletBalance}</span>
+            </button>
             <button
               onClick={() => setLanguage(l => l === 'en' ? 'hi' : 'en')}
               className="px-4 py-2 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-widest border border-emerald-100 dark:border-emerald-800/50 rounded-xl bg-emerald-50/50 dark:bg-emerald-900/20 hover:scale-105 transition-all flex items-center gap-2 shadow-sm"
@@ -811,31 +586,11 @@ const AppContent: React.FC = () => {
         }>
           <Routes>
             <Route path="/" element={<Home
-              onBid={(id) => {
-                if (!user.phone || !user.location || user.location === 'Not set') {
-                  setShowEditProfile(true);
-                  showAlert(language === 'en'
-                    ? 'Please complete your profile (Phone & Location) before bidding.'
-                    : 'बोली लगाने से पहले कृपया अपनी प्रोफ़ाइल (फ़ोन और स्थान) पूरी करें।', 'info');
-                  return;
-                }
-                setBidModalOpen({ isOpen: true, jobId: id });
-              }}
-              onViewBids={(j) => {
-                console.log('[App] onViewBids handler called', j.id);
-                try {
-                  setViewBidsModal({ isOpen: true, job: j });
-                  getJobWithFullDetails(j.id, true);
-                } catch (err) {
-                  console.error('[App] Error in onViewBids handler', err);
-                }
-              }}
+              onBid={handleOnBid}
+              onViewBids={handleOnViewBids}
               onChat={handleChatOpen}
               onEdit={handleEditJobLink}
-              onClick={(j) => {
-                setSelectedJob(j);
-                getJobWithFullDetails(j.id, true); // Proactively fetch latest
-              }}
+              onClick={handleCardClick}
               onReplyToCounter={handleWorkerReplyToCounter}
               onWithdrawBid={handleWithdrawBid}
               setShowFilterModal={setShowFilterModal}
@@ -844,6 +599,7 @@ const AppContent: React.FC = () => {
             <Route path="/profile" element={<Profile setShowSubscriptionModal={setShowSubscriptionModal} onLogout={handleLogout} />} />
             <Route path="/post" element={<PostJob />} />
             <Route path="/analytics" element={<Analytics />} />
+            <Route path="/wallet" element={<WalletPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
@@ -1021,47 +777,51 @@ const AppContent: React.FC = () => {
           onClose={() => setReviewModalData(null)}
           onSubmit={async (rating, comment) => {
             if (!reviewModalData) return;
-            try {
-              const { error } = await supabase.from('reviews').insert({
-                reviewer_id: user.id,
-                reviewee_id: reviewModalData.revieweeId,
-                job_id: reviewModalData.jobId,
-                rating,
-                comment,
-                tags: null
-              });
-              if (error) throw error;
-              await addNotification(reviewModalData.revieweeId, "New Review", `You received a ${rating} star review!`, "SUCCESS");
+
+            // Refactored to use reviewService for safety
+            const { submitReview } = await import('./services/reviewService');
+            const { success, error } = await submitReview(
+              user.id,
+              reviewModalData.revieweeId,
+              reviewModalData.jobId,
+              rating,
+              comment
+            );
+
+            if (success) {
+              // Determine user language for notification
+              const msg = language === 'en'
+                ? `You received a ${rating} star review!`
+                : `आपको ${rating} स्टार की समीक्षा मिली!`;
+
+              await addNotification(reviewModalData.revieweeId, "New Review", msg, "SUCCESS");
               setReviewModalData(null);
               showAlert(t.reviewSubmitted, 'success');
-            } catch { showAlert('Failed to submit review', 'error'); }
+            } else {
+              showAlert(error || 'Failed to submit review', 'error');
+            }
           }}
           revieweeName={reviewModalData?.revieweeName || ''}
         />
 
-        {chatOpen.isOpen && chatOpen.job && (
-          <ChatInterface
-            job={chatOpen.job}
-            currentUser={user}
-            onClose={() => { setChatOpen({ isOpen: false, job: null }); setActiveChatId(null); setActiveJobId(null); }}
-            onBackToMessages={() => {
-              setChatOpen({ isOpen: false, job: null });
-              setActiveChatId(null);
-              setActiveJobId(null);
-              setShowChatList(true); // Reopen Messages panel
-            }}
-            messages={messages.filter(m => m.jobId === chatOpen.job?.id)}
-            onSendMessage={handleSendMessage}
-            onCompleteJob={handleCompleteJob}
-            onTranslateMessage={handleTranslateMessage}
-            onDeleteMessage={handleDeleteMessage}
-            onEditMessage={handleEditMessage}
-            onIncomingMessage={(msg) => setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])}
-            onMessageUpdate={handleMessageUpdate}
-            receiverId={chatOpen.receiverId}
-            isPremium={user.isPremium}
-            remainingTries={user.isPremium ? 999 : (2 - (user.aiUsageCount || 0))}
-          />
+        {/* Chat Interface */}
+        {chatState.isOpen && chatState.job && (
+          <Suspense fallback={null}>
+            <ChatInterface
+              jobId={chatState.job.id}
+              onClose={closeChat}
+              onSendMessage={sendMessage}
+
+              currentUser={user}
+              onTranslateMessage={translateMessage}
+              onCompleteJob={(job) => completeJob(job, setReviewModalData)}
+              onEditMessage={editMessage}
+              onDeleteMessage={deleteMessage}
+              receiverId={chatState.receiverId}
+              isPremium={user.isPremium}
+              remainingTries={user.isPremium ? 999 : (2 - (user.aiUsageCount || 0))}
+            />
+          </Suspense>
         )}
 
         <OnboardingModal
@@ -1096,11 +856,21 @@ export const App: React.FC = () => {
   return (
     <ErrorBoundary>
       <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <UserProvider>
-          <JobProvider>
-            <AppContent />
-          </JobProvider>
-        </UserProvider>
+        <LanguageProvider>
+          <ToastProvider>
+            <UserProvider>
+              <WalletProvider>
+                <NotificationProvider>
+                  <JobProvider>
+                    <ThemeProvider>
+                      <AppContent />
+                    </ThemeProvider>
+                  </JobProvider>
+                </NotificationProvider>
+              </WalletProvider>
+            </UserProvider>
+          </ToastProvider>
+        </LanguageProvider>
       </Router>
     </ErrorBoundary>
   );

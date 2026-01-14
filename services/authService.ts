@@ -396,3 +396,23 @@ export const incrementAIUsage = async (
 };
 
 
+
+// Permanent Account Deletion
+export const deleteAccount = async (): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { safeRPC } = await import('./fetchUtils');
+    const { error } = await safeRPC('delete_own_account', {});
+
+    if (error) {
+      console.error('[AuthService] Delete Account RPC failed:', error);
+      return { success: false, error: error.message };
+    }
+
+    // Force sign out to clear session
+    await signOut();
+    return { success: true };
+  } catch (error: any) {
+    console.error('[AuthService] Error deleting account:', error);
+    return { success: false, error: error.message || 'Failed to delete account' };
+  }
+};
