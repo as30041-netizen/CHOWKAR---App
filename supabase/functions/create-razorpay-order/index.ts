@@ -6,16 +6,26 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
+    console.log('[Order] Request received:', req.method);
+
     // Handle CORS preflight requests
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
+        // Add 30-second timeout to handle slow Razorpay responses or cold starts
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Edge Function call timed out after 30 seconds')), 30000)
+        );
     }
 
     try {
-        const { amount, currency, receipt, userId, coins } = await req.json()
+        const body = await req.json();
+        const { amount, currency, receipt, userId, coins, type } = body;
+
+        console.log('[Order] Creating order for:', { userId, amount, coins, type });
 
         // Validate inputs
         if (!amount || !currency) {
+            console.error('[Order] Missing required fields:', { amount, currency });
             throw new Error('Missing required fields: amount or currency')
         }
 
@@ -23,6 +33,7 @@ serve(async (req) => {
         const RAZORPAY_KEY_SECRET = Deno.env.get('RAZORPAY_KEY_SECRET')
 
         if (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET) {
+            console.error('[Order] Server misconfiguration: Razorpay keys not found in Env');
             throw new Error('Server misconfiguration: Razorpay keys not found')
         }
 
@@ -30,6 +41,7 @@ serve(async (req) => {
         const authHeader = `Basic ${btoa(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`)}`
 
         // Call Razorpay API
+        console.log('[Order] Calling Razorpay API...');
         const response = await fetch('https://api.razorpay.com/v1/orders', {
             method: 'POST',
             headers: {
@@ -37,13 +49,14 @@ serve(async (req) => {
                 'Authorization': authHeader
             },
             body: JSON.stringify({
-                amount: amount * 100, // Razorpay expects amount in paise (sub-unit)
+                amount: Math.round(amount * 100), // Razorpay expects amount in paise
                 currency: currency,
                 receipt: receipt,
                 payment_capture: 1, // Auto-capture
                 notes: {
                     userId: userId,
-                    coins: coins // Pass coin count for webhook to credit
+                    coins: coins || 0,
+                    type: type || 'coins'
                 }
             })
         })
@@ -51,9 +64,12 @@ serve(async (req) => {
         const data = await response.json()
 
         if (!response.ok) {
-            console.error('Razorpay API Error:', data);
+            console.error('[Order] Razorpay API Error Status:', response.status);
+            console.error('[Order] Razorpay API Error Data:', data);
             throw new Error(data.error?.description || 'Failed to create Razorpay order')
         }
+
+        console.log('[Order] Successfully created:', data.id);
 
         // Return the Order ID and details to the client
         return new Response(
@@ -65,7 +81,7 @@ serve(async (req) => {
         )
 
     } catch (error) {
-        console.error('Edge Function Error:', error.message)
+        console.error('[Order] Edge Function Error:', error.message)
         return new Response(
             JSON.stringify({ error: error.message }),
             {
@@ -75,3 +91,4 @@ serve(async (req) => {
         )
     }
 })
+

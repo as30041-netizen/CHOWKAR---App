@@ -41,6 +41,10 @@ export const ReportUserModal: React.FC<ReportUserModalProps> = ({
     };
 
     const handleSubmit = async () => {
+        if (!reporterUserId || !reportedUserId) {
+            console.error('Missing user IDs for report');
+            return;
+        }
         setIsSubmitting(true);
         try {
             const { error } = await supabase

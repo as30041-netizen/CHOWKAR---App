@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, XCircle, LayoutGrid, IndianRupee } from 'lucide-react';
+import { ArrowLeft, XCircle, LayoutGrid, IndianRupee, Loader2 } from 'lucide-react';
 import { useUser } from '../contexts/UserContextDB';
 import { useWallet } from '../contexts/WalletContext';
 import { useJobs } from '../contexts/JobContextDB';
@@ -108,8 +108,11 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
         contextIncrementAiUsage();
     };
 
+    // Add local submitting state to prevent double clicks
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
     const handlePlaceBid = async () => {
-        if (!jobId || !bidAmount) return;
+        if (!jobId || !bidAmount || isSubmitting) return;
 
         const currentJob = jobs.find(j => j.id === jobId);
         if (!currentJob) return;
@@ -154,6 +157,8 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
             console.log(`[BidModal] Warning: Bid ₹${amount} exceeds budget ₹${currentJob.budget}`);
         }
 
+        setIsSubmitting(true);
+
         const newBid: Bid = {
             id: `b${Date.now()}`,
             jobId: currentJob.id,
@@ -174,7 +179,7 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
         };
 
         try {
-            const realBidId = await addBid(newBid);
+            await addBid(newBid);
 
             showAlert(contextT.alertBidPlaced, 'success');
 
@@ -190,8 +195,11 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
             const msg = err.message || '';
             if (msg.includes('Job is closed') || msg.includes('no longer accepting')) {
                 showAlert(contextLanguage === 'en' ? 'Job is closed or no longer accepting bids.' : 'यह जॉब बंद हो गया है।', 'error');
+            } else {
                 showAlert(msg, 'error');
             }
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -280,15 +288,16 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
 
                     <button
                         onClick={handlePlaceBid}
-                        disabled={!!existingBid || walletBalance < 1}
-                        className={`btn w-full mt-4 !py-5 !rounded-2xl font-black uppercase tracking-[0.2em] transition-all text-sm shadow-xl ${existingBid
+                        disabled={!!existingBid || walletBalance < 1 || isSubmitting}
+                        className={`btn w-full mt-4 !py-5 !rounded-2xl font-black uppercase tracking-[0.2em] transition-all text-sm shadow-xl flex items-center justify-center gap-2 ${existingBid
                             ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
                             : 'btn-primary shadow-emerald-500/20 hover:shadow-emerald-500/40 hover:-translate-y-1 active:scale-95'
-                            }`}
+                            } ${isSubmitting ? 'opacity-80 cursor-wait' : ''}`}
                     >
+                        {isSubmitting && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>}
                         {existingBid
                             ? (contextLanguage === 'en' ? 'Already Bid' : 'पहले से बोली लगाई')
-                            : contextT.sendBid
+                            : isSubmitting ? (contextLanguage === 'en' ? 'Sending...' : 'भेज रहा हूँ...') : contextT.sendBid
                         }
                     </button>
                 </div>

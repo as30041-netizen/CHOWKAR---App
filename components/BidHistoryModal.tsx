@@ -15,7 +15,7 @@ interface BidWithJob extends Bid {
 }
 
 export const BidHistoryModal: React.FC<BidHistoryModalProps> = ({ isOpen, onClose }) => {
-    const { user, t, language } = useUser();
+    const { user, t, language, showAlert } = useUser();
     const [bids, setBids] = useState<BidWithJob[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -26,6 +26,8 @@ export const BidHistoryModal: React.FC<BidHistoryModalProps> = ({ isOpen, onClos
     }, [isOpen]);
 
     const fetchBids = async () => {
+        if (!user.id) return; // Guard against zombie auth
+
         setLoading(true);
         try {
             const { data: bidsData, error: bidsError } = await supabase
@@ -60,8 +62,13 @@ export const BidHistoryModal: React.FC<BidHistoryModalProps> = ({ isOpen, onClos
             }));
 
             setBids(transformedBids);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error fetching bid history:', error);
+            showAlert(language === 'en'
+                ? 'Failed to load bid history. Please try again.'
+                : 'बोली इतिहास लोड करने में विफल। कृपया पुन: प्रयास करें।',
+                'error'
+            );
         } finally {
             setLoading(false);
         }

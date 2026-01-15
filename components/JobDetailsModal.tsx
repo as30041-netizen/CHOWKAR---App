@@ -66,7 +66,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
     const isParticipant = user.id === liveJob.posterId || isAcceptedWorker;
 
     const handleSubmitCounter = async () => {
-        if (!myBid || !onReplyToCounter || !counterAmount || isProcessing) return;
+        if (!user.id || !myBid || !onReplyToCounter || !counterAmount || isProcessing) return;
 
         const amount = parseInt(counterAmount);
         if (isNaN(amount) || amount <= 0) {

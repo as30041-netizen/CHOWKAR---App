@@ -4,6 +4,9 @@ import { useUser } from '../contexts/UserContextDB';
 import { Pencil, Crown, CheckCircle2, MapPin, Star, Award, Briefcase, LogOut, ChevronRight, Share2, ShieldCheck, Zap, ArrowLeft, TrendingUp } from 'lucide-react';
 import { REVIEW_TAGS_TRANSLATIONS } from '../constants';
 import { useNavigate } from 'react-router-dom';
+import { deleteAccount } from '../services/authService';
+import { useWallet } from '../contexts/WalletContext';
+import { Trash2, AlertTriangle, X, Wallet as WalletIcon, BrainCircuit } from 'lucide-react';
 
 interface ProfileProps {
     setShowSubscriptionModal: (show: boolean) => void;
@@ -13,7 +16,10 @@ interface ProfileProps {
 export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLogout }) => {
     const navigate = useNavigate();
     const { user, t, language, showAlert, setShowEditProfile } = useUser();
+    const { walletBalance } = useWallet();
     const [postedJobsCount, setPostedJobsCount] = useState(0);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     React.useEffect(() => {
         const fetchJobCount = async () => {
@@ -42,6 +48,24 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
         } else {
             navigator.clipboard.writeText(window.location.href);
             showAlert(language === 'en' ? 'Profile link copied!' : 'प्रोफ़ाइल लिंक कॉपी किया गया!', 'success');
+        }
+    };
+
+    const handleDeleteAccount = async () => {
+        setIsDeleting(true);
+        try {
+            const result = await deleteAccount();
+            if (result.success) {
+                showAlert(language === 'hi' ? 'आपका खाता सफलतापूर्वक हटा दिया गया है।' : 'Your account has been deleted successfully.', 'success');
+                onLogout();
+            } else {
+                showAlert(result.error || (language === 'hi' ? 'खाता हटाने में विफल।' : 'Failed to delete account.'), 'error');
+            }
+        } catch (error: any) {
+            showAlert(error.message || 'An error occurred', 'error');
+        } finally {
+            setIsDeleting(false);
+            setShowDeleteConfirm(false);
         }
     };
 
@@ -144,6 +168,68 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
                         <div className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">{stat.label}</div>
                     </div>
                 ))}
+            </div>
+
+            {/* Wallet & AI Quick Access */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Wallet Balance Card */}
+                <div
+                    onClick={() => navigate('/wallet')}
+                    className="bg-white dark:bg-gray-900 rounded-[3rem] p-8 border-4 border-amber-500/20 dark:border-amber-500/10 shadow-glass cursor-pointer hover:scale-[1.01] active:scale-95 transition-all group overflow-hidden relative"
+                >
+                    <div className="absolute -right-4 -top-4 w-32 h-32 bg-amber-50 dark:bg-amber-900/10 rounded-full blur-3xl group-hover:bg-amber-100 transition-colors" />
+                    <div className="relative z-10 flex items-center justify-between">
+                        <div className="flex items-center gap-5">
+                            <div className="p-4 bg-amber-50 dark:bg-amber-900/30 rounded-2xl text-amber-600 transition-transform group-hover:rotate-12">
+                                <WalletIcon size={28} strokeWidth={3} />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-black text-gray-900 dark:text-white leading-none mb-1">My Wallet</h3>
+                                <p className="text-2xl font-black text-amber-600 tracking-tight">{walletBalance} <span className="text-xs uppercase tracking-widest text-amber-400">Coins</span></p>
+                            </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                            <ChevronRight size={24} className="text-gray-300 group-hover:text-amber-500 group-hover:translate-x-1 transition-all" />
+                            <span className="text-[8px] font-black text-amber-500/50 uppercase tracking-widest">Add Money</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* AI usage Tracker Card */}
+                <div
+                    className="bg-white dark:bg-gray-900 rounded-[3rem] p-8 border-4 border-indigo-500/20 dark:border-indigo-500/10 shadow-glass transition-all group overflow-hidden relative"
+                >
+                    <div className="absolute -right-4 -top-4 w-32 h-32 bg-indigo-50 dark:bg-indigo-900/10 rounded-full blur-3xl" />
+                    <div className="relative z-10 flex items-center justify-between">
+                        <div className="flex items-center gap-5">
+                            <div className="p-4 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl text-indigo-600">
+                                <BrainCircuit size={28} strokeWidth={3} />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-black text-gray-900 dark:text-white leading-none mb-1">AI Usage</h3>
+                                <div className="flex items-center gap-2">
+                                    <div className="h-2 w-24 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-indigo-500 rounded-full transition-all duration-1000"
+                                            style={{ width: `${Math.min(100, (user.aiUsageCount || 0) * 10)}%` }}
+                                        />
+                                    </div>
+                                    <span className="text-xs font-black text-indigo-600">{user.aiUsageCount || 0}/10</span>
+                                </div>
+                            </div>
+                        </div>
+                        {user.aiUsageCount >= 10 && !user.isPremium ? (
+                            <button
+                                onClick={() => setShowSubscriptionModal(true)}
+                                className="text-[8px] font-black bg-indigo-600 text-white px-3 py-1.5 rounded-full uppercase tracking-widest shadow-lg shadow-indigo-500/30 hover:scale-105 active:scale-95 transition-all"
+                            >
+                                Get Unlimited
+                            </button>
+                        ) : (
+                            <span className="text-[8px] font-black text-indigo-500/50 uppercase tracking-widest">Credits Used</span>
+                        )}
+                    </div>
+                </div>
             </div>
 
             {/* Double Column Info Section */}
@@ -253,7 +339,55 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
                 >
                     <LogOut size={22} strokeWidth={3} /> {t.signOut}
                 </button>
+
+                <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="w-full flex items-center justify-center gap-4 text-gray-400 dark:text-gray-500 py-4 hover:text-red-500 transition-colors font-black uppercase tracking-[0.2em] text-[10px]"
+                >
+                    <Trash2 size={14} /> {language === 'hi' ? 'खाता हटाएं' : 'Delete Account'}
+                </button>
             </div>
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteConfirm && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-fade-in shadow-2xl">
+                    <div className="bg-white dark:bg-gray-900 rounded-[3rem] p-10 max-w-md w-full border-4 border-red-500/20 shadow-2xl space-y-8 animate-scale-in">
+                        <div className="flex justify-between items-center text-red-500">
+                            <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-2xl">
+                                <AlertTriangle size={32} />
+                            </div>
+                            <button onClick={() => setShowDeleteConfirm(false)} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
+                        </div>
+
+                        <div className="space-y-3">
+                            <h3 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">
+                                {language === 'hi' ? 'क्या आप निश्चित हैं?' : 'Are you absolutely sure?'}
+                            </h3>
+                            <p className="text-gray-500 dark:text-gray-400 font-medium leading-relaxed">
+                                {language === 'hi'
+                                    ? 'आपका प्रोफ़ाइल डेटा मिटा दिया जाएगा। यह कार्रवाई वापस नहीं ली जा सकती।'
+                                    : 'Your profile data will be wiped. This action cannot be undone and you will lose access to your account.'}
+                            </p>
+                        </div>
+
+                        <div className="grid gap-4">
+                            <button
+                                onClick={handleDeleteAccount}
+                                disabled={isDeleting}
+                                className="w-full bg-red-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-red-500/30 active:scale-95 transition-all disabled:opacity-50"
+                            >
+                                {isDeleting ? (language === 'hi' ? 'मिटा रहा है...' : 'DELETING...') : (language === 'hi' ? 'हाँ, मेरा खाता हटाएं' : 'YES, DELETE MY ACCOUNT')}
+                            </button>
+                            <button
+                                onClick={() => setShowDeleteConfirm(false)}
+                                className="w-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 py-5 rounded-2xl font-black uppercase tracking-widest text-xs active:scale-95 transition-all"
+                            >
+                                {language === 'hi' ? 'नहीं, वापस जाएं' : 'NO, TAKE ME BACK'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

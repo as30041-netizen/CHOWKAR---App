@@ -138,6 +138,12 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
             return;
         }
 
+        // CRITICAL: Auth Guard
+        if (!user.id) {
+            showAlert("You must be logged in to post a job.", 'error');
+            return;
+        }
+
         setIsPosting(true);
         try {
             if (isEditing && initialJob) {
@@ -271,6 +277,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
 
 
     const handleEnhanceDescription = async () => {
+        if (!user.id) return;
         if (!checkFreeLimit()) return;
         if (!newJobDesc.trim()) return;
 
@@ -285,6 +292,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
     };
 
     const handleEstimateWage = async () => {
+        if (!user.id) return;
         if (!checkFreeLimit()) return;
         if (!newJobCategory || !user.location) {
             showAlert(t.alertFillFields, 'error');

@@ -209,3 +209,51 @@ export const analyzeImageForJob = async (
     return null;
   }
 };
+
+export const matchJobToWorker = async (
+  workerSkills: string[],
+  workerBio: string,
+  jobTitle: string,
+  jobDescription: string
+): Promise<{ score: number; reason: string } | null> => {
+  try {
+    const ai = getAI();
+    if (!ai) return null;
+
+    const model = ai.getGenerativeModel({
+      model: 'gemini-1.5-flash',
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: SchemaType.OBJECT,
+          properties: {
+            score: { type: SchemaType.NUMBER },
+            reason: { type: SchemaType.STRING }
+          }
+        }
+      }
+    });
+
+    const prompt = `
+      Compare this Worker to this Job for a labor marketplace in India.
+      Worker Skills: ${workerSkills.join(', ')}
+      Worker Bio: ${workerBio}
+      
+      Job Title: ${jobTitle}
+      Job Description: ${jobDescription}
+      
+      Calculate a compatibility score from 0 to 100.
+      Also provide a 1-sentence reason in simple English (e.g. "You have all the required farming skills").
+      Return as JSON with keys "score" and "reason".
+    `;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    if (!text) return null;
+    return JSON.parse(text);
+  } catch (e) {
+    console.error("Magic Match failed", e);
+    return null;
+  }
+};

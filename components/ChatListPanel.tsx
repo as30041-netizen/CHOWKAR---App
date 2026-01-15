@@ -33,11 +33,11 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
     // Load available chats using Optimized RPC (Solves N+1 Query Problem)
     // Only fetch once when panel opens, not on every message change
     useEffect(() => {
-        if (!isOpen || !user.id || user.id.length < 10 || user.id === 'u1') {
+        if (!isOpen || !user.id) {
             return;
         }
 
-        // DEBOUNCE: Skip if fetched recently (< 5 seconds) to prevent notification/realtime loops
+        // DEBOUNCE: Skip if fetched recently (< 5 seconds)
         const now = Date.now();
         if (hasFetchedRef.current && (now - lastFetchTimeRef.current < 5000)) {
             console.log('[ChatListPanel] Skipping fetch (throttled)');
@@ -48,32 +48,31 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
         lastFetchTimeRef.current = now;
 
         const loadChats = async () => {
-            // Only show loading spinner on FIRST load, not background refreshes
+            // Only show loading spinner on FIRST load
             if (inboxChats.length === 0) setIsLoading(true);
 
             try {
                 // Small delay to ensure Supabase client is fully ready
                 await new Promise(resolve => setTimeout(resolve, 100));
 
-                // Dynamic import to avoid circular dependencies if any
                 const { fetchInboxSummaries } = await import('../services/chatService');
                 const { chats, error } = await fetchInboxSummaries(user.id);
 
                 if (error) {
                     console.error('Failed to load inbox:', error);
-                    hasFetchedRef.current = false; // Allow retry on error
+                    hasFetchedRef.current = false;
                 } else {
                     setInboxChats(chats);
-                    // Optimized Prefetch: Stagger requests to avoid freezing UI
-                    chats.forEach((c, index) => {
+                    // Optimized Prefetch: Limit to top 5 most recent chats to check specifically for updates without flooding network
+                    chats.slice(0, 5).forEach((c, index) => {
                         setTimeout(() => {
                             getJobWithFullDetails(c.jobId);
-                        }, 500 + (index * 200)); // Stagger by 200ms
+                        }, 500 + (index * 200));
                     });
                 }
             } catch (err) {
                 console.error('Error loading inbox:', err);
-                hasFetchedRef.current = false; // Allow retry on error
+                hasFetchedRef.current = false;
             } finally {
                 setIsLoading(false);
             }

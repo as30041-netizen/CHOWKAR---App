@@ -24,8 +24,10 @@ export const initiatePayment = async (packId: string, userId: string, userEmail?
     console.log(`[Payment] Initializing Razorpay for ${pack.coins} coins (₹${pack.price})...`);
 
     try {
-        // 1. Create Order via Edge Function (Secure)
-        const { data: orderData, error: orderError } = await supabase.functions.invoke('create-razorpay-order', {
+        // 1. Create Order via Edge Function (Secure) with timeout
+        console.log('[Payment] Calling create-razorpay-order Edge Function...');
+
+        const invokePromise = supabase.functions.invoke('create-razorpay-order', {
             body: {
                 amount: pack.price,
                 currency: 'INR',
@@ -35,9 +37,23 @@ export const initiatePayment = async (packId: string, userId: string, userEmail?
             }
         });
 
-        if (orderError || !orderData || orderData.error) {
-            console.error('[Payment] Order Creation Failed:', orderError || orderData?.error);
-            throw new Error('Failed to initialize payment server.');
+        // Add 30-second timeout
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Edge Function call timed out after 30 seconds')), 30000)
+        );
+
+        const { data: orderData, error: orderError } = await Promise.race([invokePromise, timeoutPromise]) as any;
+
+        console.log('[Payment] Edge Function response received:', { orderData, orderError });
+
+        if (orderError) {
+            console.error('[Payment] Order Creation Error Object:', orderError);
+            throw new Error(orderError.message || 'Failed to initialize payment server.');
+        }
+
+        if (!orderData || orderData.error) {
+            console.error('[Payment] Order Data Error:', orderData?.error);
+            throw new Error(orderData?.error || 'Failed to initialize payment server.');
         }
 
         const { id: order_id, amount: order_amount, currency: order_currency } = orderData;
@@ -91,5 +107,72 @@ export const initiatePayment = async (packId: string, userId: string, userEmail?
     } catch (err: any) {
         console.error('[Payment] Exception:', err);
         return { success: false, error: err.message || 'Unknown payment error' };
+    }
+};
+
+/**
+ * Initiates a real payment for Premium Upgrade
+ */
+export const initiatePremiumPayment = async (userId: string, userEmail?: string, userPhone?: string): Promise<PaymentResult> => {
+    const { PREMIUM_PRICE } = await import('../constants');
+
+    console.log(`[Payment] Initializing Premium Upgrade for ₹${PREMIUM_PRICE}...`);
+
+    try {
+        // 1. Create Order via Edge Function
+        const { data: orderData, error: orderError } = await supabase.functions.invoke('create-razorpay-order', {
+            body: {
+                amount: PREMIUM_PRICE,
+                currency: 'INR',
+                receipt: `prem_${Date.now()}`,
+                userId: userId,
+                type: 'premium'
+            }
+        });
+
+        if (orderError || !orderData || orderData.error) {
+            throw new Error(orderError?.message || orderData?.error || 'Failed to initialize premium payment.');
+        }
+
+        const { id: order_id, amount: order_amount, currency: order_currency } = orderData;
+
+        // 2. Open Razorpay Checkout
+        return new Promise((resolve) => {
+            const options: RazorpayOptions = {
+                key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+                amount: order_amount,
+                currency: order_currency,
+                name: 'Chowkar Premium',
+                description: 'Lifetime Premium Access',
+                image: '/logo192.png',
+                order_id: order_id,
+                handler: async (response: any) => {
+                    console.log('[Payment] Premium Payment Successful:', response);
+                    resolve({
+                        success: true,
+                        transactionId: response.razorpay_payment_id
+                    });
+                },
+                prefill: {
+                    email: userEmail,
+                    contact: userPhone
+                },
+                theme: {
+                    color: '#f59e0b' // Amber
+                },
+                modal: {
+                    ondismiss: () => {
+                        resolve({ success: false, error: 'Payment Cancelled' });
+                    }
+                }
+            };
+
+            const rzp1 = new (window as any).Razorpay(options);
+            rzp1.open();
+        });
+
+    } catch (err: any) {
+        console.error('[Payment] Premium Exception:', err);
+        return { success: false, error: err.message || 'Unknown error' };
     }
 };

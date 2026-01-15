@@ -158,6 +158,7 @@ export const fetchHomeFeed = async (
 
     if (!response.ok) {
       console.error(`[JobService] RPC get_home_feed failed: ${response.status}`);
+      console.error(`[JobService] Full error response:`, await response.text());
       throw new Error(`Feed fetch failed: ${response.status}`);
     }
 
@@ -302,64 +303,34 @@ export const fetchMyApplicationsFeed = async (
   try {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
-    // 0. Fetch hidden job IDs to filter them out (keeps history clean permanently)
-    let hiddenJobIds: Set<string> = new Set();
-    try {
-      const hiddenResponse = await safeFetch(
-        `${supabaseUrl}/rest/v1/user_job_visibility?user_id=eq.${userId}&is_hidden=eq.true&select=job_id`
-      );
-      if (hiddenResponse.ok) {
-        const hiddenData = await hiddenResponse.json();
-        hiddenJobIds = new Set(hiddenData.map((h: any) => h.job_id));
-        console.log(`[JobService] Found ${hiddenJobIds.size} hidden jobs to exclude`);
+    // Use Optimized RPC
+    const response = await safeFetch(
+      `${supabaseUrl}/rest/v1/rpc/get_my_applications_feed`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          p_user_id: userId,
+          p_limit: limit,
+          p_offset: offset
+        })
       }
-    } catch (e) {
-      console.warn('[JobService] Could not fetch hidden jobs, proceeding without filter');
-    }
-
-    // 1. Fetch Bids via REST
-    const bidsResponse = await safeFetch(
-      `${supabaseUrl}/rest/v1/bids?worker_id=eq.${userId}&select=job_id,id,status,amount,negotiation_history&order=created_at.desc&offset=${offset}&limit=${limit}`
     );
 
-    if (!bidsResponse.ok) throw new Error(`Bids fetch failed: ${bidsResponse.status}`);
-    const bidsData = await bidsResponse.json();
-
-    if (!bidsData || bidsData.length === 0) {
-      return { jobs: [], hasMore: false };
+    if (!response.ok) {
+      console.error(`[JobService] RPC get_my_applications_feed failed: ${response.status}`);
+      throw new Error(`Applications fetch failed: ${response.status}`);
     }
 
-    // 1b. Filter out bids for hidden jobs BEFORE fetching job details
-    const visibleBids = bidsData.filter((b: any) => !hiddenJobIds.has(b.job_id));
+    const data = await response.json();
+    console.log(`[JobService] RPC Data received: ${data?.length || 0} applications`);
 
-    if (visibleBids.length === 0) {
-      console.log('[JobService] All fetched bids were for hidden jobs');
-      return { jobs: [], hasMore: bidsData.length === limit };
-    }
+    const jobs = (data || []).map((row: any) => dbJobToApp(row));
 
-    // 2. Fetch Jobs via REST (using 'in' operator format: id=in.(id1,id2,...))
-    const jobIds = visibleBids.map((b: any) => b.job_id).join(',');
-    const jobsResponse = await safeFetch(
-      `${supabaseUrl}/rest/v1/jobs?id=in.(${jobIds})`
-    );
-
-    if (!jobsResponse.ok) throw new Error(`Jobs fetch failed: ${jobsResponse.status}`);
-    const jobsData = await jobsResponse.json();
-
-    const jobsMap = new Map(jobsData.map((j: any) => [j.id, j]));
-    const jobs = visibleBids.map((bid: any) => {
-      const dbJob = jobsMap.get(bid.job_id);
-      if (!dbJob) return null;
-      const appJob = dbJobToApp(dbJob as DbJob);
-      appJob.myBidId = bid.id;
-      appJob.myBidStatus = bid.status;
-      appJob.myBidAmount = bid.amount;
-      appJob.myBidLastNegotiationBy = bid.negotiation_history?.[bid.negotiation_history.length - 1]?.by;
-      return appJob;
-    }).filter((j: any) => j !== null) as Job[];
-
-    console.log(`[JobService] ✅ Applications feed complete: ${jobs.length} jobs found (${hiddenJobIds.size} hidden excluded)`);
-    return { jobs, hasMore: bidsData.length === limit };
+    console.log(`[JobService] ✅ Applications feed optimized: ${jobs.length} jobs loaded via single RPC`);
+    return { jobs, hasMore: jobs.length === limit };
   } catch (error: any) {
     console.error('[JobService] fetchMyApplicationsFeed exception:', error?.message || error);
     return { jobs: [], hasMore: false };

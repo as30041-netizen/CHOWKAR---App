@@ -37,7 +37,7 @@ export const Home: React.FC<HomeProps> = ({
     onBid, onViewBids, onChat, onEdit, onClick, onReplyToCounter, onWithdrawBid,
     setShowFilterModal: _setShowFilterModal, showAlert
 }) => {
-    const { user, role, setRole, t, language, isAuthLoading } = useUser();
+    const { user, role, setRole, t, language, isAuthLoading, hasInitialized } = useUser();
     const { notifications } = useNotification();
     const { jobs, loading, isRevalidating, refreshJobs, fetchMoreJobs, hasMore, isLoadingMore, loadFeed, hideJob, error: jobsError } = useJobs();
     const [posterTab, setPosterTab] = useState<'ACTIVE' | 'HISTORY'>('ACTIVE');
@@ -58,27 +58,20 @@ export const Home: React.FC<HomeProps> = ({
     const [showSortMenu, setShowSortMenu] = useState(false);
     const [viewMode, setViewMode] = useState<'LIST' | 'MAP'>('LIST');
 
-    // Track if this is the first load (page refresh scenario)
-    const isFirstLoadRef = React.useRef(true);
-
     useEffect(() => {
-        if (isAuthLoading || !user.id) return;
+        // CRITICAL FIX: Wait for FULL initialization (session check complete) before loading data.
+        // Previously we waited 800ms, which failed on slow connections.
+        if (!hasInitialized || isAuthLoading || !user.id) return;
 
         const loadData = async () => {
-            // On first load (page refresh), wait briefly for session refresh to complete
-            if (isFirstLoadRef.current) {
-                isFirstLoadRef.current = false;
-                console.log('[Home] First load detected, waiting for session refresh...');
-                await new Promise(resolve => setTimeout(resolve, 800)); // Give session refresh time
-            }
-
+            console.log('[Home] Auth initialized. Loading feed...');
             const type = role === UserRole.POSTER ? 'POSTER' : (workerTab === 'FIND' ? 'HOME' : 'WORKER_APPS');
             console.log(`[Home] Triggering feed load: role=${role}, workerTab=${workerTab}, posterTab=${posterTab}, finalType=${type}`);
             loadFeed(type, 0, user.id);
         };
 
         loadData();
-    }, [role, workerTab, posterTab, dashboardTab, loadFeed, user.id, isAuthLoading]);
+    }, [role, workerTab, posterTab, dashboardTab, loadFeed, user.id, isAuthLoading, hasInitialized]);
 
     // Handle explicit refresh
     const handleRefresh = async () => {
@@ -445,6 +438,9 @@ export const Home: React.FC<HomeProps> = ({
                                                 onReplyToCounter={onReplyToCounter}
                                                 onWithdrawBid={onWithdrawBid}
                                                 onHide={hideJob}
+                                                isPremium={user.isPremium}
+                                                userSkills={user.skills}
+                                                userBio={user.bio}
                                             />
                                         </div>
                                     ))

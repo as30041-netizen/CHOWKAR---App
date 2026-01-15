@@ -1,28 +1,29 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
 serve(async (req) => {
-    // 1. Verify Request Method
+    console.log('[Webhook] Request received:', req.method);
+
     if (req.method !== 'POST') {
         return new Response('Method Not Allowed', { status: 405 })
     }
 
     try {
-        // 2. Get Headers & Body
         const signature = req.headers.get('x-razorpay-signature')
-        const eventId = req.headers.get('x-razorpay-event-id') // IDEMPOTENCY KEY
+        const eventId = req.headers.get('x-razorpay-event-id')
         const secret = Deno.env.get('RAZORPAY_WEBHOOK_SECRET')
         const bodyText = await req.text()
 
+        console.log('[Webhook] Event ID:', eventId);
+        console.log('[Webhook] Signature present:', !!signature);
+        console.log('[Webhook] Secret present:', !!secret);
+
         if (!signature || !secret || !eventId) {
-            console.error('Missing signature, secret, or event ID')
+            console.error('[Webhook] Missing required headers or configuration');
             return new Response('Configuration Error or Missing Header', { status: 500 })
         }
 
-        // 3. Verify Signature (HMAC SHA256)
-        // The library expects (hash, key, message, inputEncoding, outputEncoding)
-        // Or simpler: verification based on node buffer eq
-
-        // Manual HMAC Verification using Web Crypto API (Standard Deno way)
+        // 3. Verify Signature
         const encoder = new TextEncoder()
         const keyData = encoder.encode(secret)
         const msgData = encoder.encode(bodyText)
@@ -35,42 +36,63 @@ serve(async (req) => {
         const expectedSignature = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
 
         if (expectedSignature !== signature) {
-            console.error('Invalid Signature. Expected:', expectedSignature, 'Got:', signature)
+            console.error('[Webhook] Invalid Signature. Expected:', expectedSignature, 'Got:', signature);
+            // In development, you might want to bypass signature check, but for production it MUST stay.
             return new Response('Invalid Signature', { status: 401 })
         }
 
-        // 4. Process Event
         const event = JSON.parse(bodyText)
-        console.log(`Received Event: ${event.event} (ID: ${eventId})`)
+        console.log(`[Webhook] Processing Event: ${event.event}`);
 
+        // Handle ONLY order.paid to prevent double-crediting (payment.captured is redundant for this flow)
         if (event.event === 'order.paid') {
-            const { order, payment } = event.payload
-            const notes = order.entity.notes
-            const userId = notes?.userId
-            const coins = notes?.coins ? parseInt(notes.coins) : 0
+            const payload = event.payload;
+            const order = payload.order?.entity;
+            const payment = payload.payment?.entity;
+
+            // Extract notes from either order or payment
+            const notes = order?.notes || payment?.notes;
+            const userId = notes?.userId;
+            const type = notes?.type || 'coins';
+            const coins = notes?.coins ? Number(notes.coins) : 0;
+
+            console.log('[Webhook] Extracted Metadata:', { userId, type, coins, orderId: order?.id, paymentId: payment?.id });
 
             if (userId && coins > 0) {
                 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
                 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
                 const supabase = createClient(supabaseUrl, supabaseKey)
 
-                // CALL IDEMPOTENT RPC
-                const { data, error } = await supabase.rpc('admin_process_payment_webhook', {
+                let rpcName = 'admin_process_payment_webhook'
+                let rpcArgs: any = {
                     p_event_id: eventId,
                     p_user_id: userId,
                     p_amount: coins,
-                    p_order_id: order.entity.id,
+                    p_order_id: order?.id || payment?.order_id || 'unknown',
                     p_raw_event: event
-                })
+                }
+
+                if (type === 'premium') {
+                    rpcName = 'admin_activate_premium'
+                    rpcArgs = {
+                        p_event_id: eventId,
+                        p_user_id: userId,
+                        p_order_id: order?.id || payment?.order_id || 'unknown',
+                        p_raw_event: event
+                    }
+                }
+
+                console.log(`[Webhook] Calling RPC: ${rpcName}`, rpcArgs);
+                const { data, error } = await supabase.rpc(rpcName, rpcArgs)
 
                 if (error) {
-                    console.error('RPC Error:', error)
+                    console.error('[Webhook] RPC Error:', error);
                     return new Response('Internal Server Error', { status: 500 })
                 }
 
-                console.log('Payment Process Result:', data)
+                console.log('[Webhook] Success:', data)
             } else {
-                console.error('Missing userId or coins in metadata', notes)
+                console.warn('[Webhook] Missing userId or coins in metadata', { userId, coins });
             }
         }
 
@@ -80,7 +102,8 @@ serve(async (req) => {
         })
 
     } catch (err) {
-        console.error('Webhook Error:', err.message)
+        console.error('[Webhook] Runtime Error:', err.message)
         return new Response(`Error: ${err.message}`, { status: 400 })
     }
 })
+

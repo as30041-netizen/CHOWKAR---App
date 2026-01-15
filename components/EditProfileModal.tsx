@@ -29,6 +29,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
     const [isSaving, setIsSaving] = useState(false);
     const [isLocating, setIsLocating] = useState(false);
     const [newCoordinates, setNewCoordinates] = useState<{ lat: number; lng: number } | undefined>(undefined);
+    const [searchQuery, setSearchQuery] = useState('');
 
     // Initialize state when modal opens
     useEffect(() => {
@@ -140,8 +141,6 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
         reader.readAsDataURL(file);
     };
 
-    const [searchQuery, setSearchQuery] = useState('');
-
     const handleGetLocation = () => {
         setIsLocating(true);
         getDeviceLocation(
@@ -204,7 +203,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                     </div>
                 </div>
 
-                <div className="overflow-y-auto p-8 space-y-10 custom-scrollbar">
+                <div className="overflow-y-auto p-8 space-y-10 custom-scrollbar" style={{ maxHeight: 'calc(95vh - 250px)' }}>
                     {/* Photo Uploader */}
                     <div className="flex justify-center flex-col items-center gap-6">
                         <div className="relative group/avatar">
@@ -362,42 +361,42 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                         </div>
 
                     </div>
-                </div>
 
-                {/* DANGER ZONE - Delete Account */}
-                <div className="mx-8 mt-12 p-6 rounded-[2rem] bg-red-50 dark:bg-red-900/10 border-2 border-red-100 dark:border-red-900/20">
-                    <h3 className="text-red-600 dark:text-red-400 font-black uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                        {language === 'en' ? 'Danger Zone' : 'खतरा क्षेत्र'}
-                    </h3>
-                    <p className="text-gray-600 dark:text-gray-400 text-sm mb-6 font-medium leading-relaxed">
-                        {language === 'en'
-                            ? 'Once you delete your account, there is no going back. Please be certain.'
-                            : 'एक बार जब आप अपना खाता हटा देते हैं, तो वापस नहीं जा सकते। कृपया सुनिश्चित हों।'}
-                    </p>
-                    <button
-                        onClick={async () => {
-                            if (window.confirm(language === 'en' ? 'Are you sure you want to PERMANENTLY delete your account?' : 'क्या आप वाकई अपना खाता स्थायी रूप से हटाना चाहते हैं?')) {
-                                const { deleteAccount } = await import('../services/authService');
-                                setIsSaving(true);
-                                const { success, error } = await deleteAccount();
-                                if (success) {
-                                    onClose();
-                                    window.location.reload();
-                                } else {
-                                    showAlert(error || 'Failed to delete', 'error');
-                                    setIsSaving(false);
+                    {/* DANGER ZONE - Delete Account - Now inside scroll container */}
+                    <div className="mt-12 p-6 rounded-[2rem] bg-red-50 dark:bg-red-900/10 border-2 border-red-100 dark:border-red-900/20">
+                        <h3 className="text-red-600 dark:text-red-400 font-black uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                            {language === 'en' ? 'Danger Zone' : 'खतरा क्षेत्र'}
+                        </h3>
+                        <p className="text-gray-600 dark:text-gray-400 text-sm mb-6 font-medium leading-relaxed">
+                            {language === 'en'
+                                ? 'Once you delete your account, there is no going back. Please be certain.'
+                                : 'एक बार जब आप अपना खाता हटा देते हैं, तो वापस नहीं जा सकते। कृपया सुनिश्चित हों।'}
+                        </p>
+                        <button
+                            onClick={async () => {
+                                if (window.confirm(language === 'en' ? 'Are you sure you want to PERMANENTLY delete your account?' : 'क्या आप वाकई अपना खाता स्थायी रूप से हटाना चाहते हैं?')) {
+                                    const { deleteAccount } = await import('../services/authService');
+                                    setIsSaving(true);
+                                    const { success, error } = await deleteAccount();
+                                    if (success) {
+                                        onClose();
+                                        window.location.reload();
+                                    } else {
+                                        showAlert(error || 'Failed to delete', 'error');
+                                        setIsSaving(false);
+                                    }
                                 }
-                            }
-                        }}
-                        disabled={isSaving}
-                        className="w-full py-4 rounded-xl bg-white dark:bg-red-950/30 border-2 border-red-200 dark:border-red-900/50 text-red-500 font-bold text-xs uppercase tracking-[0.2em] hover:bg-red-500 hover:text-white transition-all shadow-sm"
-                    >
-                        {isSaving ? 'Processing...' : (language === 'en' ? 'Delete Account' : 'खाता हटाएं')}
-                    </button>
+                            }}
+                            disabled={isSaving}
+                            className="w-full py-4 rounded-xl bg-white dark:bg-red-950/30 border-2 border-red-200 dark:border-red-900/50 text-red-500 font-bold text-xs uppercase tracking-[0.2em] hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                        >
+                            {isSaving ? 'Processing...' : (language === 'en' ? 'Delete Account' : 'खाता हटाएं')}
+                        </button>
+                    </div>
                 </div>
 
-                {/* Footer Save Button */}
+                {/* Footer Save Button - Outside scroll container */}
                 <div className="p-8 bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl border-t border-gray-100 dark:border-gray-800 shrink-0">
                     <button
                         onClick={handleSaveProfile}
@@ -420,6 +419,6 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                     )}
                 </div>
             </div>
-        </div >
+        </div>
     );
 };

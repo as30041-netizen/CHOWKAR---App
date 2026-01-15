@@ -25,10 +25,12 @@ export const CounterModal: React.FC<CounterModalProps> = ({ isOpen, onClose, bid
         }
     }, [isOpen, initialAmount]);
 
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
     if (!isOpen) return null;
 
     const handleSendCounter = async () => {
-        if (!jobId || !bidId || !counterInputAmount) return;
+        if (!jobId || !bidId || !counterInputAmount || isSubmitting) return;
 
         const newAmount = parseInt(counterInputAmount);
 
@@ -39,6 +41,8 @@ export const CounterModal: React.FC<CounterModalProps> = ({ isOpen, onClose, bid
                 : 'कृपया ₹0 से अधिक वैध राशि दर्ज करें', 'error');
             return;
         }
+
+        setIsSubmitting(true);
 
         // Try getting from context first
         const job = jobs.find(j => j.id === jobId);
@@ -85,6 +89,8 @@ export const CounterModal: React.FC<CounterModalProps> = ({ isOpen, onClose, bid
         } catch (err) {
             console.error(err);
             showAlert("Failed to send counter", "error");
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -114,9 +120,14 @@ export const CounterModal: React.FC<CounterModalProps> = ({ isOpen, onClose, bid
 
                 <button
                     onClick={handleSendCounter}
-                    className="btn btn-primary w-full !py-5 !rounded-2xl font-black uppercase tracking-[0.2em] shadow-[0_20px_40px_-10px_rgba(16,185,129,0.3)] hover:-translate-y-1 active:scale-95 transition-all text-sm"
+                    disabled={isSubmitting}
+                    className="btn btn-primary w-full !py-5 !rounded-2xl font-black uppercase tracking-[0.2em] shadow-[0_20px_40px_-10px_rgba(16,185,129,0.3)] hover:-translate-y-1 active:scale-95 transition-all text-sm flex items-center justify-center gap-2"
                 >
-                    {t.sendCounter}
+                    {isSubmitting ? (
+                        <>Sending...</>
+                    ) : (
+                        t.sendCounter
+                    )}
                 </button>
             </div>
         </div>

@@ -3,7 +3,7 @@ import { User, UserRole, Notification, ChatMessage } from '../types';
 import { TRANSLATIONS, FREE_AI_USAGE_LIMIT } from '../constants';
 import { supabase } from '../lib/supabase';
 import { incrementAIUsage as incrementAIUsageDB, updateUserProfile, getCurrentUser, getUserProfile, signOut } from '../services/authService';
-import { initializeAppStateTracking, setAppLoginState, cleanupAppStateTracking } from '../services/appStateService';
+import { initializeAppStateTracking, setAppLoginState, cleanupAppStateTracking, addAppStateListener } from '../services/appStateService';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 import { useLanguage } from './LanguageContext';
@@ -15,7 +15,7 @@ interface UserContextType {
   role: UserRole;
   setRole: React.Dispatch<React.SetStateAction<UserRole>>;
   language: 'en' | 'hi';
-  setLanguage: (lang: 'en' | 'hi') => void;
+  setLanguage: React.Dispatch<React.SetStateAction<'en' | 'hi'>>;
   isLoggedIn: boolean;
   setIsLoggedIn: React.Dispatch<React.SetStateAction<boolean>>;
   isAuthLoading: boolean;
@@ -33,6 +33,7 @@ interface UserContextType {
   refreshUser: () => Promise<void>;
   showEditProfile: boolean;
   setShowEditProfile: React.Dispatch<React.SetStateAction<boolean>>;
+  hasInitialized: boolean;
 }
 
 export const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -149,10 +150,29 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     initializeAppStateTracking();
+
+    // Listen for App Resume (Foreground) to refresh session
+    const cleanupListener = addAppStateListener(async (isActive) => {
+      if (isActive && isLoggedIn) {
+        console.log('[Auth] App resumed. Validating session...');
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (error || !session) {
+          console.warn('[Auth] Session invalid on resume:', error);
+          // If session is dead on resume, we must log out to prevent "zombie" state
+          logout();
+        } else {
+          console.log('[Auth] Session valid on resume. Refreshing data...');
+          fetchUserData();
+        }
+      }
+    });
+
     return () => {
+      cleanupListener();
       cleanupAppStateTracking();
     };
-  }, []);
+  }, [isLoggedIn]); // Re-bind if login state changes
 
   useEffect(() => {
     setAppLoginState(isLoggedIn);
@@ -163,39 +183,45 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const refreshSessionOnLoad = async () => {
       if (isAuthCallbackRef.current) return;
       try {
-        const { data: { session }, error } = await supabase.auth.refreshSession();
-        if (error) { }
-        else if (session) { }
-      } catch (err) { }
+        // STRICT CHECK: Try to get a valid session immediately
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (session?.user) {
+          console.log('[Auth] Valid session found on init.');
+          setIsLoggedIn(true);
+          currentUserIdRef.current = session.user.id;
+          setUser(prev => ({ ...prev, id: session.user.id, email: session.user.email }));
+        } else {
+          console.log('[Auth] No active session on init.');
+          // If we were optimistically logged in, we MUST clear it now because the server said "No".
+          if (localStorage.getItem('chowkar_isLoggedIn') === 'true') {
+            console.warn('[Auth] Optimistic login failed. Logging out.');
+            logout();
+          }
+        }
+      } catch (err) {
+        console.error('[Auth] Init session check failed:', err);
+        logout();
+      } finally {
+        if (mounted) {
+          setIsAuthLoading(false);
+          setHasInitialized(true);
+        }
+      }
     };
+
     refreshSessionOnLoad();
 
-    const timeoutDuration = isAuthCallbackRef.current ? 30000 : 8000; // Increased to 8s/30s for slow networks
-    const safetyTimeout = setTimeout(async () => {
+    // Redundant "Safety Timeout" removed - we rely on the explicit check above.
+    // We kept the timeout logic conceptually as a fallback for the async call hanging indefinitely?
+    // Supabase client usually timeouts itself. Let's keep a very long safety just in case.
+    const safetyTimeout = setTimeout(() => {
       if (mounted && isAuthLoading) {
-        try {
-          // Double check session one last time
-          const { data: { session } } = await supabase.auth.getSession();
-
-          if (session?.user) {
-            setIsLoggedIn(true);
-            currentUserIdRef.current = session.user.id;
-            setUser(prev => ({ ...prev, id: session.user.id, email: session.user.email }));
-          } else {
-            // SOFT FAILURE: Don't auto-logout immediately on timeout, just stop loading.
-            // This allows the UI to show a "Retry" button instead of kicking them out.
-            console.warn('[Auth] Auth check timed out. Maintaining previous state.');
-            // We do NOT call setIsLoggedIn(false) here blindly.
-            // If we were optimistically logged in (localStorage), we keep it.
-            // The UI will show a retry button if user.id is still missing.
-          }
-        } catch (e) {
-          console.error('[Auth] Safety timeout error', e);
-        }
-        setHasInitialized(true);
+        console.warn('[Auth] Initialization took too long using fallback.');
         setIsAuthLoading(false);
+        setHasInitialized(true);
       }
-    }, timeoutDuration);
+    }, 10000);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
@@ -435,11 +461,13 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } else {
         setIsLoggedIn(false);
         setLoadingMessage('No active session found');
+        throw new Error('No active session');
       }
     } catch (error) {
       setLoadingMessage('Retry failed. Please refresh the page.');
     } finally {
-      setTimeout(() => setIsAuthLoading(false), 500);
+      setIsAuthLoading(false);
+      setHasInitialized(true);
     }
   };
 
@@ -463,7 +491,8 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       retryAuth,
       refreshUser: fetchUserData,
       showEditProfile,
-      setShowEditProfile
+      setShowEditProfile,
+      hasInitialized
     }}>
       {children}
     </UserContext.Provider>

@@ -35,6 +35,7 @@ const OnboardingModal = lazy(() => import('./components/OnboardingModal').then(m
 const BidHistoryModal = lazy(() => import('./components/BidHistoryModal').then(m => ({ default: m.BidHistoryModal })));
 const NotificationsPanel = lazy(() => import('./components/NotificationsPanel').then(m => ({ default: m.NotificationsPanel })));
 const ChatListPanel = lazy(() => import('./components/ChatListPanel').then(m => ({ default: m.ChatListPanel })));
+const SubscriptionModal = lazy(() => import('./components/SubscriptionModal').then(m => ({ default: m.SubscriptionModal })));
 const LandingPage = lazy(() => import('./components/LandingPage').then(m => ({ default: m.LandingPage })));
 const UserProfileModal = lazy(() => import('./components/UserProfileModal').then(m => ({ default: m.UserProfileModal })));
 
@@ -61,6 +62,11 @@ const AppContent: React.FC = () => {
     showAlert, currentAlert, updateUserInDB, refreshUser,
     showEditProfile, setShowEditProfile
   } = useUser();
+
+  // Debug Auth State
+  useEffect(() => {
+    console.log('[AppContent] Auth State:', { isLoggedIn, isAuthLoading, userId: user.id });
+  }, [isLoggedIn, isAuthLoading, user.id]);
 
   const {
     notifications,
@@ -356,6 +362,12 @@ const AppContent: React.FC = () => {
 
   // --- Memoized Handlers for Performance ---
   const handleOnBid = useCallback((id: string) => {
+    // CRITICAL: Prevent action if user session is invalid (Zombie state protection)
+    if (!user.id) {
+      console.warn('Attempted to bid without valid user ID');
+      return;
+    }
+
     if (!user.phone || !user.location || user.location === 'Not set') {
       setShowEditProfile(true);
       showAlert(language === 'en'
@@ -364,7 +376,7 @@ const AppContent: React.FC = () => {
       return;
     }
     setBidModalOpen({ isOpen: true, jobId: id });
-  }, [user.phone, user.location, language, showAlert, setShowEditProfile]);
+  }, [user.id, user.phone, user.location, language, showAlert, setShowEditProfile]);
 
   const handleOnViewBids = useCallback((j: Job) => {
     console.log('[App] onViewBids handler called', j.id);
@@ -844,6 +856,11 @@ const AppContent: React.FC = () => {
           userId={profileModal.userId}
           userName={profileModal.userName}
           onClose={() => setProfileModal({ isOpen: false, userId: '' })}
+        />
+
+        <SubscriptionModal
+          isOpen={showSubscriptionModal}
+          onClose={() => setShowSubscriptionModal(false)}
         />
 
       </Suspense>

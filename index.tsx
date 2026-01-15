@@ -6,8 +6,8 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { initSupabase } from './lib/supabase';
 
-// NOTE: HelmetProvider temporarily disabled to fix DOM manipulation errors in dev
-// import { HelmetProvider } from 'react-helmet-async';
+// NOTE: HelmetProvider enabled for production
+import { HelmetProvider } from 'react-helmet-async';
 
 console.log('[App] Initializing Chowkar application...');
 console.log('[App] Environment check:', {
@@ -26,10 +26,12 @@ if (!rootElement) {
 
 const root = ReactDOM.createRoot(rootElement);
 root.render(
-  // NOTE: StrictMode and HelmetProvider disabled to avoid 'removeChild' errors
+  // NOTE: StrictMode disabled to avoid 'removeChild' errors, but SEO enabled
   <ErrorBoundary>
-    <ThemeProvider>
-      <App />
-    </ThemeProvider>
+    <HelmetProvider>
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>
+    </HelmetProvider>
   </ErrorBoundary>
 );

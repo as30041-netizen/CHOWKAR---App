@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Job, JobStatus, UserRole, Bid } from '../types';
-import { MapPin, IndianRupee, Clock, CheckCircle2 as CheckCircle, User as UserIcon, Calendar, Hourglass, XCircle, AlertCircle, ChevronRight, Ban, Pencil, ExternalLink, Navigation, Volume2, Square, TrendingUp, Handshake, CornerDownRight, Star, Trash2 } from 'lucide-react';
+import { MapPin, IndianRupee, Clock, CheckCircle2 as CheckCircle, User as UserIcon, Calendar, Hourglass, XCircle, AlertCircle, ChevronRight, Ban, Pencil, ExternalLink, Navigation, Volume2, Square, TrendingUp, Handshake, CornerDownRight, Star, Trash2, Sparkles } from 'lucide-react';
 import { TRANSLATIONS, CATEGORY_TRANSLATIONS } from '../constants';
 
 interface JobCardProps {
@@ -18,7 +18,12 @@ interface JobCardProps {
   onReplyToCounter?: (jobId: string, bidId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', amount?: number) => void;
   onWithdrawBid?: (jobId: string, bidId: string) => void;
   onHide?: (jobId: string) => void;
+  isPremium?: boolean;
+  userSkills?: string[];
+  userBio?: string;
 }
+
+import { matchJobToWorker } from '../services/geminiService';
 
 // Helper for relative time
 const getTimeAgo = (timestamp: number) => {
@@ -45,9 +50,32 @@ export const JobCard = React.memo<JobCardProps>(({
   onClick,
   onReplyToCounter,
   onWithdrawBid,
-  onHide
+  onHide,
+  isPremium,
+  userSkills,
+  userBio
 }) => {
   const isPoster = job.posterId === currentUserId;
+
+  const [matchData, setMatchData] = useState<{ score: number; reason: string } | null>(null);
+  const [matchLoading, setMatchLoading] = useState(false);
+
+  useEffect(() => {
+    if (userRole === UserRole.WORKER && !isPoster && isPremium && job.status === JobStatus.OPEN && !matchData && !matchLoading) {
+      const getMatch = async () => {
+        setMatchLoading(true);
+        const result = await matchJobToWorker(
+          userSkills || [],
+          userBio || '',
+          job.title,
+          job.description
+        );
+        setMatchData(result);
+        setMatchLoading(false);
+      };
+      getMatch();
+    }
+  }, [isPremium, userRole, isPoster, job.id]);
 
   // OPTIMIZATION: Use pre-computed bid info if available (from optimized feeds)
   // Fallback to searching the bids array if they were eager-loaded
@@ -287,6 +315,33 @@ export const JobCard = React.memo<JobCardProps>(({
           <span className="px-4 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-widest border border-emerald-100/50 dark:border-emerald-800/30">
             {catT}
           </span>
+          {userRole === UserRole.WORKER && !isPoster && job.status === JobStatus.OPEN && (
+            isPremium ? (
+              matchLoading ? (
+                <div className="w-24 h-6 bg-gray-100 dark:bg-gray-800 rounded-full animate-pulse" />
+              ) : matchData ? (
+                <div className="flex items-center gap-2 group/match relative cursor-default">
+                  <div className="px-3 py-1.5 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-[9px] font-black uppercase tracking-widest shadow-lg shadow-violet-500/20 flex items-center gap-1.5 border border-white/10">
+                    <TrendingUp size={10} strokeWidth={4} />
+                    {matchData.score}% Match
+                  </div>
+                  {/* Tooltip on hover */}
+                  <div className="absolute bottom-full left-0 mb-2 w-48 bg-gray-900 text-white p-3 rounded-xl text-[10px] opacity-0 group-hover/match:opacity-100 translate-y-2 group-hover/match:translate-y-0 transition-all pointer-events-none shadow-2xl z-50 border border-white/10 backdrop-blur-xl">
+                    <p className="font-bold flex items-center gap-1.5 mb-1 text-violet-400">
+                      <Sparkles size={10} /> AI ANALYSIS
+                    </p>
+                    {matchData.reason}
+                  </div>
+                </div>
+              ) : null
+            ) : (
+              <div className="px-3 py-1.5 rounded-full bg-gray-50/50 dark:bg-gray-800/50 text-gray-400 text-[9px] font-black uppercase tracking-widest border border-dashed border-gray-200 dark:border-gray-700 flex items-center gap-1.5 opacity-60">
+                <TrendingUp size={10} strokeWidth={3} />
+                AI Insight
+                <span className="w-1 h-1 rounded-full bg-amber-500" />
+              </div>
+            )
+          )}
           {job.hasNewBid && (
             <span className="bg-red-500 text-white text-[8px] font-black px-2 py-1 rounded-lg animate-bounce uppercase tracking-tighter">NEW BID</span>
           )}
@@ -347,7 +402,13 @@ export const JobCard = React.memo<JobCardProps>(({
           {userRole === UserRole.WORKER && !isPoster && (
             !myBid && job.status === JobStatus.OPEN ? (
               <button
-                onClick={() => onBid(job.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Minimal local protection: if parent is slow, at least show pulse
+                  const btn = e.currentTarget;
+                  btn.classList.add('opacity-70', 'cursor-wait');
+                  onBid(job.id);
+                }}
                 className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3.5 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
               >
                 {t.bidNow} <ChevronRight size={16} strokeWidth={3} />
@@ -360,7 +421,7 @@ export const JobCard = React.memo<JobCardProps>(({
           {userRole === UserRole.POSTER && isPoster && job.status === JobStatus.OPEN && (
             (job.bidCount ?? job.bids.length) === 0 ? (
               <button
-                onClick={() => onEdit(job)}
+                onClick={(e) => { e.stopPropagation(); onEdit(job); }}
                 className="w-full sm:w-auto bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 px-6 py-3.5 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
               >
                 <Pencil size={14} strokeWidth={3} /> {t.editJob}
@@ -384,7 +445,7 @@ export const JobCard = React.memo<JobCardProps>(({
 
           {job.status === JobStatus.IN_PROGRESS && (isPoster || (acceptedBid && acceptedBid.workerId === currentUserId)) && (
             <button
-              onClick={() => onChat(job)}
+              onClick={(e) => { e.stopPropagation(); onChat(job); }}
               className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
             >
               <UserIcon size={16} strokeWidth={3} /> {t.chat}

@@ -89,15 +89,11 @@ export const safeFetch = async (
             } else {
                 console.error('[safeFetch] Failed to refresh session:', error?.message || 'No session returned');
 
-                // CRITICAL: Clear storage IMMEDIATELY to break the loop
-                // (Do not wait for signOut as it might hang with bad token)
-                localStorage.clear();
-
-                // Attempt server signout (fire and forget)
-                supabase.auth.signOut().catch(e => console.warn('SignOut failed:', e));
-
-                // Force reload to clean state
-                window.location.reload();
+                // CRITICAL FIX: Do NOT clear storage or reload page automatically.
+                // This causes "0 Balance" and random logouts on network glitches.
+                // Just throw the error so the UI can decide whether to show a "Session Expired" modal
+                // or let the user manually retry.
+                throw new Error('Session expired: ' + (error?.message || 'Refresh failed'));
             }
         }
 

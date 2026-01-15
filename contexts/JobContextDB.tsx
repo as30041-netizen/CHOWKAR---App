@@ -112,7 +112,6 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   // --- Surgical Sync Handlers ---
-  // --- Surgical Sync Handlers ---
   const handleJobChange = useCallback((eventType: string, payload: any) => {
     console.log(`[Realtime] Surgical Job ${eventType}:`, payload.new?.id || payload.old?.id);
 

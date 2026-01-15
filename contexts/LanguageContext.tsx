@@ -5,7 +5,7 @@ type Language = 'en' | 'hi';
 
 interface LanguageContextType {
     language: Language;
-    setLanguage: (lang: Language) => void;
+    setLanguage: React.Dispatch<React.SetStateAction<Language>>;
     t: any;
 }
 

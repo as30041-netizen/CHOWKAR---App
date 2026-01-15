@@ -11,19 +11,19 @@ interface WalletContextType {
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const { user } = useUser();
+    const { user, isAuthLoading, hasInitialized } = useUser();
     const [walletBalance, setWalletBalance] = useState<number>(0);
     const [isLoading, setIsLoading] = useState<boolean>(false);
 
     const refreshWallet = useCallback(async () => {
-        if (!user?.id) {
-            setWalletBalance(0);
+        // Only fetch if auth is NOT loading AND we have a valid confirmed user ID
+        // AND Supabase has finished its initial session check.
+        if (isAuthLoading || !hasInitialized || !user?.id) {
             return;
         }
 
         try {
-            // Don't set global loading state for background refreshes to avoid partial UI flickers
-            // We only track it if needed for initial load logic locally
+            console.log('[Wallet] Fetching balance for:', user.id);
             const { data, error } = await supabase
                 .from('wallets')
                 .select('balance')
@@ -32,24 +32,28 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
             if (data) {
                 setWalletBalance(data.balance);
-            } else if (error && error.code === 'PGRST116') {
-                // Wallet doesn't exist yet (should be created by trigger, but fail safe)
-                setWalletBalance(0);
+            } else if (error) {
+                // If it's a "no rows" error, it might be a new user or RLS block.
+                // We ONLY set to 0 if we are sure it's not a temporary auth glitch.
+                if (error.code === 'PGRST116') {
+                    setWalletBalance(0);
+                }
+                console.warn('[Wallet] Fetch error:', error);
             }
         } catch (err) {
-            console.error('[Wallet] Fetch failed', err);
+            console.error('[Wallet] Exception during fetch', err);
         }
-    }, [user?.id]);
+    }, [user?.id, isAuthLoading, hasInitialized]);
 
-    // Initial fetch when user ID changes
+    // Initial fetch when user ID changes and auth is ready
     useEffect(() => {
-        if (user?.id) {
+        if (hasInitialized && !isAuthLoading && user?.id) {
             setIsLoading(true);
             refreshWallet().finally(() => setIsLoading(false));
-        } else {
+        } else if (hasInitialized && !isAuthLoading && !user?.id) {
             setWalletBalance(0);
         }
-    }, [user?.id, refreshWallet]);
+    }, [user?.id, isAuthLoading, hasInitialized, refreshWallet]);
 
     return (
         <WalletContext.Provider value={{ walletBalance, refreshWallet, isLoading }}>

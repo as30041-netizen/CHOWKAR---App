@@ -59,6 +59,25 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   const [job, setJob] = useState<Job | null>(null);
 
+  // ALL useState/useRef hooks declared BEFORE any early returns (React Rules of Hooks)
+  const [inputText, setInputText] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [showQuickReplies, setShowQuickReplies] = useState(true);
+  const [isListening, setIsListening] = useState(false);
+  const [translatingId, setTranslatingId] = useState<string | null>(null);
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+  const [showMenu, setShowMenu] = useState(false);
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
+  const [isOtherUserOnline, setIsOtherUserOnline] = useState(false);
+  const [showSafetyTips, setShowSafetyTips] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const typingTimeoutRef = useRef<any>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+
   // Fetch job details
   useEffect(() => {
     const fetchJobDetails = async () => {
@@ -72,33 +91,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     fetchJobDetails();
   }, [jobId]);
 
-  // Derived Constants
+  // Derived Constants - use optional chaining since job might be null
   const isPoster = job?.posterId === currentUser.id;
-  const acceptedBid = job?.bids.find(b => b.id === job.acceptedBidId);
-  const agreedBid = job?.bids.find(b => b.negotiationHistory?.some(h => h.agreed));
-  const otherPersonId = receiverId || (isPoster ? (acceptedBid?.workerId || agreedBid?.workerId || '') : job?.posterId);
-
-  const [inputText, setInputText] = useState('');
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [showQuickReplies, setShowQuickReplies] = useState(true);
-  const [isListening, setIsListening] = useState(false);
-  const [translatingId, setTranslatingId] = useState<string | null>(null);
-  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
-  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
-  const [editText, setEditText] = useState('');
-
-  // UI State
-  const [showMenu, setShowMenu] = useState(false);
-  const [isOtherTyping, setIsOtherTyping] = useState(false);
-  const [isOtherUserOnline, setIsOtherUserOnline] = useState(false);
-  const [showSafetyTips, setShowSafetyTips] = useState(false);
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [showProfileModal, setShowProfileModal] = useState(false);
-  const typingTimeoutRef = useRef<any>(null);
-
-  // INTERNAL STATE: Single source of truth for THIS chat
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const acceptedBid = job?.bids?.find(b => b.id === job?.acceptedBidId);
+  const agreedBid = job?.bids?.find(b => b.negotiationHistory?.some(h => h.agreed));
+  const otherPersonId = receiverId || (isPoster ? (acceptedBid?.workerId || agreedBid?.workerId || '') : job?.posterId) || '';
 
   // Helper to safely add/update messages (Deduplication & Replacement)
   const upsertMessages = (newMsgs: ChatMessage[]) => {
@@ -126,8 +123,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   };
 
   const loadMessages = async () => {
-    // Don't set loading true on background refresh
-    // setIsLoadingHistory(true); 
+    if (!job?.id) return; // Guard
     try {
       const { messages: historyData } = await fetchJobMessages(job.id);
 
@@ -145,13 +141,26 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   };
 
   // Initial Load
+  const { hasInitialized } = useUser();
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   useEffect(() => {
+    // CRITICAL FIX: Wait for auth initialization
+    if (!job?.id || !hasInitialized) return;
+
     setIsLoadingHistory(true);
-    loadMessages();
-  }, [job.id]);
+    setLoadError(null);
+
+    loadMessages().catch(err => {
+      console.error('Initial load failed:', err);
+      setLoadError('Failed to load messages');
+      setIsLoadingHistory(false);
+    });
+  }, [job?.id, hasInitialized]);
 
   // HYBRID SYNC: Refetch on window focus to catch offline messages
   useEffect(() => {
+    if (!job?.id) return;
     const handleFocus = () => {
       if (document.visibilityState === 'visible') {
         console.log('[Chat] App foregrounded, refreshing messages...');
@@ -165,7 +174,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       window.removeEventListener('visibilitychange', handleFocus);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [job.id]);
+  }, [job?.id]);
 
   // We no longer merge props.messages. We use 'messages' state directly.
   const allMessages = messages;
@@ -204,7 +213,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
     let timeoutId: any;
 
-    if (job.id && currentUser.id) {
+    if (job?.id && currentUser.id) {
       // DEBOUNCE: Use a timeout to prevent spamming mark_messages_read RPC
       timeoutId = setTimeout(markAsRead, 2000); // Wait 2s after last message arrival
 
@@ -227,9 +236,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       setActiveJobId(null);
     };
     // Trigger when job changes, or when the TOTAL message list changes (to catch new arrivals)
-  }, [job.id, currentUser.id, markNotificationsAsReadForJob, otherPersonId, allMessages.length]);
+  }, [job?.id, currentUser.id, markNotificationsAsReadForJob, otherPersonId, allMessages.length]);
 
   useEffect(() => {
+    if (!job?.id) return;
     const newChannel = supabase.channel(`chat_room:${job.id}`, {
       config: { presence: { key: currentUser.id } }
     });
@@ -297,7 +307,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     return () => {
       supabase.removeChannel(newChannel);
     };
-  }, [job.id, currentUser.id, otherPersonId]);
+  }, [job?.id, currentUser.id, otherPersonId]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputText(e.target.value);
@@ -319,18 +329,18 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   let otherPersonPhoto = '';
 
   // VISIBILITY RULES: Phone only visible for IN_PROGRESS jobs
-  const isPhoneVisible = job.status === 'IN_PROGRESS';
-  const isArchived = job.status === 'COMPLETED';
+  const isPhoneVisible = job?.status === 'IN_PROGRESS';
+  const isArchived = job?.status === 'COMPLETED';
 
   const [securePhone, setSecurePhone] = useState('');
 
   useEffect(() => {
-    if (isPhoneVisible) {
+    if (isPhoneVisible && job?.id) {
       fetchJobContact(job.id).then(contact => {
         if (contact && contact.phone) setSecurePhone(contact.phone);
       }).catch(err => console.error('Failed to fetch contact info', err));
     }
-  }, [job.id, isPhoneVisible]);
+  }, [job?.id, isPhoneVisible]);
 
   if (isPoster) {
     otherPersonName = acceptedBid?.workerName || 'Worker';
@@ -338,9 +348,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     otherPersonPhone = securePhone || (isPhoneVisible ? (acceptedBid?.workerPhone || '') : '');
     otherPersonPhoto = acceptedBid?.workerPhoto || '';
   } else {
-    otherPersonName = job.posterName || 'Employer';
-    otherPersonPhone = securePhone || (isPhoneVisible ? (job.posterPhone || '') : '');
-    otherPersonPhoto = job.posterPhoto || '';
+    otherPersonName = job?.posterName || 'Employer';
+    otherPersonPhone = securePhone || (isPhoneVisible ? (job?.posterPhone || '') : '');
+    otherPersonPhoto = job?.posterPhoto || '';
   }
 
   const quickReplies = isPoster ? QUICK_REPLIES_POSTER : QUICK_REPLIES_WORKER;
@@ -497,6 +507,24 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     return acc;
   }, {} as Record<string, ChatMessage[]>);
 
+  // Show loading state if job hasn't loaded yet (after all hooks are called)
+  if (!job) {
+    return (
+      <div className="fixed inset-0 z-[100] bg-gray-950 flex items-center justify-center">
+        <div className="text-white text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading chat...</p>
+          <button
+            onClick={onClose}
+            className="mt-4 text-gray-500 text-sm hover:text-white transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       {/* Desktop Backdrop - allows clicking outside to close */}
@@ -634,7 +662,20 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-[#e5ddd5] dark:bg-gray-950 bg-opacity-10 transition-colors" style={{ backgroundImage: 'radial-gradient(var(--bg-pattern-color, #cbd5e1) 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
-          {!isLoadingHistory && allMessages.length === 0 && (
+          {!isLoadingHistory && loadError && (
+            <div className="flex flex-col items-center justify-center py-12 space-y-4">
+              <div className="text-red-400 bg-red-500/10 p-3 rounded-full"><ShieldAlert size={24} /></div>
+              <p className="text-sm font-medium text-red-500">{loadError}</p>
+              <button
+                onClick={() => { setIsLoadingHistory(true); setLoadError(null); loadMessages(); }}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-700 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {!isLoadingHistory && !loadError && allMessages.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 opacity-50 space-y-2">
               <Sparkles size={40} className="text-emerald-300" />
               <p className="text-sm font-medium text-gray-500">Start the conversation</p>

@@ -4,6 +4,18 @@ import { Capacitor } from '@capacitor/core';
 let appIsActive = true;
 let isLoggedIn = false;
 
+type AppStateListener = (isActive: boolean) => void;
+const listeners: Set<AppStateListener> = new Set();
+
+export const addAppStateListener = (listener: AppStateListener) => {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+};
+
+const notifyListeners = (isActive: boolean) => {
+    listeners.forEach(listener => listener(isActive));
+};
+
 // Track app foreground/background state
 export const initializeAppStateTracking = () => {
     if (!Capacitor.isNativePlatform()) {
@@ -14,6 +26,7 @@ export const initializeAppStateTracking = () => {
     CapacitorApp.addListener('appStateChange', (state: AppState) => {
         appIsActive = state.isActive;
         console.log('[AppState] App is now:', appIsActive ? 'FOREGROUND' : 'BACKGROUND');
+        notifyListeners(appIsActive);
     });
 
     console.log('[AppState] State tracking initialized');

@@ -263,8 +263,8 @@ export const TRANSLATIONS = {
     reviewSubmitted: "Review Submitted!",
     compliments: "What went well?",
 
-    // Premium - UPDATED FOR "COMING SOON"
-    upgradePremium: "Premium Coming Soon",
+    // Premium
+    upgradePremium: "Upgrade to Premium",
     premiumDesc: "We are building professional tools for you.",
     premiumFeature1: "AI Job Description Enhancer",
     premiumFeature2: "AI Wage Estimator",
@@ -625,8 +625,8 @@ export const TRANSLATIONS = {
     reviewSubmitted: "रिव्यु जमा हो गया!",
     compliments: "क्या अच्छा रहा?",
 
-    // Premium - UPDATED FOR "COMING SOON"
-    upgradePremium: "प्रीमियम जल्द आ रहा है",
+    // Premium
+    upgradePremium: "प्रीमियम में अपग्रेड करें",
     premiumDesc: "हम आपके लिए प्रोफेशनल टूल्स बना रहे हैं।",
     premiumFeature1: "AI विवरण सुधार (AI Enhancer)",
     premiumFeature2: "AI मजदूरी अनुमान (AI Wage Estimator)",
@@ -773,6 +773,7 @@ export const TRANSLATIONS = {
 export const POSTER_FEE = 0; // Free for now
 export const WORKER_COMMISSION_RATE = 0; // 0% commission
 export const FREE_AI_USAGE_LIMIT = 2; // Number of free AI uses allowed
+export const PREMIUM_PRICE = 199; // ₹199 for life-time or annual (simplified)
 
 export const DRAFT_STORAGE_KEY = 'chowkar_job_draft';
 
