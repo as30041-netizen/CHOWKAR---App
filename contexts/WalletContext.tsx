@@ -23,9 +23,11 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
 
         try {
+            // Use dynamic import to avoid circular dependencies
+            const { safeFetch } = await import('../services/fetchUtils');
+
             console.log('[Wallet] Fetching balance for:', user.id);
-            const { data, error } = await supabase
-                .from('wallets')
+            const { data, error } = await safeFetch<any>('wallets')
                 .select('balance')
                 .eq('user_id', user.id)
                 .single();
@@ -48,6 +50,9 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     // Initial fetch when user ID changes and auth is ready
     useEffect(() => {
         if (hasInitialized && !isAuthLoading && user?.id) {
+            // Prevent multiple parallel fetches if already loading
+            if (isLoading) return;
+
             setIsLoading(true);
             refreshWallet().finally(() => setIsLoading(false));
         } else if (hasInitialized && !isAuthLoading && !user?.id) {
