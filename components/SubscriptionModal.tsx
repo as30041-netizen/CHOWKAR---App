@@ -13,6 +13,16 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, on
     const { user, t, language, showAlert, refreshUser } = useUser();
     const [loading, setLoading] = useState(false);
 
+    // Pre-warm payment engine when modal opens
+    React.useEffect(() => {
+        if (isOpen) {
+            import('../lib/supabase').then(({ supabase }) => {
+                supabase.functions.invoke('create-razorpay-order', { method: 'GET' })
+                    .catch(() => { }); // Silent fail
+            });
+        }
+    }, [isOpen]);
+
     if (!isOpen) return null;
 
     const handleUpgrade = async () => {
@@ -21,6 +31,15 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, on
             const result = await initiatePremiumPayment(user.id, user.email || '', user.phone || '');
             if (result.success) {
                 await refreshUser();
+
+                // Polling retry for webhook latency
+                let attempts = 0;
+                const pollInterval = setInterval(async () => {
+                    attempts++;
+                    await refreshUser();
+                    if (attempts >= 3) clearInterval(pollInterval);
+                }, 2000);
+
                 showAlert(language === 'en' ? 'Welcome to Premium!' : 'प्रीमियम में आपका स्वागत है!', 'success');
                 onClose();
             } else if (result.error !== 'Payment Cancelled') {

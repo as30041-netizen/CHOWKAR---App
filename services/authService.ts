@@ -191,21 +191,34 @@ export const getCurrentUser = async (
     if (!finalProfile) return { user: null, error: 'Database sync failed' };
 
     // 3. Fetch Reviews
-    const { data: reviewsData } = await supabase
-      .from('reviews')
-      .select('*, reviewer:profiles!reviewer_id(name)')
-      .eq('reviewee_id', authUser.id)
-      .order('created_at', { ascending: false });
+    // 3. Fetch Reviews using safeFetch (Reliable)
+    let reviews: any[] = [];
+    try {
+      const { safeFetch } = await import('./fetchUtils');
+      const response = await safeFetch(
+        `${supabaseUrl}/rest/v1/reviews?reviewee_id=eq.${authUser.id}&select=*,reviewer:profiles!reviewer_id(name)&order=created_at.desc`,
+        {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store'
+        }
+      );
 
-    const reviews = (reviewsData || []).map((r: any) => ({
-      id: r.id,
-      reviewerId: r.reviewer_id,
-      reviewerName: r.reviewer?.name || 'User',
-      rating: r.rating,
-      comment: r.comment,
-      date: new Date(r.created_at).getTime(),
-      tags: []
-    }));
+      if (response.ok) {
+        const reviewsData = await response.json();
+        reviews = (reviewsData || []).map((r: any) => ({
+          id: r.id,
+          reviewerId: r.reviewer_id,
+          reviewerName: r.reviewer?.name || 'User',
+          rating: r.rating,
+          comment: r.comment,
+          date: new Date(r.created_at).getTime(),
+          tags: r.tags || []
+        }));
+      }
+    } catch (err) {
+      console.warn('[AuthService] Reviews fetch failed, continuing without reviews:', err);
+    }
 
     const user = mapDbProfileToUser(finalProfile, authUser.email, reviews);
     console.log(`[AuthService] Source of Truth Synced: ${user.name} (Phone: ${user.phone})`);
@@ -311,7 +324,7 @@ export const getUserProfile = async (userId: string): Promise<{ user: User | nul
     let reviews: any[] = [];
     try {
       const reviewsResponse = await safeFetch(
-        `${supabaseUrl}/rest/v1/reviews?reviewee_id=eq.${userId}&select=id,reviewer_id,rating,comment,created_at&order=created_at.desc`,
+        `${supabaseUrl}/rest/v1/reviews?reviewee_id=eq.${userId}&select=*,reviewer:profiles!reviewer_id(name)&order=created_at.desc`,
         {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
@@ -324,11 +337,11 @@ export const getUserProfile = async (userId: string): Promise<{ user: User | nul
         reviews = (reviewsData || []).map((r: any) => ({
           id: r.id,
           reviewerId: r.reviewer_id,
-          reviewerName: 'User', // Simplified - no join needed for now
+          reviewerName: r.reviewer?.name || 'User',
           rating: r.rating,
           comment: r.comment,
           date: new Date(r.created_at).getTime(),
-          tags: []
+          tags: r.tags || []
         }));
         console.log('[AuthService] Reviews loaded via REST:', reviews.length);
       }

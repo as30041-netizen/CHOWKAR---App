@@ -17,6 +17,8 @@ interface PushPayload {
     title: string
     body: string
     data?: Record<string, string>
+    type?: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR'
+    relatedJobId?: string
 }
 
 // Generate OAuth2 access token for FCM v1 API
@@ -158,7 +160,7 @@ serve(async (req) => {
 
     try {
         const payload: PushPayload = await req.json()
-        const { userId, title, body, data } = payload
+        const { userId, title, body, data, type = 'INFO', relatedJobId } = payload
 
         if (!userId || !title || !body) {
             return new Response(
@@ -167,8 +169,32 @@ serve(async (req) => {
             )
         }
 
-        // Get user's push token from database
         const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!)
+
+        // 1. INSERT INTO DB (Single Source of Truth)
+        // We do this BEFORE sending push, so history is preserved even if FCM fails.
+        // We use service_role, so RLS is bypassed (efficient).
+        const { data: insertedNotif, error: insertError } = await supabase
+            .from('notifications')
+            .insert({
+                user_id: userId,
+                title: title,
+                message: body,
+                type: type,
+                related_job_id: relatedJobId || null,
+                read: false
+            })
+            .select() // Return data so we can log it
+
+        if (insertError) {
+            console.error('Failed to insert notification into DB:', insertError)
+            // We continue to try sending the push even if DB fails, or should we abort?
+            // Safer to abort or at least log heavily. For now, proceeding but logging error.
+        } else {
+            console.log('Notification saved to DB:', insertedNotif?.[0]?.id)
+        }
+
+        // 2. FETCH PUSH TOKEN
         const { data: profile, error: profileError } = await supabase
             .from('profiles')
             .select('push_token')
@@ -185,12 +211,17 @@ serve(async (req) => {
 
         if (!profile?.push_token) {
             console.log('User has no push token:', userId)
+            // Even if no push token, we successfully saved to DB (which is good!)
             return new Response(
-                JSON.stringify({ error: 'User has no push token registered' }),
+                JSON.stringify({
+                    success: true,
+                    message: 'Notification saved to DB, but user has no push token.'
+                }),
                 { status: 200, headers: { 'Content-Type': 'application/json' } }
             )
         }
 
+        // 3. SEND FCM PUSH
         let fcmResult: any
         let apiUsed: string
 
@@ -238,7 +269,7 @@ serve(async (req) => {
         }
 
         return new Response(
-            JSON.stringify({ success: true, apiUsed, fcm: fcmResult }),
+            JSON.stringify({ success: true, apiUsed, fcm: fcmResult, dbInsert: !insertError }),
             { headers: { 'Content-Type': 'application/json' } }
         )
 

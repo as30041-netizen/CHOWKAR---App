@@ -1,27 +1,40 @@
 /**
- * Production-safe logging utility
- * Logs are only printed in development mode
+ * Application Logger
+ * Wraps console methods to prevent noise in production.
+ * 
+ * Usage:
+ * import { logger } from './logger';
+ * logger.log('Something happened');
  */
 
-const isDev = import.meta.env.DEV || import.meta.env.MODE === 'development';
+const isProduction = import.meta.env.PROD;
 
 export const logger = {
-    log: (...args: unknown[]) => {
-        if (isDev) console.log(...args);
+    log: (message: string, ...args: any[]) => {
+        if (!isProduction) {
+            console.log(message, ...args);
+        }
     },
-    warn: (...args: unknown[]) => {
-        if (isDev) console.warn(...args);
+
+    info: (message: string, ...args: any[]) => {
+        if (!isProduction) {
+            console.info(message, ...args);
+        }
     },
-    error: (...args: unknown[]) => {
-        // Always log errors, even in production
-        console.error(...args);
+
+    debug: (message: string, ...args: any[]) => {
+        if (!isProduction) {
+            console.debug(message, ...args);
+        }
     },
-    debug: (...args: unknown[]) => {
-        if (isDev) console.debug(...args);
+
+    warn: (message: string, ...args: any[]) => {
+        // Warnings are useful in production, but we can filter if needed
+        console.warn(message, ...args);
     },
-    info: (...args: unknown[]) => {
-        if (isDev) console.info(...args);
+
+    error: (message: string, ...args: any[]) => {
+        // Errors should always be visible
+        console.error(message, ...args);
     }
 };
-
-export default logger;

@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { XCircle, Search, Filter, Phone, Briefcase, ChevronRight, MoreVertical, Archive, Trash2, FileText } from 'lucide-react';
+import { XCircle, Search, Filter, Phone, Briefcase, ChevronRight, MoreVertical, Archive, Trash2, FileText, Star, ArrowLeft } from 'lucide-react';
 import { useNotification } from '../contexts/NotificationContext';
 import { Job } from '../types';
 
 import { useUser } from '../contexts/UserContextDB';
 import { useJobs } from '../contexts/JobContextDB';
+import { useSwipe } from '../hooks/useSwipe';
 
 interface ChatListPanelProps {
     isOpen: boolean;
@@ -29,6 +30,12 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
     const [deletedChats, setDeletedChats] = useState<Set<string>>(new Set());
     const hasFetchedRef = React.useRef(false);
     const lastFetchTimeRef = React.useRef(0);
+
+    // Swipe to Close
+    const { onTouchStart, onTouchMove, onTouchEnd, onMouseDown, onMouseMove, onMouseUp } = useSwipe({
+        onSwipeRight: onClose,
+        threshold: 50
+    });
 
     // Load available chats using Optimized RPC (Solves N+1 Query Problem)
     // Only fetch once when panel opens, not on every message change
@@ -184,21 +191,23 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-start justify-end">
+        <div className="fixed inset-0 z-50 flex items-start justify-end"
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}>
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={onClose}></div>
 
-            <div className="relative w-full max-w-sm bg-white dark:bg-gray-900 h-full shadow-[-20px_0_50px_rgba(0,0,0,0.1)] animate-slide-in-right flex flex-col border-l border-gray-100 dark:border-gray-800 pt-safe pb-safe transition-all duration-500 sm:rounded-l-[3rem]">
+            <div className="relative w-full sm:max-w-[360px] bg-white dark:bg-gray-900 h-full shadow-[-10px_0_30px_rgba(0,0,0,0.05)] animate-slide-in-right flex flex-col border-l border-gray-100 dark:border-gray-800 pt-safe pb-safe transition-all duration-500">
 
-                {/* Header */}
-                <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl px-6 py-8 border-b border-gray-100 dark:border-gray-800 z-10 sticky top-0 transition-colors">
-                    <div className="flex justify-between items-center mb-8">
-                        <div>
-                            <h2 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">{t.chats || 'Messages'}</h2>
-                            <div className="h-1.5 w-10 bg-emerald-500 rounded-full mt-2" />
-                        </div>
-                        <button onClick={onClose} className="p-3 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl text-gray-400 dark:text-gray-500 transition-all active:scale-90">
-                            <XCircle size={28} strokeWidth={1.5} />
+                {/* Header - Ultra Compact */}
+                <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl px-4 py-3 border-b border-gray-100 dark:border-gray-800 z-10 sticky top-0 transition-colors">
+                    <div className="flex items-center gap-3 mb-3">
+                        <button onClick={onClose} className="p-1.5 -ml-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full text-gray-500 dark:text-gray-400 transition-all active:scale-95 md:hidden">
+                            <ArrowLeft size={18} strokeWidth={2.5} />
                         </button>
+                        <div>
+                            <h2 className="text-lg font-bold text-gray-900 dark:text-white tracking-tight leading-none">{t.chats || 'Messages'}</h2>
+                        </div>
                     </div>
 
                     {/* Search Bar */}
@@ -330,8 +339,13 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                                             {/* Content Area */}
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex justify-between items-center mb-1">
-                                                    <h4 className="font-black text-gray-900 dark:text-white truncate pr-2 tracking-tight transition-colors group-hover/card:text-emerald-600 dark:group-hover/card:text-emerald-400">
+                                                    <h4 className="font-black text-gray-900 dark:text-white truncate pr-2 tracking-tight transition-colors group-hover/card:text-emerald-600 dark:group-hover/card:text-emerald-400 flex items-center gap-1.5">
                                                         {chat.counterpartName}
+                                                        {chat.counterpartRating && chat.counterpartRating > 0 && (
+                                                            <span className="inline-flex items-center gap-0.5 text-[9px] bg-amber-50 dark:bg-amber-900/30 px-1.5 py-0.5 rounded-md text-amber-600 dark:text-amber-400 font-black border border-amber-100 dark:border-amber-800/30">
+                                                                <Star size={9} fill="currentColor" strokeWidth={0} /> {chat.counterpartRating.toFixed(1)}
+                                                            </span>
+                                                        )}
                                                     </h4>
                                                     {timeDisplay && (
                                                         <span className={`text-[9px] font-black uppercase tracking-widest ${hasUnreadRealtime ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400'}`}>

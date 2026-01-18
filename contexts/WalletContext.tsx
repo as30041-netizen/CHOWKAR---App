@@ -23,31 +23,52 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
 
         try {
-            // Use dynamic import to avoid circular dependencies
-            const { safeFetch } = await import('../services/fetchUtils');
-
             console.log('[Wallet] Fetching balance for:', user.id);
-            const { data, error } = await safeFetch<any>('wallets')
-                .select('balance')
-                .eq('user_id', user.id)
-                .single();
+            const { safeFetch } = await import('../services/fetchUtils');
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
-            if (data) {
-                setWalletBalance(data.balance);
-            } else if (error) {
-                // If it's a "no rows" error, it might be a new user or RLS block.
-                // We ONLY set to 0 if we are sure it's not a temporary auth glitch.
-                if (error.code === 'PGRST116') {
-                    setWalletBalance(0);
-                }
-                console.warn('[Wallet] Fetch error:', error);
+            const response = await safeFetch(`${supabaseUrl}/rest/v1/wallets?user_id=eq.${user.id}&select=balance`);
+
+            if (!response.ok) {
+                throw new Error(`Wallet fetch failed: ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data && data.length > 0) {
+                setWalletBalance(data[0].balance);
+            } else {
+                setWalletBalance(0);
             }
         } catch (err) {
             console.error('[Wallet] Exception during fetch', err);
         }
     }, [user?.id, isAuthLoading, hasInitialized]);
 
-    // Initial fetch when user ID changes and auth is ready
+    // 2. Realtime Subscription
+    useEffect(() => {
+        if (!hasInitialized || isAuthLoading || !user?.id) return;
+
+        const channel = supabase
+            .channel(`wallet_changes_${user.id}`)
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'wallets',
+                filter: `user_id=eq.${user.id}`
+            }, (payload) => {
+                console.log('[Wallet] Realtime update:', payload);
+                if (payload.new && (payload.new as any).balance !== undefined) {
+                    setWalletBalance((payload.new as any).balance);
+                }
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [user?.id, isAuthLoading, hasInitialized]);
+
+    // 1. Initial fetch when user ID changes and auth is ready
     useEffect(() => {
         if (hasInitialized && !isAuthLoading && user?.id) {
             // Prevent multiple parallel fetches if already loading

@@ -116,10 +116,21 @@ export const useChatHandlers = (setShowEditProfile: (show: boolean) => void, set
         // setMessages(prev => [...prev, newMessage]);
 
         try {
-            await waitForSupabase(async () => {
-                return await supabase.from('chat_messages').insert({
-                    job_id: newMessage.jobId, sender_id: newMessage.senderId, receiver_id: newMessage.receiverId, text: newMessage.text
-                }).select().single();
+            const { safeFetch } = await import('../services/fetchUtils');
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+            await safeFetch(`${supabaseUrl}/rest/v1/chat_messages`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=representation'
+                },
+                body: JSON.stringify({
+                    job_id: newMessage.jobId,
+                    sender_id: newMessage.senderId,
+                    receiver_id: newMessage.receiverId,
+                    text: newMessage.text
+                })
             });
         } catch (err) {
             console.error('Error sending message:', err);

@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Job, Bid, JobStatus } from '../types';
-import { fetchHomeFeed, fetchMyJobsFeed, fetchMyApplicationsFeed, fetchJobFullDetails, createJob as createJobDB, updateJob as updateJobDB, deleteJob as deleteJobDB, createBid as createBidDB, updateBid as updateBidDB } from '../services/jobService';
+import { fetchHomeFeed, fetchMyJobsFeed, fetchMyApplicationsFeed, fetchJobFullDetails, createJob as createJobDB, updateJob as updateJobDB, deleteJob as deleteJobDB, createBid as createBidDB, updateBid as updateBidDB, fetchDashboardStats } from '../services/jobService';
 import { supabase } from '../lib/supabase';
 
 interface JobContextType {
@@ -11,6 +11,7 @@ interface JobContextType {
   deleteJob: (jobId: string) => Promise<{ success: boolean; error?: string }>;
   addBid: (bid: Bid) => Promise<string | undefined>;
   updateBid: (bid: Bid) => Promise<void>;
+  markJobAsReviewed: (jobId: string) => void;
   refreshJobs: (userId?: string) => Promise<void>;
   fetchMoreJobs: () => Promise<void>;
   getJobWithFullDetails: (jobId: string, force?: boolean) => Promise<Job | null>; // NEW: Lazy load full details
@@ -21,7 +22,16 @@ interface JobContextType {
   isRevalidating: boolean;
   isLoadingMore: boolean;
   hasMore: boolean;
+  stats: {
+    poster_active: number;
+    poster_history: number;
+    worker_active: number;
+    worker_history: number;
+    discover_active: number;
+  };
   error: string | null;
+  searchQuery: string;
+  setSearchQuery: (q: string) => void;
 }
 
 const JobContext = createContext<JobContextType | undefined>(undefined);
@@ -90,20 +100,31 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [loading, setLoading] = useState(true);
   const [isRevalidating, setIsRevalidating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // IMPORTANT: Do NOT initialize from localStorage!
-  // The auth state from Supabase should be the single source of truth.
-  // Initializing from localStorage causes a race condition where queries run
-  // before the Supabase client's auth session is ready.
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [stats, setStats] = useState({ poster_active: 0, poster_history: 0, worker_active: 0, worker_history: 0, discover_active: 0 });
+  const [searchQuery, setSearchQuery] = useState('');
+  const currentRequestIdRef = useRef<number>(0);
+
+  // --- Stats Loading ---
+  const loadStats = useCallback(async (userId: string) => {
+    const newStats = await fetchDashboardStats(userId);
+    setStats(newStats);
+  }, []);
+
   const lastLoadAttemptRef = useRef<Record<string, number>>({});
   const lastLoadTypeRef = useRef<string>('');
   const subscribedUserIdRef = useRef<string | null>(null);
+  const inFlightFetches = useRef(new Set<string>());
+  const fetchCache = useRef(new Map<string, number>());
+  const feedCache = useRef<Record<string, any>>({
+    HOME: { jobs: [], hasMore: true, offset: 0, lastUpdated: 0 },
+    POSTER: { jobs: [], hasMore: true, offset: 0, lastUpdated: 0 },
+    WORKER_APPS: { jobs: [], hasMore: true, offset: 0, lastUpdated: 0 }
+  });
 
   const clearJobs = useCallback(() => {
     setJobs([]);
     setError(null);
-    // Clear localStorage cache on logout
     try {
       localStorage.removeItem('chowkar_feed_cache');
     } catch (e) {
@@ -152,7 +173,10 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     Object.keys(feedCache.current).forEach(key => {
       feedCache.current[key].jobs = updater(feedCache.current[key].jobs);
     });
-  }, []);
+
+    // Refresh dashboard stats on job changes
+    if (currentUserId) loadStats(currentUserId);
+  }, [currentUserId, loadStats]);
 
   const handleBidChange = useCallback((eventType: string, payload: any) => {
     console.log(`[Realtime] Surgical Bid ${eventType}:`, payload.new?.id || payload.old?.id);
@@ -245,7 +269,10 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     Object.keys(feedCache.current).forEach(key => {
       feedCache.current[key].jobs = bidUpdater(feedCache.current[key].jobs);
     });
-  }, [currentUserId]);
+
+    // Refresh dashboard stats on bid changes
+    if (currentUserId) loadStats(currentUserId);
+  }, [currentUserId, loadStats]);
 
   // Real-time subscription for jobs and bids (HYBRID: Broadcast + postgres_changes)
   // Only subscribe when user is logged in AND we have a valid currentUserId
@@ -343,8 +370,6 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     WORKER_APPS: { jobs: [], hasMore: true, offset: 0, lastUpdated: 0 }
   });
 
-  const feedCache = useRef<Record<string, any>>(getEmptyCache());
-
 
 
   // Store current filters to support pagination (fetchMoreJobs)
@@ -352,6 +377,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const loadFeed = useCallback(async (type: 'HOME' | 'POSTER' | 'WORKER_APPS', offset: number = 0, userIdOverride?: string, filters?: { category?: string; searchQuery?: string }) => {
     const isInitial = offset === 0;
+    const requestId = ++currentRequestIdRef.current;
     const now = Date.now();
 
     // Update filter ref if provided (usually on initial load/filter change)
@@ -407,6 +433,10 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
       }
 
+      if (userId && userId !== currentUserId) {
+        setCurrentUserId(userId);
+      }
+
       console.log(`[JobContext] Loading ${type} feed for user: ${userId} with filters:`, currentFiltersRef.current);
 
       // 4. Execute RPC
@@ -421,11 +451,61 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       console.log(`[JobContext] ✅ ${type} feed loaded: ${result.jobs.length} jobs, hasMore: ${result.hasMore}`);
 
-      if (lastLoadTypeRef.current !== resultTypeOnStart) return;
+      // 4b. Review Sync Fallback: If RPC doesn't provide hasMyReview, fetch it manually for this batch
+      try {
+        const jobIds = result.jobs.map(j => j.id);
+        if (jobIds.length > 0) {
+          const { data: reviewsData } = await supabase
+            .from('reviews')
+            .select('job_id')
+            .eq('reviewer_id', userId)
+            .in('job_id', jobIds);
+
+          if (reviewsData && reviewsData.length > 0) {
+            const reviewedSet = new Set(reviewsData.map((r: any) => r.job_id));
+            result.jobs = result.jobs.map(j => ({
+              ...j,
+              hasMyReview: j.hasMyReview || reviewedSet.has(j.id)
+            }));
+            console.log(`[JobContext] Synced reviews for ${reviewsData.length} jobs in batch`);
+          }
+        }
+      } catch (e) {
+        console.warn('[JobContext] Review sync failed', e);
+      }
+
+      // 5. THE GUARD: If a newer request has started (tab switch), abandon this update
+      if (requestId !== currentRequestIdRef.current) {
+        console.warn(`[JobContext] ⚠️ Abandonding stale result for ${type} (Request ${requestId} vs Current ${currentRequestIdRef.current})`);
+        return;
+      }
 
       // 6. Update State & Cache
       if (isInitial) {
-        setJobs(result.jobs);
+        setJobs(prev => {
+          // Smart Merge: When replacing the feed, check if we have "richer" versions of these jobs in memory
+          // (e.g., with phone numbers or full bid history) and preserve that data.
+          return result.jobs.map(newJob => {
+            const existing = prev.find(p => p.id === newJob.id);
+            if (existing) {
+              // If existing job has a posterPhone but new one (feed) doesn't, keep the old one.
+              // Also preserve bids if existing has more (detailed fetch) than the feed (summary).
+              return {
+                ...newJob,
+                posterPhone: existing.posterPhone || newJob.posterPhone,
+                posterPhoto: existing.posterPhoto || newJob.posterPhoto, // Preserve high-res photo if applicable
+                // If we have detailed bids loaded, don't overwrite with summary/empty bids from feed
+                bids: (existing.bids?.length > (newJob.bids?.length || 0)) ? existing.bids : newJob.bids,
+                // Preserve myBid fields if they were locally calculated/optimistic
+                myBidId: existing.myBidId || newJob.myBidId,
+                myBidStatus: existing.myBidStatus || newJob.myBidStatus,
+                hasMyReview: existing.hasMyReview || newJob.hasMyReview
+              };
+            }
+            return newJob;
+          });
+        });
+
         // Only update cache if no filters (we only cache the "default" view)
         if (!hasActiveFilters) {
           feedCache.current[type] = {
@@ -443,6 +523,9 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
       }
       setHasMore(result.hasMore || false);
+
+      // 7. Refresh Stats too
+      loadStats(userId);
     } catch (err: any) {
       console.error(`[JobContext] Error loading ${type} feed:`, err);
       if (lastLoadTypeRef.current === type) setError(`Failed: ${err.message || 'Unknown error'}`);
@@ -585,6 +668,16 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
+  const markJobAsReviewed = (jobId: string) => {
+    const updater = (prev: Job[]) => prev.map(j => j.id === jobId ? { ...j, hasMyReview: true } : j);
+    setJobs(updater);
+
+    // ALSO update cache so it persists across tab switches
+    Object.keys(feedCache.current).forEach(type => {
+      feedCache.current[type].jobs = updater(feedCache.current[type].jobs);
+    });
+  };
+
   const deleteJob = async (jobId: string) => {
     const previousJobs = jobs;
     try {
@@ -687,8 +780,6 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  const fetchCache = React.useRef<Map<string, number>>(new Map());
-  const inFlightFetches = React.useRef<Set<string>>(new Set());
 
   const getJobWithFullDetails = useCallback(async (jobId: string, force = false): Promise<Job | null> => {
     const now = Date.now();
@@ -723,16 +814,28 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       if (fullJob) {
         fetchCache.current.set(jobId, now);
-        // Update local state with the fully loaded job
-        setJobs(prev => {
-          const index = prev.findIndex(j => j.id === jobId);
+        // Update local state AND feed cache with the fully loaded job
+        // This prevents "summary" feeds (without phone) from overwriting detailed data on revalidation
+        const updater = (prevJobs: Job[]) => {
+          const index = prevJobs.findIndex(j => j.id === jobId);
           if (index !== -1) {
-            const newJobs = [...prev];
-            newJobs[index] = fullJob;
+            const newJobs = [...prevJobs];
+            // Merge to be safe, though fullJob should be complete
+            newJobs[index] = { ...newJobs[index], ...fullJob };
             return newJobs;
           }
-          return [fullJob, ...prev];
+          return [fullJob, ...prevJobs];
+        };
+
+        setJobs(updater);
+
+        // Update internal cache immediately so tab switches don't revert to summary data
+        Object.keys(feedCache.current).forEach(key => {
+          if (feedCache.current[key].jobs.some((j: Job) => j.id === jobId)) {
+            feedCache.current[key].jobs = updater(feedCache.current[key].jobs);
+          }
         });
+
         return fullJob;
       }
 
@@ -767,6 +870,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (error) throw error;
 
       console.log(`[JobContext] ✅ Job ${jobId} and chat hidden`);
+      if (currentUserId) loadStats(currentUserId);
       return { success: true };
     } catch (err: any) {
       console.error('[JobContext] Error hiding job:', err);
@@ -778,9 +882,9 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   return (
     <JobContext.Provider value={{
-      jobs, setJobs, addJob, updateJob, deleteJob, addBid, updateBid,
+      jobs, setJobs, addJob, updateJob, deleteJob, addBid, updateBid, markJobAsReviewed,
       refreshJobs, fetchMoreJobs, getJobWithFullDetails, loadFeed,
-      clearJobs, hideJob, loading, isRevalidating, isLoadingMore, hasMore, error
+      clearJobs, hideJob, loading, isRevalidating, isLoadingMore, hasMore, stats, error, searchQuery, setSearchQuery
     }}>
       {children}
     </JobContext.Provider>

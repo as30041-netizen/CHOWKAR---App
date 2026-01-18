@@ -9,7 +9,7 @@ import { LanguageProvider } from './contexts/LanguageContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { ChatMessage, Coordinates, Job, JobStatus, UserRole } from './types';
 import {
-  MapPin, UserCircle, ArrowLeftRight, Bell, MessageCircle, Languages, Loader2
+  MapPin, UserCircle, ArrowLeftRight, Bell, MessageCircle, Languages, Loader2, Briefcase, Menu, Search, X, Home as HomeIcon, Wallet, LayoutGrid, Plus
 } from 'lucide-react';
 import { supabase, waitForSupabase } from './lib/supabase';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -21,6 +21,7 @@ const PostJob = lazy(() => import('./pages/PostJob').then(m => ({ default: m.Pos
 
 const Analytics = lazy(() => import('./pages/Analytics').then(m => ({ default: m.Analytics })));
 const WalletPage = lazy(() => import('./pages/WalletPage').then(m => ({ default: m.WalletPage })));
+const CategoryJobs = lazy(() => import('./pages/CategoryJobs').then(m => ({ default: m.CategoryJobs })));
 
 // --- Lazy loaded Components ---
 const Confetti = lazy(() => import('./components/Confetti').then(m => ({ default: m.Confetti })));
@@ -31,7 +32,6 @@ const JobDetailsModal = lazy(() => import('./components/JobDetailsModal').then(m
 const EditProfileModal = lazy(() => import('./components/EditProfileModal').then(m => ({ default: m.EditProfileModal })));
 const ViewBidsModal = lazy(() => import('./components/ViewBidsModal').then(m => ({ default: m.ViewBidsModal })));
 const CounterModal = lazy(() => import('./components/CounterModal').then(m => ({ default: m.CounterModal })));
-const OnboardingModal = lazy(() => import('./components/OnboardingModal').then(m => ({ default: m.OnboardingModal })));
 const BidHistoryModal = lazy(() => import('./components/BidHistoryModal').then(m => ({ default: m.BidHistoryModal })));
 const NotificationsPanel = lazy(() => import('./components/NotificationsPanel').then(m => ({ default: m.NotificationsPanel })));
 const ChatListPanel = lazy(() => import('./components/ChatListPanel').then(m => ({ default: m.ChatListPanel })));
@@ -41,6 +41,7 @@ const UserProfileModal = lazy(() => import('./components/UserProfileModal').then
 
 // Import Synchronous Components
 import { BottomNav } from './components/BottomNav';
+import { Sidebar } from './components/Sidebar';
 
 // Services
 import { signInWithGoogle } from './services/authService';
@@ -63,6 +64,14 @@ const AppContent: React.FC = () => {
     showEditProfile, setShowEditProfile
   } = useUser();
 
+  const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsDesktop(window.innerWidth >= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // Debug Auth State
   useEffect(() => {
     console.log('[AppContent] Auth State:', { isLoggedIn, isAuthLoading, userId: user.id });
@@ -82,7 +91,7 @@ const AppContent: React.FC = () => {
   const { completeJob, cancelJob, withdrawBid, replyToCounter, editJobLink } = useJobActions();
 
 
-  const { jobs, updateJob, deleteJob, updateBid, getJobWithFullDetails, refreshJobs, loading } = useJobs();
+  const { jobs, updateJob, deleteJob, updateBid, getJobWithFullDetails, markJobAsReviewed, refreshJobs, loading, searchQuery, setSearchQuery } = useJobs();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -137,6 +146,7 @@ const AppContent: React.FC = () => {
   const [profileCoords, setProfileCoords] = useState<Coordinates | undefined>(undefined);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // --- UI State ---
   const [showNotifications, setShowNotifications] = useState(false);
@@ -157,32 +167,10 @@ const AppContent: React.FC = () => {
   const [viewBidsModal, setViewBidsModal] = useState<{ isOpen: boolean; job: Job | null }>({ isOpen: false, job: null });
   const [counterModalOpen, setCounterModalOpen] = useState<{ isOpen: boolean; bidId: string | null; jobId: string | null; initialAmount: string }>({ isOpen: false, bidId: null, jobId: null, initialAmount: '' });
   // User Profile Modal State
-  const [profileModal, setProfileModal] = useState<{ isOpen: boolean; userId: string; userName?: string }>({ isOpen: false, userId: '' });
+  const [profileModal, setProfileModal] = useState<{ isOpen: boolean; userId: string; userName?: string; phoneNumber?: string }>({ isOpen: false, userId: '' });
 
   // --- UI State ---
-  const [showOnboarding, setShowOnboarding] = useState(false);
 
-  // Check onboarding status
-  useEffect(() => {
-    // Wait for real DB data before nagging about profile
-    // We check user.joinDate to ensure we have a db-hydrated user (optimistic user creates joinDate from Date.now, but DB user has it too)
-    // Better: check if we have actually attempted to load the profile.
-
-    if (isLoggedIn && !isAuthLoading && !user.name.includes('Mock')) {
-      // 1. Role Selection
-      const hasCompletedOnboarding = localStorage.getItem('chowkar_onboarding_complete');
-      if (hasCompletedOnboarding !== 'true') {
-        setShowOnboarding(true);
-        return; // Prioritize Role Selection
-      }
-
-      // 2. Profile Completion (Phone/Location) - Show if essential fields missing
-      // Don't auto-show unless we are sure they are missing. 
-
-
-
-    }
-  }, [isLoggedIn, isAuthLoading, user]);
 
   // Handle pending notification navigation (from LocalNotifications tap)
   useEffect(() => {
@@ -342,6 +330,8 @@ const AppContent: React.FC = () => {
     closeChat();
     setActiveChatId(null);
     setActiveJobId(null);
+    setShowChatList(false);
+    setShowNotifications(false);
   }, [location.pathname]);
 
   // Track when ViewBidsModal opens to set active job and mark notifications as read
@@ -408,6 +398,28 @@ const AppContent: React.FC = () => {
     const currentJob = job || selectedJob;
     if (!currentJob) return;
 
+    // 1. If job is already completed, just handle the review part
+    if (currentJob.status === JobStatus.COMPLETED) {
+      if (currentJob.hasMyReview) {
+        showAlert(language === 'en' ? 'You have already reviewed this user.' : 'आप पहले ही समीक्षा दे चुके हैं।', 'info');
+        return;
+      }
+
+      const acceptedBid = currentJob.bids.find(b => b.id === currentJob.acceptedBidId);
+      if (acceptedBid) {
+        setReviewModalData({
+          isOpen: true,
+          revieweeId: role === UserRole.POSTER ? acceptedBid.workerId : currentJob.posterId,
+          revieweeName: role === UserRole.POSTER ? acceptedBid.workerName : currentJob.posterName,
+          jobId: currentJob.id
+        });
+      } else {
+        showAlert('No worker found to review.', 'error');
+      }
+      return;
+    }
+
+    // 2. Normal completion flow for IN_PROGRESS jobs
     if (!confirm(t.completeJobPrompt)) return;
 
     const success = await completeJob(currentJob, (reviewData) => {
@@ -489,92 +501,188 @@ const AppContent: React.FC = () => {
   // --- Main Layout ---
   return (
     <div className="h-[100dvh] w-full bg-green-50 dark:bg-gray-950 font-sans text-gray-900 dark:text-white flex flex-col overflow-hidden transition-colors duration-300">
-      {/* Header */}
-      <header className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800 z-30 shadow-glass flex-none transition-all duration-300 pt-safe sticky top-0">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/')}>
-            <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center shadow-lg transform group-hover:rotate-6 transition-transform">
-              <MapPin size={22} className="text-white" fill="rgba(255,255,255,0.2)" />
-            </div>
-            <div>
-              <h1 className="text-xl font-black text-gray-900 dark:text-white tracking-tighter leading-none">CHOWKAR</h1>
-              <div className="h-1 w-6 bg-emerald-500 rounded-full mt-1 group-hover:w-10 transition-all" />
-            </div>
-          </div>
+      {/* Header - Amazon/Super App Style */}
+      {/* Hide header on specific mobile pages to avoid "Double Header", but keep it on Desktop for "Super App" feel */}
+      {(!['/wallet', '/profile', '/post', '/chat'].some(path => location.pathname.startsWith(path)) || isDesktop) && (
+        <header className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 z-50 shadow-sm pt-safe sticky top-0">
+          <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
 
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-10">
-            {[
-              { path: '/', label: t.navHome },
-              { path: '/post', label: t.navPost, role: UserRole.POSTER },
-              { path: '/profile', label: t.navProfile }
-            ].map((link) => {
-              if (link.role && role !== link.role) return null;
-              const active = location.pathname === link.path;
-              return (
+            {/* 1. Left Cluster: Identity & Navigation */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                className="p-2 -ml-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                title="Menu"
+              >
+                <Menu size={24} />
+              </button>
+
+              {role === UserRole.WORKER && (
                 <button
-                  key={link.path}
-                  onClick={() => {
-                    if (link.path === '/post' && (!user.phone || !user.location || user.location === 'Not set')) {
-                      setShowEditProfile(true);
-                      showAlert(language === 'en'
-                        ? 'Please complete your profile (Phone & Location) before posting a job.'
-                        : 'काम पोस्ट करने से पहले कृपया अपनी प्रोफ़ाइल (फ़ोन और स्थान) पूरी करें।', 'info');
-                      return;
-                    }
-                    navigate(link.path);
-                  }}
-                  className={`text-[11px] font-black uppercase tracking-[0.2em] transition-all relative group ${active ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-white'}`}
+                  onClick={() => navigate('/')}
+                  className={`hidden md:flex items-center gap-2 p-2.5 rounded-xl transition-all active:scale-95 group ${location.pathname === '/'
+                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20'
+                    : 'bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30'
+                    }`}
+                  title="Dashboard"
                 >
-                  {link.label}
-                  <span className={`absolute -bottom-2 left-0 h-1 bg-emerald-500 rounded-full transition-all ${active ? 'w-full' : 'w-0 group-hover:w-1/2'}`} />
+                  <HomeIcon size={20} className="group-hover:scale-110 transition-transform" />
                 </button>
-              );
-            })}
-          </nav>
+              )}
+            </div>
 
-          <div className="flex items-center gap-4">
-            {/* Wallet Balance Badge (Clickable) */}
-            <button
-              onClick={() => navigate('/wallet')}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 rounded-xl border border-amber-100 dark:border-amber-800/30 text-xs font-bold shadow-sm hover:scale-105 active:scale-95 transition-all cursor-pointer"
-            >
-              <span className="text-sm">🪙</span>
-              <span>{walletBalance}</span>
-            </button>
-            <button
-              onClick={() => setLanguage(l => l === 'en' ? 'hi' : 'en')}
-              className="px-4 py-2 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-widest border border-emerald-100 dark:border-emerald-800/50 rounded-xl bg-emerald-50/50 dark:bg-emerald-900/20 hover:scale-105 transition-all flex items-center gap-2 shadow-sm"
-            >
-              <Languages size={15} strokeWidth={2.5} /> {language === 'en' ? 'हिन्दी' : 'English'}
-            </button>
-            <div className="w-px h-6 bg-gray-100 dark:bg-gray-800 mx-1 hidden sm:block" />
-            <button
-              onClick={() => setShowChatList(true)}
-              className="relative p-2.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl transition-all active:scale-90"
-            >
-              <MessageCircle size={22} className="text-gray-600 dark:text-gray-400" strokeWidth={2} />
-              {unreadChatCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[20px] h-[20px] bg-emerald-500 text-white text-[10px] font-black rounded-full flex items-center justify-center px-1.5 shadow-[0_0_10px_rgba(16,185,129,0.5)] border-2 border-white dark:border-gray-900">
-                  {unreadChatCount}
-                </span>
+            {/* 2. Center Cluster: Discovery Area */}
+            <div className="flex-1 max-w-xl relative mx-4 group">
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-emerald-500 transition-colors">
+                <Search size={18} />
+              </div>
+              <input
+                type="text"
+                placeholder={role === UserRole.WORKER
+                  ? (language === 'en' ? "Search for work near you..." : "अपने आस-पास काम खोजें...")
+                  : (language === 'en' ? "Search your job posts..." : "अपनी पोस्ट खोजें...")}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-gray-100 dark:bg-gray-800 border-2 border-transparent focus:border-emerald-500/30 rounded-2xl pl-10 pr-10 py-2.5 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:bg-white dark:focus:bg-gray-900 transition-all shadow-sm"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors"
+                >
+                  <X size={16} />
+                </button>
               )}
-            </button>
-            <button
-              onClick={() => setShowNotifications(true)}
-              data-notifications-button
-              className="relative p-2.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl transition-all active:scale-90"
-            >
-              <Bell size={22} className="text-gray-600 dark:text-gray-400" strokeWidth={2} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[20px] h-[20px] bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center px-1.5 shadow-[0_0_10px_rgba(239,68,68,0.5)] border-2 border-white dark:border-gray-900">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
+            </div>
+
+            {/* 3. Right Cluster: Service & Social Feed */}
+            <div className="flex items-center gap-1.5">
+              {role === UserRole.WORKER && (
+                <div className="hidden md:flex items-center gap-1.5 mr-2 pr-2 border-r border-gray-100 dark:border-gray-800">
+                  <button
+                    onClick={() => navigate('/find')}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 whitespace-nowrap ${location.pathname === '/find'
+                      ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/40 ring-2 ring-emerald-500/20'
+                      : 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-emerald-700 dark:hover:bg-emerald-50'
+                      }`}
+                  >
+                    <Search size={16} strokeWidth={3} />
+                    {language === 'en' ? 'Find Work' : 'काम खोजें'}
+                  </button>
+
+                  <button
+                    onClick={() => navigate('/wallet')}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all font-bold text-sm ${location.pathname === '/wallet'
+                      ? 'bg-emerald-50 active:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      }`}
+                  >
+                    <Wallet size={18} strokeWidth={2.5} />
+                    <span>{language === 'en' ? 'Wallet' : 'वॉलेट'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => navigate('/profile')}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all font-bold text-sm ${location.pathname === '/profile'
+                      ? 'bg-emerald-50 active:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      }`}
+                  >
+                    <UserCircle size={18} strokeWidth={2.5} />
+                    <span>{t.profile}</span>
+                  </button>
+                </div>
               )}
-            </button>
+
+              {role === UserRole.POSTER && (
+                <div className="hidden md:flex items-center gap-1.5 mr-2 pr-2 border-r border-gray-100 dark:border-gray-800">
+                  <button
+                    onClick={() => navigate('/post')}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 whitespace-nowrap ${location.pathname === '/post'
+                      ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/40 ring-2 ring-emerald-500/20'
+                      : 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-emerald-700 dark:hover:bg-emerald-50'
+                      }`}
+                  >
+                    <Plus size={16} strokeWidth={3} />
+                    {language === 'en' ? 'Post Job' : 'नया काम'}
+                  </button>
+
+                  <button
+                    onClick={() => navigate('/')}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all font-bold text-sm ${location.pathname === '/'
+                      ? 'bg-emerald-50 active:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      }`}
+                  >
+                    <LayoutGrid size={18} strokeWidth={2.5} />
+                    <span>{language === 'en' ? 'Dashboard' : 'डैशबोर्ड'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => navigate('/wallet')}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all font-bold text-sm ${location.pathname === '/wallet'
+                      ? 'bg-emerald-50 active:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      }`}
+                  >
+                    <Wallet size={18} strokeWidth={2.5} />
+                    <span>{language === 'en' ? 'Wallet' : 'वॉलेट'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => navigate('/profile')}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all font-bold text-sm ${location.pathname === '/profile'
+                      ? 'bg-emerald-50 active:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      }`}
+                  >
+                    <UserCircle size={18} strokeWidth={2.5} />
+                    <span>{t.profile}</span>
+                  </button>
+                </div>
+              )}
+
+              <button
+                onClick={() => setShowChatList(true)}
+                className={`p-2.5 rounded-xl transition-all relative group ${showChatList || chatState.isOpen
+                  ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                title="Chats"
+              >
+                <MessageCircle size={24} className="group-hover:scale-110 transition-transform" />
+                {unreadChatCount > 0 && (
+                  <span className={`absolute top-2 right-2 w-2.5 h-2.5 rounded-full border-2 ${showChatList || chatState.isOpen ? 'bg-white border-emerald-600' : 'bg-emerald-500 border-white dark:border-gray-900'
+                    }`} />
+                )}
+              </button>
+
+              <button
+                onClick={() => setShowNotifications(true)}
+                className={`p-2.5 rounded-xl transition-all relative group ${showNotifications
+                  ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                title="Notifications"
+              >
+                <Bell size={24} className="group-hover:scale-110 transition-transform" />
+                {unreadCount > 0 && (
+                  <span className={`absolute top-2 right-2 w-2.5 h-2.5 rounded-full border-2 ${showNotifications ? 'bg-white border-emerald-600' : 'bg-red-500 border-white dark:border-gray-900'
+                    }`} />
+                )}
+              </button>
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
+      )}
+
+      {/* Sidebar Drawer */}
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        onLanguageToggle={() => setLanguage(l => l === 'en' ? 'hi' : 'en')}
+        onLogout={handleLogout}
+      />
 
       {/* Alerts */}
       {showConfetti && <Confetti />}
@@ -608,18 +716,40 @@ const AppContent: React.FC = () => {
               setShowFilterModal={setShowFilterModal}
               showAlert={showAlert}
             />} />
+            <Route path="/find" element={<Home
+              onBid={handleOnBid}
+              onViewBids={handleOnViewBids}
+              onChat={handleChatOpen}
+              onEdit={handleEditJobLink}
+              onClick={handleCardClick}
+              onReplyToCounter={handleWorkerReplyToCounter}
+              onWithdrawBid={handleWithdrawBid}
+              setShowFilterModal={setShowFilterModal}
+              showAlert={showAlert}
+            />} />
             <Route path="/profile" element={<Profile setShowSubscriptionModal={setShowSubscriptionModal} onLogout={handleLogout} />} />
             <Route path="/post" element={<PostJob />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/wallet" element={<WalletPage />} />
+            <Route path="/category/:categoryId" element={<CategoryJobs />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
       </main>
 
-      <BottomNav />
+      {/* Bottom Navigation (Mobile Only) */}
+      <BottomNav
+        unreadChatCount={unreadChatCount}
+        walletBalance={walletBalance}
+        onChatClick={() => setShowChatList(true)}
+        onTabChange={() => {
+          setShowChatList(false);
+          setShowNotifications(false);
+          closeChat();
+        }}
+      />
 
-      {/* --- Global Modals (Lazy Loaded) --- */}
+      {/* --- MODALS --- */}
       <Suspense fallback={null}>
         <BidModal
           isOpen={bidModalOpen.isOpen}
@@ -654,7 +784,7 @@ const AppContent: React.FC = () => {
           }}
           showAlert={showAlert}
           onReplyToCounter={handleWorkerReplyToCounter}
-          onViewProfile={(userId, name) => setProfileModal({ isOpen: true, userId, userName: name })}
+          onViewProfile={(userId, name, phoneNumber) => setProfileModal({ isOpen: true, userId, userName: name, phoneNumber })}
           onCompleteJob={handleCompleteJob}
         />
 
@@ -807,6 +937,13 @@ const AppContent: React.FC = () => {
                 : `आपको ${rating} स्टार की समीक्षा मिली!`;
 
               await addNotification(reviewModalData.revieweeId, "New Review", msg, "SUCCESS");
+
+              // REFRESH: Immediately refetch this job to update hasMyReview status
+              await getJobWithFullDetails(reviewModalData.jobId, true);
+
+              // OPTIMISTIC: Manually mark as reviewed in case refetch is slow
+              markJobAsReviewed(reviewModalData.jobId);
+
               setReviewModalData(null);
               showAlert(t.reviewSubmitted, 'success');
             } else {
@@ -836,25 +973,14 @@ const AppContent: React.FC = () => {
           </Suspense>
         )}
 
-        <OnboardingModal
-          isOpen={showOnboarding}
-          onComplete={(selectedRole) => {
-            setRole(selectedRole);
-            localStorage.setItem('chowkar_onboarding_complete', 'true');
-            setShowOnboarding(false);
-            if (selectedRole === UserRole.POSTER) {
-              navigate('/post');
-            } else {
-              navigate('/');
-            }
-          }}
-        />
+
 
 
         <UserProfileModal
           isOpen={profileModal.isOpen}
           userId={profileModal.userId}
           userName={profileModal.userName}
+          phoneNumber={profileModal.phoneNumber}
           onClose={() => setProfileModal({ isOpen: false, userId: '' })}
         />
 

@@ -5,7 +5,7 @@ import { supabase, waitForSupabase } from '../lib/supabase';
 import { fetchJobMessages, blockUser, unblockUser, getRelationshipStatus } from '../services/chatService';
 import { fetchJobFullDetails, fetchJobContact } from '../services/jobService';
 import { Job, ChatMessage, User } from '../types';
-import { Send, Phone, CheckCircle, ArrowLeft, LockKeyhole, Paperclip, MoreVertical, Check, CheckCheck, Languages, Mic, MicOff, Loader2, Sparkles, Lock, Volume2, Square, Trash2, ShieldAlert, FileText, Flag, ChevronRight, Pencil, Ban } from 'lucide-react';
+import { Send, Phone, CheckCircle, ArrowLeft, LockKeyhole, Paperclip, MoreVertical, Check, CheckCheck, Languages, Mic, MicOff, Loader2, Sparkles, Lock, Volume2, Square, Trash2, ShieldAlert, FileText, Flag, ChevronRight, Pencil, Ban, Heart, History as HistoryIcon } from 'lucide-react';
 import { SafetyTipsModal, CommunityGuidelinesModal, TermsModal } from './InfoModals';
 const QUICK_REPLIES_WORKER = [
   "I'm on my way",
@@ -62,6 +62,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   // ALL useState/useRef hooks declared BEFORE any early returns (React Rules of Hooks)
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [showQuickReplies, setShowQuickReplies] = useState(true);
   const [isListening, setIsListening] = useState(false);
   const [translatingId, setTranslatingId] = useState<string | null>(null);
@@ -122,21 +123,44 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     });
   };
 
-  const loadMessages = async () => {
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  const loadMessages = async (targetPage: number = 0) => {
     if (!job?.id) return; // Guard
     try {
-      const { messages: historyData } = await fetchJobMessages(job.id);
+      if (targetPage === 0) setIsLoadingHistory(true);
+      else setIsLoadingMore(true);
+
+      const { messages: historyData } = await fetchJobMessages(job.id, targetPage);
+
+      // Check if we reached the end
+      if (!historyData || historyData.length < 50) {
+        setHasMore(false);
+      } else {
+        setHasMore(true);
+      }
 
       // Sort by timestamp
       const sorted = (historyData || []).sort((a, b) => a.timestamp - b.timestamp);
-      console.log(`[Chat] Loaded ${sorted.length} messages from history`);
 
-      // Use upsert instead of set to preserve temp messages if any exist
-      upsertMessages(sorted);
+      if (targetPage === 0) {
+        console.log(`[Chat] Loaded ${sorted.length} messages from latest (page 0)`);
+        upsertMessages(sorted);
+      } else {
+        console.log(`[Chat] Loaded ${sorted.length} older messages (page ${targetPage})`);
+        // Prepend older messages (upsert handles sorting)
+        upsertMessages(sorted);
+      }
+
+      setPage(targetPage);
+
     } catch (error) {
       console.error('Error loading chat history:', error);
     } finally {
       setIsLoadingHistory(false);
+      setIsLoadingMore(false);
     }
   };
 
@@ -361,8 +385,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [allMessages.length]); // Scroll when count changes
+    // Only scroll to bottom if we are on the first page (showing latest)
+    // This prevents jumping to bottom when loading previous history
+    if (page === 0) {
+      scrollToBottom();
+    }
+  }, [allMessages.length, page]); // Scroll when count changes
 
   useEffect(() => {
     // Cleanup speech
@@ -540,64 +568,61 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         md:shadow-2xl md:border-l border-gray-100 dark:border-gray-800
         animate-in slide-in-from-bottom md:slide-in-from-right duration-300 transition-colors">
 
-        {/* Header */}
-        <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl px-4 py-3 shadow-glass border-b border-gray-100 dark:border-gray-800 flex items-center justify-between z-10 pt-safe transition-all duration-300">
-          <div className="flex items-center gap-3">
+        {/* Header - Ultra Compact (WhatsApp/Telegram style) */}
+        <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl px-3 py-2 shadow-sm border-b border-gray-100 dark:border-gray-800 flex items-center justify-between z-10 pt-safe transition-all duration-300">
+          <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="btn-ghost !p-2 rounded-full !bg-gray-100 dark:!bg-gray-800 text-gray-500 dark:text-gray-400"
+              className="btn-ghost !p-1.5 rounded-full !bg-transparent hover:!bg-gray-100 dark:hover:!bg-gray-800 text-gray-500 dark:text-gray-400 md:hidden"
               title="Close"
             >
               <ArrowLeft size={20} />
             </button>
 
             <div
-              className="flex items-center gap-3 cursor-pointer group active:scale-95 transition-transform"
+              className="flex items-center gap-2.5 cursor-pointer group active:opacity-70 transition-opacity"
               onClick={() => setShowProfileModal(true)}
             >
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-900/40 dark:to-teal-900/40 border-2 border-white dark:border-gray-800 flex items-center justify-center text-emerald-700 dark:text-emerald-400 font-black text-xl overflow-hidden shadow-sm group-hover:scale-105 transition-transform duration-300">
+              <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 font-semibold text-xs overflow-hidden shrink-0">
                 {otherPersonPhoto ? (
                   <img src={otherPersonPhoto} alt={otherPersonName} className="w-full h-full object-cover" />
                 ) : (
                   otherPersonName.charAt(0)
                 )}
               </div>
-              <div>
-                <h2 className="font-black text-gray-900 dark:text-white leading-none flex items-center gap-1.5 text-base">
+              <div className="flex flex-col justify-center h-8">
+                <h2 className="font-semibold text-gray-900 dark:text-gray-100 leading-tight text-[13px] flex items-center gap-1">
                   {otherPersonName}
-                  <ChevronRight size={14} className="text-gray-400 opacity-60 group-hover:translate-x-0.5 transition-transform" />
+                  <ChevronRight size={10} className="text-gray-400 opacity-50" />
                 </h2>
-                <div className="flex items-center gap-2 mt-1.5">
-                  <span className={`w-2 h-2 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.5)] ${isOtherUserOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-300 dark:bg-gray-700'}`}></span>
-                  <span className="text-[10px] text-gray-400 dark:text-gray-500 font-black uppercase tracking-[0.15em]">{isOtherUserOnline ? 'Online' : 'Offline'}</span>
-                </div>
+                {isOtherUserOnline ? (
+                  <span className="text-[10px] text-emerald-500 font-medium leading-none">Online</span>
+                ) : (
+                  <span className="text-[10px] text-gray-400 font-medium leading-none">Offline</span>
+                )}
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-1">
             {otherPersonPhone ? (
-              <a href={`tel:${otherPersonPhone}`} className="btn-ghost !p-2.5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
-                <Phone size={20} />
+              <a href={`tel:${otherPersonPhone}`} className="btn-ghost !p-2 rounded-full text-emerald-600 dark:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20">
+                <Phone size={18} strokeWidth={2} />
               </a>
-            ) : (
-              <div className="p-2 text-gray-300 dark:text-gray-600 opacity-50">
-                <LockKeyhole size={20} />
-              </div>
-            )}
+            ) : null}
             <div className="relative">
-              <button onClick={() => setShowMenu(!showMenu)} className="btn-ghost !p-2 rounded-full text-gray-400 dark:text-gray-500">
-                <MoreVertical size={20} />
+              <button onClick={() => setShowMenu(!showMenu)} className="btn-ghost !p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800">
+                <MoreVertical size={18} />
               </button>
               {showMenu && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
-                  <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-20 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                    <button onClick={() => { setShowMenu(false); setShowSafetyTips(true); }} className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                      <ShieldAlert size={16} className="text-emerald-600 dark:text-emerald-500" /> Safety Tips
+                  <div className="absolute right-0 top-full mt-1 w-44 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-20 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                    <button onClick={() => { setShowMenu(false); setShowSafetyTips(true); }} className="w-full text-left px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                      <ShieldAlert size={14} className="text-emerald-600 dark:text-emerald-500" /> Safety Tips
                     </button>
-                    <button onClick={() => { setShowMenu(false); setShowReportModal(true); }} className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-medium text-red-600 dark:text-red-400 flex items-center gap-2">
-                      <Flag size={16} /> Report User
+                    <button onClick={() => { setShowMenu(false); setShowReportModal(true); }} className="w-full text-left px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 text-xs font-medium text-red-600 dark:text-red-400 flex items-center gap-2">
+                      <Flag size={14} /> Report User
                     </button>
                     <button
                       onClick={async () => {
@@ -614,9 +639,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                           }
                         }
                       }}
-                      className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center gap-2 border-t border-gray-100 dark:border-gray-700"
+                      className="w-full text-left px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 text-xs font-medium text-gray-500 dark:text-gray-400 flex items-center gap-2 border-t border-gray-100 dark:border-gray-700"
                     >
-                      <Ban size={16} className={blockingStatus.iBlocked ? "text-emerald-500" : "text-gray-400"} />
+                      <Ban size={14} className={blockingStatus.iBlocked ? "text-emerald-500" : "text-gray-400"} />
                       {blockingStatus.iBlocked ? 'Unblock User' : 'Block User'}
                     </button>
                   </div>
@@ -626,26 +651,24 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           </div>
         </div>
 
-        {/* Job Context Banner */}
-        <div className="bg-gradient-to-r from-emerald-500 to-teal-600 px-5 py-2.5 flex justify-between items-center shadow-lg relative z-0">
-          <div className="flex items-center gap-2 overflow-hidden">
-            <div className="p-1 bg-white/20 rounded-lg backdrop-blur-sm">
-              <FileText size={14} className="text-white" />
-            </div>
-            <span className="font-black text-white text-[11px] line-clamp-1 uppercase tracking-widest">{job.title}</span>
+        {/* Job Context Banner - Minimalist */}
+        <div className="bg-gray-50 dark:bg-gray-900/50 px-4 py-1.5 flex justify-between items-center border-b border-gray-100 dark:border-gray-800 relative z-0">
+          <div className="flex items-center gap-1.5 overflow-hidden text-gray-500 dark:text-gray-400">
+            <FileText size={10} strokeWidth={2.5} />
+            <span className="font-semibold text-[10px] line-clamp-1 tracking-wide">{job.title}</span>
           </div>
-          <span className="bg-white/20 backdrop-blur-md text-white text-[10px] font-black px-3 py-1.5 rounded-full shadow-inner border border-white/10 ml-3 whitespace-nowrap">
+          <span className="text-[10px] font-semibold text-gray-900 dark:text-gray-200 bg-white dark:bg-gray-800 px-2 py-0.5 rounded border border-gray-200 dark:border-gray-700 ml-2 whitespace-nowrap">
             ₹{acceptedBid?.amount || job.budget}
           </span>
         </div>
 
         {/* Phone Number Prompt Banner */}
         {(!currentUser.phone || currentUser.phone.length < 10) && (
-          <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-4 py-3 flex items-center gap-3 shadow-lg">
-            <Phone size={18} className="text-white flex-shrink-0" />
+          <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-4 py-2.5 flex items-center gap-2.5 shadow-sm">
+            <Phone size={16} className="text-white flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-white text-xs font-black leading-tight">Add your phone number</p>
-              <p className="text-white/80 text-[10px] font-medium mt-0.5">Share contact info to coordinate with {otherPersonName}</p>
+              <p className="text-white text-[11px] font-bold leading-tight">Add your phone number</p>
+              <p className="text-white/80 text-[9px] font-medium mt-0.5">Share contact to coordinate with {otherPersonName}</p>
             </div>
             <button
               onClick={() => {
@@ -653,7 +676,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 onClose();
                 setTimeout(() => window.location.href = '/profile', 100);
               }}
-              className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white text-[10px] font-black px-3 py-1.5 rounded-full whitespace-nowrap transition-all active:scale-95"
+              className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white text-[9px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap transition-all active:scale-95"
             >
               ADD NOW
             </button>
@@ -661,7 +684,24 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         )}
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-[#e5ddd5] dark:bg-gray-950 bg-opacity-10 transition-colors" style={{ backgroundImage: 'radial-gradient(var(--bg-pattern-color, #cbd5e1) 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
+        <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-[#e5ddd5] dark:bg-gray-950 bg-opacity-10 transition-colors"
+          style={{ backgroundImage: 'radial-gradient(var(--bg-pattern-color, #cbd5e1) 1px, transparent 1px)', backgroundSize: '20px 20px' }}
+          ref={messagesContainerRef}
+        >
+          {/* LOAD PREVIOUS BUTTON */}
+          {hasMore && !isLoadingHistory && (
+            <div className="flex justify-center py-2">
+              <button
+                onClick={() => loadMessages(page + 1)}
+                disabled={isLoadingMore}
+                className="bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-[10px] font-bold uppercase tracking-widest px-4 py-1.5 rounded-full shadow-sm hover:bg-emerald-50 dark:hover:bg-gray-700 hover:text-emerald-600 transition-all flex items-center gap-2"
+              >
+                {isLoadingMore ? <Loader2 size={12} className="animate-spin" /> : <HistoryIcon size={12} />}
+                {isLoadingMore ? 'Loading...' : 'Load Previous Messages'}
+              </button>
+            </div>
+          )}
+
           {!isLoadingHistory && loadError && (
             <div className="flex flex-col items-center justify-center py-12 space-y-4">
               <div className="text-red-400 bg-red-500/10 p-3 rounded-full"><ShieldAlert size={24} /></div>
@@ -865,13 +905,19 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                   This job has been completed
                 </div>
 
-                <button
-                  onClick={() => onCompleteJob(job)}
-                  className="btn btn-primary w-full bg-amber-500 hover:bg-amber-600 mb-2"
-                >
-                  <Sparkles size={18} fill="white" />
-                  Rate Your Experience
-                </button>
+                {job.hasMyReview ? (
+                  <div className="flex-1 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 py-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 border border-green-100 dark:border-green-800">
+                    <Heart size={16} fill="currentColor" /> You have reviewed this user
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => onCompleteJob(job)}
+                    className="btn btn-primary w-full bg-amber-500 hover:bg-amber-600 mb-2"
+                  >
+                    <Sparkles size={18} fill="white" />
+                    Rate Your Experience
+                  </button>
+                )}
                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-none">
                   Chat is archived and read-only.
                 </p>

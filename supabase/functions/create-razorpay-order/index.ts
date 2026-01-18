@@ -11,10 +11,14 @@ serve(async (req) => {
     // Handle CORS preflight requests
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
-        // Add 30-second timeout to handle slow Razorpay responses or cold starts
-        const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Edge Function call timed out after 30 seconds')), 30000)
-        );
+    }
+
+    // PRE-WARM HANDLER
+    if (req.method === 'GET') {
+        return new Response(JSON.stringify({ status: 'warmed' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200
+        });
     }
 
     try {

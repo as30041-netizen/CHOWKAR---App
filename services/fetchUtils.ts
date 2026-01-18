@@ -1,5 +1,6 @@
 
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 
 const DEFAULT_TIMEOUT_MS = 10000;
 
@@ -55,7 +56,7 @@ export const safeFetch = async (
 
         // RETRY LOGIC FOR 401 (Expired Token)
         if (response.status === 401) {
-            console.warn('[safeFetch] 401 Unauthorized detected. Attempting to refresh session and retry...');
+            logger.warn('[safeFetch] 401 Unauthorized detected. Attempting to refresh session and retry...');
 
             // 1. Invalidate cache
             const { supabase } = await import('../lib/supabase');
@@ -69,7 +70,7 @@ export const safeFetch = async (
             const { data: { session }, error } = await Promise.race([refreshPromise, timeoutPromise]) as any;
 
             if (!error && session?.access_token) {
-                console.log('[safeFetch] Session refreshed successfully. Retrying request...');
+                logger.log('[safeFetch] Session refreshed successfully. Retrying request...');
 
                 // 3. Update header with new token
                 (fetchOptions.headers as any)['Authorization'] = `Bearer ${session.access_token}`;
@@ -87,7 +88,7 @@ export const safeFetch = async (
                     clearTimeout(retryTimeoutId);
                 }
             } else {
-                console.error('[safeFetch] Failed to refresh session:', error?.message || 'No session returned');
+                logger.error('[safeFetch] Failed to refresh session:', error?.message || 'No session returned');
 
                 // CRITICAL FIX: Do NOT clear storage or reload page automatically.
                 // This causes "0 Balance" and random logouts on network glitches.

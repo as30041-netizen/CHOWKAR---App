@@ -97,6 +97,7 @@ export interface InboxChatSummary {
     counterpartId: string;
     counterpartName: string;
     counterpartPhoto?: string;
+    counterpartRating?: number;
     lastMessage?: {
         text: string;
         timestamp: number;
@@ -148,6 +149,7 @@ export const fetchInboxSummaries = async (userId: string): Promise<{ chats: Inbo
             counterpartId: row.counterpart_id,
             counterpartName: row.counterpart_name || 'User',
             counterpartPhoto: row.counterpart_photo || undefined,
+            counterpartRating: Number(row.counterpart_rating),
             lastMessage: row.last_message_text ? {
                 text: row.last_message_text,
                 timestamp: new Date(row.last_message_time).getTime(),

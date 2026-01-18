@@ -198,23 +198,17 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
             // Remove the bid from the job
             setLocalJob(prev => prev ? { ...prev, bids: prev.bids.filter(b => b.id !== bidId) } : prev);
 
-            // 2. SOFT REJECT: Update status instead of deleting to preserve market data
-            const { error } = await supabase
-                .from('bids')
-                .update({ status: 'REJECTED' })
-                .eq('id', bidId);
+            // 2. SOFT REJECT: Use centralized service (calls secure RPC)
+            const { rejectBid } = await import('../services/jobService');
+            const { success, error } = await rejectBid(bidId);
 
-            if (error) throw error;
+            if (!success) throw new Error(error);
 
             // 3. Broadcast update for instant UI update on other clients
-            const broadcastChannel = supabase.channel('global_sync');
-            broadcastChannel.send({
-                type: 'broadcast',
-                event: 'bid_updated',
-                payload: { id: bidId, job_id: jobId, status: 'REJECTED' }
-            });
+            // Note: rejectBid service already broadcasts 'bid_updated', but we can keep this for safety or rely on service.
+            // Service broadcasts 'bid_updated' with REJECTED status.
 
-            // 4. Notify the worker with friendly message (no mention of "rejected")
+            // 4. Notify the worker with friendly message
             await addNotification(
                 workerId,
                 "Bid Update",
@@ -222,7 +216,6 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                 "INFO",
                 jobId
             );
-            // Note: addNotification handles push automatically
 
             showAlert(language === 'en' ? 'Bid rejected' : 'बोली अस्वीकार', 'info');
         } catch (error: any) {
@@ -230,6 +223,8 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
             showAlert(`Failed to reject bid: ${error.message || 'Unknown error'}`, 'error');
         }
     };
+
+
 
     // Helper function for relative time display
     const getRelativeTime = (timestamp: number): string => {
@@ -403,7 +398,7 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                                                     <button
                                                         onClick={() => handleAcceptBid(localJob!.id, bid.id, bid.amount, bid.workerId)}
                                                         disabled={isAcceptingBid}
-                                                        className="w-full py-5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl shadow-emerald-500/30 hover:shadow-emerald-500/50 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                                                        className="w-full py-5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl shadow-emerald-200 dark:shadow-none hover:from-emerald-700 hover:to-teal-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                                                     >
                                                         {isAcceptingBid ? (
                                                             <Loader2 size={20} className="animate-spin" />
@@ -426,19 +421,19 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                                                     <button
                                                         onClick={() => handleAcceptBid(localJob!.id, bid.id, bid.amount, bid.workerId)}
                                                         disabled={isAcceptingBid}
-                                                        className="flex-1 btn btn-primary !py-4 !rounded-2xl shadow-lg font-black uppercase tracking-widest text-xs hover:shadow-emerald-500/20"
+                                                        className="flex-1 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-2xl shadow-lg shadow-emerald-200 dark:shadow-none font-black uppercase tracking-widest text-xs hover:from-emerald-700 hover:to-teal-700 active:scale-[0.98] transition-all flex items-center justify-center"
                                                     >
                                                         {isAcceptingBid ? (
-                                                            <Loader2 size={18} className="animate-spin mx-auto" />
+                                                            <Loader2 size={18} className="animate-spin" />
                                                         ) : (
-                                                            'Accept Bid'
+                                                            language === 'en' ? 'Accept Bid' : 'बोली स्वीकारें'
                                                         )}
                                                     </button>
                                                     <button
                                                         onClick={() => onCounter(bid.id, bid.amount)}
                                                         className="flex-1 py-4 px-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-100 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-1.5"
                                                     >
-                                                        Counter
+                                                        {language === 'en' ? 'Counter' : 'मोलभाव'}
                                                     </button>
                                                     <button
                                                         onClick={() => handleRejectBid(localJob!.id, bid.id, bid.workerName, bid.workerId)}

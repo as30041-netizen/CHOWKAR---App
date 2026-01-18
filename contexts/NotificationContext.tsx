@@ -31,12 +31,13 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     const markAllAsRead = async () => {
         setNotifications(prev => prev.map(n => ({ ...n, read: true })));
         try {
-            const { safeRPC } = await import('../lib/supabase');
-            const { error } = await safeRPC('mark_all_notifications_read');
-            if (error) {
-                // Fallback
-                await supabase.from('notifications').update({ read: true }).eq('user_id', user.id);
-            }
+            const { safeFetch } = await import('../services/fetchUtils');
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            await safeFetch(`${supabaseUrl}/rest/v1/notifications?user_id=eq.${user.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ read: true })
+            });
         } catch (e) { console.error(e); }
     };
 
@@ -44,18 +45,24 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         if (!confirm('Are you sure you want to clear all notifications?')) return;
         setNotifications([]);
         try {
-            const { safeRPC } = await import('../lib/supabase');
-            const { error } = await safeRPC('clear_all_notifications');
-            if (error) {
-                await supabase.from('notifications').delete().eq('user_id', user.id);
-            }
+            const { safeFetch } = await import('../services/fetchUtils');
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            await safeFetch(`${supabaseUrl}/rest/v1/notifications?user_id=eq.${user.id}`, {
+                method: 'DELETE'
+            });
         } catch (e) { console.error(e); }
     };
 
     const markAsRead = async (id: string) => {
         setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
         try {
-            await supabase.from('notifications').update({ read: true }).eq('id', id);
+            const { safeFetch } = await import('../services/fetchUtils');
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            await safeFetch(`${supabaseUrl}/rest/v1/notifications?id=eq.${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ read: true })
+            });
         } catch (e) { console.error(e); }
     };
 
@@ -218,15 +225,22 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 
         // DB
         try {
-            // We use the 'mark_notifications_read' RPC if available, or direct update
-            // For now, let's use direct update as it's safer if RPC varies
-            const { error } = await supabase
-                .from('notifications')
-                .update({ read: true })
-                .eq('user_id', user.id)
-                .eq('related_job_id', jobId);
+            const { safeFetch } = await import('../services/fetchUtils');
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            // Correct URL construction with query parameters
+            const response = await safeFetch(`${supabaseUrl}/rest/v1/notifications?user_id=eq.${user.id}&related_job_id=eq.${jobId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=representation'
+                },
+                body: JSON.stringify({ read: true })
+            });
 
-            if (error) throw error;
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(text || 'Failed to mark notifications as read');
+            }
         } catch (err) {
             console.error('Error marking read:', err);
         }
@@ -235,14 +249,18 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     const deleteNotification = async (notifId: string) => {
         setNotifications(prev => prev.filter(n => n.id !== notifId));
         try {
-            await supabase.from('notifications').delete().eq('id', notifId);
+            const { safeFetch } = await import('../services/fetchUtils');
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            await safeFetch(`${supabaseUrl}/rest/v1/notifications?id=eq.${notifId}`, { method: 'DELETE' });
         } catch (e) { console.error(e); }
     };
 
     const clearNotificationsForJob = async (jobId: string) => {
         setNotifications(prev => prev.filter(n => n.relatedJobId !== jobId));
         try {
-            await supabase.from('notifications').delete().eq('user_id', user.id).eq('related_job_id', jobId);
+            const { safeFetch } = await import('../services/fetchUtils');
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            await safeFetch(`${supabaseUrl}/rest/v1/notifications?user_id=eq.${user.id}&related_job_id=eq.${jobId}`, { method: 'DELETE' });
         } catch (e) { console.error(e); }
     };
 

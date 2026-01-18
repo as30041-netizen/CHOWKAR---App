@@ -20,6 +20,8 @@ BEGIN
     FROM (
         SELECT 
             j.*,
+            p.name AS poster_name,
+            p.profile_photo AS poster_photo,
             b.id AS my_bid_id,
             b.status AS my_bid_status,
             b.amount AS my_bid_amount,
@@ -27,6 +29,7 @@ BEGIN
             (SELECT COUNT(*) FROM bids WHERE job_id = j.id) AS bid_count
         FROM bids b
         JOIN jobs j ON b.job_id = j.id
+        JOIN profiles p ON j.poster_id = p.id
         LEFT JOIN user_job_visibility v ON v.job_id = j.id AND v.user_id = p_user_id
         WHERE b.worker_id = p_user_id
           AND (v.is_hidden IS NULL OR v.is_hidden = FALSE)

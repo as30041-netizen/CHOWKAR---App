@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, XCircle, LayoutGrid, IndianRupee, Loader2 } from 'lucide-react';
+import { ArrowLeft, LayoutGrid, IndianRupee, Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useUser } from '../contexts/UserContextDB';
 import { useWallet } from '../contexts/WalletContext';
 import { useJobs } from '../contexts/JobContextDB';
@@ -15,6 +16,8 @@ interface BidModalProps {
     showAlert: (message: string, type: 'success' | 'error' | 'info') => void;
 }
 
+
+
 export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSuccess, showAlert }) => {
     const {
         user: contextUser,
@@ -25,6 +28,7 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
     } = useUser();
     const { walletBalance, refreshWallet } = useWallet();
     const { jobs, addBid } = useJobs();
+    const navigate = useNavigate();
 
     const [bidAmount, setBidAmount] = useState('');
     const [bidMessage, setBidMessage] = useState('');
@@ -33,6 +37,9 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
     // FRESH bid check - fetch from API instead of using cached data
     const [existingBid, setExistingBid] = useState<Bid | null>(null);
     const [isCheckingBid, setIsCheckingBid] = useState(false);
+
+    // Add local submitting state to prevent double clicks
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Check for existing bid whenever modal opens or user changes
     useEffect(() => {
@@ -107,9 +114,6 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
         setIsEnhancingBid(false);
         contextIncrementAiUsage();
     };
-
-    // Add local submitting state to prevent double clicks
-    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handlePlaceBid = async () => {
         if (!jobId || !bidAmount || isSubmitting) return;
@@ -203,104 +207,165 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
         }
     };
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4">
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-md pointer-events-auto" onClick={onClose}></div>
-            <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl p-5 pointer-events-auto animate-slide-up pb-safe relative shadow-lg transition-all">
+    const handleRecharge = () => {
+        if (jobId) {
+            sessionStorage.setItem('pendingBidJobId', jobId);
+        }
+        onClose();
+        navigate('/wallet');
+    };
 
-                <div className="flex items-center gap-4 mb-8">
+    return (
+        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center pointer-events-none sm:p-4">
+            {/* Backdrop */}
+            <div
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto transition-opacity duration-300"
+                onClick={onClose}
+            />
+            <div className="w-full md:w-[480px] bg-white dark:bg-gray-950 md:rounded-[2.5rem] rounded-t-[2.5rem] pointer-events-auto animate-in slide-in-from-bottom duration-300 relative shadow-2xl flex flex-col max-h-[90vh]">
+
+                {/* Mobile Drag Handle */}
+                <div className="w-full flex justify-center pt-3 pb-1 md:hidden">
+                    <div className="w-12 h-1.5 bg-gray-300 dark:bg-gray-700 rounded-full" />
+                </div>
+
+                {/* Header */}
+                <div className="px-8 pt-6 pb-2 shrink-0 flex items-center gap-4">
                     <button
                         onClick={onClose}
-                        className="btn-ghost !p-2 rounded-xl !bg-gray-100 dark:!bg-gray-800 text-gray-700 dark:text-gray-300 group"
-                        aria-label="Back"
+                        className="p-2 -ml-2 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                     >
-                        <ArrowLeft size={20} className="group-hover:-translate-x-0.5 transition-transform" />
+                        <ArrowLeft size={24} strokeWidth={2.5} />
                     </button>
-                    <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
-                        <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl">
-                            <IndianRupee size={22} className="text-emerald-600 dark:text-emerald-400" />
-                        </div>
-                        {contextT.placeBid}
-                    </h3>
-                </div>
-                {/* Show warning if user already bid (check runs silently in background) */}
-                {!isCheckingBid && existingBid && (
-                    <div className="badge badge-warning w-full py-3 mb-4 rounded-xl items-start h-auto text-left leading-tight">
-                        <p className="font-medium">
-                            {contextLanguage === 'en'
-                                ? `You already bid ₹${existingBid.amount} on this job. Status: ${existingBid.status}`
-                                : `आपने इस जॉब पर ₹${existingBid.amount} बोली लगाई है। स्थिति: ${existingBid.status}`}
+                    <div>
+                        <h3 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-2">
+                            {contextT.placeBid}
+                        </h3>
+                        <p className="text-xs font-medium text-gray-400 dark:text-gray-500 mt-1">
+                            {job?.title}
                         </p>
                     </div>
-                )}
+                </div>
 
-                <div className="space-y-6">
-                    {/* Job Budget Reference */}
-                    {job && (
-                        <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 p-4 rounded-2xl flex items-center justify-between">
-                            <span className="text-[10px] font-black text-emerald-600/60 dark:text-emerald-400/60 uppercase tracking-widest">Employer's Budget</span>
-                            <span className="text-lg font-black text-emerald-700 dark:text-emerald-400">₹{job.budget}</span>
+                {/* Scrollable Content */}
+                <div className="overflow-y-auto px-8 py-4 space-y-8">
+
+                    {/* Existing Bid Warning */}
+                    {!isCheckingBid && existingBid && (
+                        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/50 p-4 rounded-2xl flex items-start gap-3">
+                            <div className="p-2 bg-amber-100 dark:bg-amber-900/40 rounded-full text-amber-600 dark:text-amber-400 shrink-0">
+                                <IndianRupee size={16} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-bold text-amber-800 dark:text-amber-300 uppercase tracking-widest mb-1">Active Bid</p>
+                                <p className="text-sm font-medium text-amber-900 dark:text-amber-100 leading-snug">
+                                    {contextLanguage === 'en'
+                                        ? `You placed a bid of ₹${existingBid.amount}. Status: ${existingBid.status}`
+                                        : `आपने ₹${existingBid.amount} की बोली लगाई है। स्थिति: ${existingBid.status}`}
+                                </p>
+                            </div>
                         </div>
                     )}
 
-                    <div>
-                        <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-3 ml-1 block">{contextT.yourOffer}</label>
+                    {/* Offer Input Section */}
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-end">
+                            <label className="text-[11px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">{contextT.yourOffer}</label>
+                            {job && (
+                                <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded-lg">
+                                    Budget: ₹{job.budget}
+                                </span>
+                            )}
+                        </div>
+
                         <div className="relative group">
-                            <span className="absolute left-5 top-1/2 -translate-y-1/2 text-emerald-500 font-black text-xl group-focus-within:scale-110 transition-transform">₹</span>
                             <input
                                 type="number"
                                 value={bidAmount}
                                 onChange={(e) => setBidAmount(e.target.value)}
-                                className="input-base !pl-12 !py-4 !text-xl font-black text-emerald-600 dark:text-emerald-400 !bg-gray-50 dark:!bg-gray-800/50 !rounded-2xl border-transparent focus:!border-emerald-500/50 focus:!shadow-[0_0_20px_rgba(16,185,129,0.1)] transition-all"
-                                placeholder={job ? `${job.budget}` : "0"}
+                                className="w-full text-5xl font-black text-gray-900 dark:text-white bg-transparent border-b-2 border-gray-100 dark:border-gray-800 focus:border-emerald-500 outline-none py-4 pl-8 placeholder-gray-200 dark:placeholder-gray-800 transition-all font-mono tracking-tighter"
+                                placeholder="0"
                                 min="1"
+                                autoFocus
                             />
-                        </div>
-                    </div>
-                    <div>
-                        <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block px-1">{contextT.msgToEmployer}</label>
-                        <textarea
-                            value={bidMessage}
-                            onChange={(e) => setBidMessage(e.target.value)}
-                            className="input-base input-focus h-28"
-                            placeholder={contextT.bidMessagePlaceholder}
-                            maxLength={500}
-                        ></textarea>
-                        <div className="flex justify-between items-center mt-2 px-1">
-                            <button onClick={handleEnhanceBid} disabled={isEnhancingBid} className="btn-ghost !p-0 text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 group">
-                                <div className="p-1 bg-emerald-100 dark:bg-emerald-900/50 rounded-lg group-hover:scale-110 transition-transform"><LayoutGrid size={12} /></div>
-                                <span className="text-xs font-bold">{isEnhancingBid ? (contextLanguage === 'en' ? 'Enhancing...' : 'बढ़ा रहा...') : (contextLanguage === 'en' ? 'Enhance with AI' : 'AI से बढ़ाएं')}</span>
-                            </button>
-                            <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">{bidMessage.length}/500</span>
-                        </div>
-                    </div>
-                    <div className="bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100/50 dark:border-blue-900/30 p-4 rounded-2xl flex justify-between items-center">
-                        <p className="text-[11px] font-bold text-blue-700/80 dark:text-blue-400/80 leading-relaxed max-w-[70%]">
-                            {contextLanguage === 'en'
-                                ? `Bidding costs 1 Coin. Once accepted, you can chat directly.`
-                                : `बोली लगाने की लागत 1 सिक्का है। स्वीकार होने पर आप चैट कर सकते हैं।`}
-                        </p>
-                        <div className={`text-xs font-black px-3 py-1.5 rounded-lg border flex items-center gap-1 ${walletBalance < 1 ? 'bg-red-50 text-red-600 border-red-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
-                            <span>🪙</span>
-                            <span>{walletBalance}</span>
+                            <span className="absolute left-0 top-1/2 -translate-y-1/2 text-3xl font-black text-emerald-500">₹</span>
                         </div>
                     </div>
 
-                    <button
-                        onClick={handlePlaceBid}
-                        disabled={!!existingBid || walletBalance < 1 || isSubmitting}
-                        className={`btn w-full mt-4 !py-5 !rounded-2xl font-black uppercase tracking-[0.2em] transition-all text-sm shadow-xl flex items-center justify-center gap-2 ${existingBid
-                            ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
-                            : 'btn-primary shadow-emerald-500/20 hover:shadow-emerald-500/40 hover:-translate-y-1 active:scale-95'
-                            } ${isSubmitting ? 'opacity-80 cursor-wait' : ''}`}
-                    >
-                        {isSubmitting && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>}
-                        {existingBid
-                            ? (contextLanguage === 'en' ? 'Already Bid' : 'पहले से बोली लगाई')
-                            : isSubmitting ? (contextLanguage === 'en' ? 'Sending...' : 'भेज रहा हूँ...') : contextT.sendBid
-                        }
-                    </button>
+                    {/* Message Section */}
+                    <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                            <label className="text-[11px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">{contextT.msgToEmployer}</label>
+
+                            <button
+                                onClick={handleEnhanceBid}
+                                disabled={isEnhancingBid}
+                                className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 px-3 py-1.5 rounded-full hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors disabled:opacity-50"
+                            >
+                                {isEnhancingBid ? <Loader2 size={10} className="animate-spin" /> : <LayoutGrid size={10} />}
+                                {contextLanguage === 'en' ? 'AI Polish' : 'AI सुधारें'}
+                            </button>
+                        </div>
+
+                        <div className="relative">
+                            <textarea
+                                value={bidMessage}
+                                onChange={(e) => setBidMessage(e.target.value)}
+                                className="w-full bg-gray-50 dark:bg-gray-900/50 rounded-2xl p-5 text-sm font-medium text-gray-700 dark:text-gray-300 border border-transparent focus:bg-white dark:focus:bg-gray-900 focus:border-emerald-500/50 focus:shadow-lg focus:shadow-emerald-500/5 outline-none resize-none transition-all h-32 leading-relaxed"
+                                placeholder={contextT.bidMessagePlaceholder}
+                                maxLength={500}
+                            />
+                            <div className="absolute bottom-3 right-3 text-[9px] font-bold text-gray-300 dark:text-gray-600 uppercase tracking-widest">
+                                {bidMessage.length}/500
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Cost Info */}
+                    <div className="flex items-center justify-between py-2 text-xs font-medium text-gray-400 dark:text-gray-500 border-t border-gray-100 dark:border-gray-800 pt-4">
+                        <span>Cost to bid</span>
+                        <div className={`flex items-center gap-1.5 font-bold ${walletBalance < 1 ? 'text-red-500' : 'text-gray-900 dark:text-white'}`}>
+                            1 Coin
+                            <span className="w-1 h-1 rounded-full bg-gray-300" />
+                            <span className="font-normal text-gray-400">Bal: {walletBalance}</span>
+                        </div>
+                    </div>
+
                 </div>
+
+                {/* Footer Actions */}
+                <div className="p-8 pt-4 pb-safe bg-white dark:bg-gray-950 md:rounded-b-[2.5rem]">
+                    {walletBalance < 1 ? (
+                        <button
+                            onClick={handleRecharge}
+                            className="w-full py-5 rounded-[1.5rem] font-black text-sm uppercase tracking-[0.2em] shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-amber-500/20 hover:shadow-orange-500/40"
+                        >
+                            <IndianRupee size={18} />
+                            {contextLanguage === 'en' ? 'Recharge Wallet (1 Coin)' : 'वॉलेट रिचार्ज करें (1 सिक्का)'}
+                        </button>
+                    ) : (
+                        <button
+                            onClick={handlePlaceBid}
+                            disabled={!!existingBid || isSubmitting}
+                            className={`w-full py-5 rounded-[1.5rem] font-black text-sm uppercase tracking-[0.2em] shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 ${existingBid
+                                ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed shadow-none'
+                                : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-emerald-500/20 hover:shadow-emerald-500/40'
+                                }`}
+                        >
+                            {isSubmitting && <Loader2 size={18} className="animate-spin" />}
+                            {existingBid
+                                ? (contextLanguage === 'en' ? 'Bid Placed' : 'बोली लगी')
+                                : contextT.sendBid
+                            }
+                        </button>
+                    )}
+                    {walletBalance < 1 && (
+                        <p className="text-center text-[10px] text-amber-600 dark:text-amber-400 font-bold mt-3 uppercase tracking-widest">
+                            {contextLanguage === 'en' ? 'Low Balance Requires Top-up' : 'कम बैलेंस - रिचार्ज करें'}
+                        </p>
+                    )}
+                </div>
+
             </div >
         </div >
     );

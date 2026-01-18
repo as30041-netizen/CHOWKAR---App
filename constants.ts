@@ -1,27 +1,91 @@
 
 import { Job, JobStatus, User, UserRole, Bid, Notification } from './types';
 
-export const CATEGORIES = [
-  'Farm Labor',
-  'Construction',
-  'Plumbing',
-  'Electrical',
-  'Driver',
-  'Cleaning',
-  'Delivery',
-  'Other'
+import { Share2, Truck, Wrench, Zap, Car, Sparkles, HardHat, Shovel } from 'lucide-react';
+
+export interface CategoryConfig {
+  id: string;
+  label: { en: string; hi: string };
+  icon: any; // Lucide icon
+  color: string; // Tailwind gradient classes
+  bg: string; // Solid bg for badges
+  image?: string; // Path to realistic image
+}
+
+export const CATEGORY_CONFIG: CategoryConfig[] = [
+  {
+    id: 'Farm Labor',
+    label: { en: 'Farm Labor', hi: 'खेती-बाड़ी' },
+    icon: Shovel,
+    color: 'from-green-400 to-emerald-600',
+    bg: 'bg-emerald-100 text-emerald-800',
+    image: '/assets/categories/farm.png'
+  },
+  {
+    id: 'Construction',
+    label: { en: 'Construction', hi: 'निर्माण / मिस्त्री' },
+    icon: HardHat,
+    color: 'from-orange-400 to-red-500',
+    bg: 'bg-orange-100 text-orange-800',
+    image: '/assets/categories/construction.png'
+  },
+  {
+    id: 'Driver',
+    label: { en: 'Driver', hi: 'ड्राइवर' },
+    icon: Car,
+    color: 'from-blue-400 to-indigo-600',
+    bg: 'bg-blue-100 text-blue-800',
+    image: '/assets/categories/driver.png'
+  },
+  {
+    id: 'Cleaning',
+    label: { en: 'Cleaning', hi: 'सफाई' },
+    icon: Sparkles,
+    color: 'from-teal-300 to-cyan-500',
+    bg: 'bg-cyan-100 text-cyan-800',
+    image: '/assets/categories/cleaning.png'
+  },
+  {
+    id: 'Plumbing',
+    label: { en: 'Plumbing', hi: 'नल फिटिंग' },
+    icon: Wrench,
+    color: 'from-sky-400 to-blue-600',
+    bg: 'bg-sky-100 text-sky-800',
+    image: '/assets/categories/plumbing.png'
+  },
+  {
+    id: 'Electrical',
+    label: { en: 'Electrical', hi: 'बिजली काम' },
+    icon: Zap,
+    color: 'from-yellow-400 to-amber-500',
+    bg: 'bg-yellow-100 text-yellow-800',
+    image: '/assets/categories/electrical.png'
+  },
+  {
+    id: 'Delivery',
+    label: { en: 'Delivery', hi: 'डिलीवरी' },
+    icon: Truck,
+    color: 'from-fuchsia-400 to-purple-600',
+    bg: 'bg-purple-100 text-purple-800',
+    image: '/assets/categories/delivery.png'
+  },
+  {
+    id: 'Other',
+    label: { en: 'Other', hi: 'अन्य' },
+    icon: Share2,
+    color: 'from-gray-400 to-slate-500',
+    bg: 'bg-gray-100 text-gray-800',
+    image: '/assets/categories/other.png'
+  }
 ];
 
-export const CATEGORY_TRANSLATIONS: Record<string, { en: string; hi: string }> = {
-  'Farm Labor': { en: 'Farm Labor', hi: 'खेत मजदूरी' },
-  'Construction': { en: 'Construction', hi: 'निर्माण / मिस्त्री' },
-  'Plumbing': { en: 'Plumbing', hi: 'नल फिटिंग' },
-  'Electrical': { en: 'Electrical', hi: 'बिजली काम' },
-  'Driver': { en: 'Driver', hi: 'ड्राइवर' },
-  'Cleaning': { en: 'Cleaning', hi: 'सफाई' },
-  'Delivery': { en: 'Delivery', hi: 'डिलीवरी' },
-  'Other': { en: 'Other', hi: 'अन्य' }
-};
+// Helper to keep backward compatibility with array-based usage
+export const CATEGORIES = CATEGORY_CONFIG.map(c => c.id);
+
+export const CATEGORY_TRANSLATIONS: Record<string, { en: string; hi: string }> = CATEGORY_CONFIG.reduce((acc, curr) => ({
+  ...acc,
+  [curr.id]: curr.label
+}), {});
 
 export const REVIEW_TAGS = [
   'Punctual',

@@ -79,6 +79,7 @@ export interface Job {
   posterName: string;
   posterPhone: string;
   posterPhoto?: string;
+  posterRating?: number;
   title: string;
   description: string;
   category: string;
@@ -91,6 +92,8 @@ export interface Job {
   createdAt: number;
   bids: Bid[];
   acceptedBidId?: string;
+  workerId?: string; // ID of the hired worker (if status is IN_PROGRESS/COMPLETED)
+  workerName?: string; // Name of the hired worker
   image?: string; // Base64 or URL of job image
   reviews?: Review[];
   // === FEED OPTIMIZATION FIELDS (populated by get_home_feed RPC) ===
@@ -103,6 +106,18 @@ export interface Job {
   hasNewCounter?: boolean; // Transient: Poster has unread new counter (calculated from action_required)
   actionRequiredCount?: number; // Transient: Number of bids requiring attention
   hasAgreement?: boolean;  // Pre-computed: At least one worker has agreed to terms
+  hasMyReview?: boolean;   // Pre-computed: Current user has already reviewed this job
+  hiredWorkerName?: string;
+  hiredWorkerPhone?: string;
+  hiredWorkerId?: string;
+}
+
+export interface DashboardStats {
+  poster_active: number;
+  poster_history: number;
+  worker_active: number;
+  worker_history: number;
+  discover_active: number;
 }
 
 export interface ChatMessage {

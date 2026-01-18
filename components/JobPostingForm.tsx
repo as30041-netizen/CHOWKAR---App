@@ -4,12 +4,12 @@ import { useNotification } from '../contexts/NotificationContext';
 import { useUser } from '../contexts/UserContextDB';
 import { useJobs } from '../contexts/JobContextDB';
 import { Job, Coordinates, JobStatus } from '../types';
-import { CATEGORIES, FREE_AI_USAGE_LIMIT, DRAFT_STORAGE_KEY, CATEGORY_TRANSLATIONS } from '../constants';
+import { CATEGORIES, CATEGORY_CONFIG, FREE_AI_USAGE_LIMIT, DRAFT_STORAGE_KEY, CATEGORY_TRANSLATIONS } from '../constants';
 import { uploadJobImage, isBase64Image } from '../services/storageService';
 import { getDeviceLocation, reverseGeocode, forwardGeocode } from '../utils/geo';
 import { enhanceJobDescriptionStream, estimateWage, analyzeImageForJob } from '../services/geminiService';
 import { LeafletMap } from './LeafletMap';
-import { Sparkles, MapPin, Calendar, Clock, Image as ImageIcon, IndianRupee, Loader2, X, Plus, ChevronRight, AlertCircle, Wand2, Lightbulb, Map as MapIcon, Languages, CheckCircle2, ArrowDownWideNarrow, Calculator, Mic, MicOff, Camera, Lock } from 'lucide-react';
+import { Sparkles, MapPin, Calendar, Clock, Image as ImageIcon, IndianRupee, Loader2, X, Plus, ChevronRight, AlertCircle, Wand2, Lightbulb, Map as MapIcon, Languages, CheckCircle2, ArrowDownWideNarrow, Calculator, Mic, MicOff, Camera, Lock, ArrowLeft } from 'lucide-react';
 
 interface JobPostingFormProps {
     onSuccess: () => void;
@@ -45,6 +45,40 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
     const remainingFreeTries = FREE_AI_USAGE_LIMIT - (user.aiUsageCount || 0);
     const showLockIcon = !user.isPremium && remainingFreeTries <= 0;
     const isEditing = !!initialJob;
+
+    // Wizard State
+    const [step, setStep] = useState(1);
+    const totalSteps = 3;
+
+    // Scroll to top on step change
+    useEffect(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, [step]);
+
+    const nextStep = () => {
+        if (validateStep(step)) {
+            setStep(prev => Math.min(prev + 1, totalSteps));
+        }
+    };
+
+    const prevStep = () => {
+        setStep(prev => Math.max(prev - 1, 1));
+    };
+
+    const validateStep = (currentStep: number) => {
+        if (currentStep === 1) {
+            if (!newJobTitle.trim()) { showAlert(t.jobTitleLabel + ' is required', 'error'); return false; }
+            if (!newJobCategory) { showAlert(t.categoryLabel + ' is required', 'error'); return false; }
+            if (!newJobDesc.trim()) { showAlert(t.descLabel + ' is required', 'error'); return false; }
+            return true;
+        }
+        if (currentStep === 2) {
+            if (!newJobDate) { showAlert(t.startDate + ' is required', 'error'); return false; }
+            if (!newJobLocation.trim()) { showAlert('Location is required', 'error'); return false; }
+            return true;
+        }
+        return true;
+    };
 
 
     // Load draft from localStorage (only for new jobs)
@@ -469,167 +503,163 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
     }
 
     return (
-        <div className="p-6 animate-fade-in pb-20">
-            <div className="flex items-center justify-between mb-10 px-2">
-                <div className="flex items-center gap-4">
-                    <div className="w-2 h-10 bg-gradient-to-b from-emerald-500 to-teal-600 rounded-full" />
-                    <h2 className="text-4xl font-black text-gray-900 dark:text-white tracking-tight">
-                        {isEditing ? t.editJob : t.postJobHeader}
-                    </h2>
+        <div className="pb-32 animate-fade-in">
+            {/* Header with Progress */}
+            <div className="mb-8">
+                <div className="flex items-center gap-3 mb-6">
+                    {onCancel && (
+                        <button onClick={onCancel} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                            <ArrowLeft size={20} className="text-gray-600 dark:text-gray-300" />
+                        </button>
+                    )}
+                    <div>
+                        <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight leading-none">
+                            {isEditing ? t.editJob : t.postJobHeader}
+                        </h2>
+                        <p className="text-xs font-bold text-gray-400 mt-1">
+                            {step === 1 && "Let's start with the basics"}
+                            {step === 2 && "Where and when?"}
+                            {step === 3 && "Final details & Review"}
+                        </p>
+                    </div>
                 </div>
-                {onCancel && (
-                    <button onClick={onCancel} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-2xl text-gray-400 transition-all active:scale-90">
-                        <X size={24} />
-                    </button>
-                )}
+
+                {/* Progress Bar */}
+                <div className="h-1.5 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden flex">
+                    <div className={`h-full transition-all duration-500 ease-out bg-emerald-500 ${step >= 1 ? 'w-1/3' : 'w-0'}`} />
+                    <div className={`h-full transition-all duration-500 ease-out ${step >= 2 ? 'bg-emerald-500 w-1/3' : 'bg-transparent w-1/3'}`} />
+                    <div className={`h-full transition-all duration-500 ease-out ${step >= 3 ? 'bg-emerald-500 w-1/3' : 'bg-transparent w-1/3'}`} />
+                </div>
+                <div className="flex justify-between mt-2 text-[10px] font-black uppercase tracking-widest text-gray-300 dark:text-gray-700">
+                    <span className={step >= 1 ? 'text-emerald-600 dark:text-emerald-400' : ''}>Basics</span>
+                    <span className={step >= 2 ? 'text-emerald-600 dark:text-emerald-400' : ''}>Logistics</span>
+                    <span className={step >= 3 ? 'text-emerald-600 dark:text-emerald-400' : ''}>Polish</span>
+                </div>
             </div>
 
-            <div className="space-y-8 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl p-8 rounded-[3rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.08)] border-4 border-white dark:border-gray-800 transition-all">
+            <div className="bg-white dark:bg-gray-900 rounded-[2rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden relative min-h-[400px]">
 
+                {/* STEP 1: BASICS */}
+                <div className={`p-6 space-y-6 transition-all duration-500 ${step === 1 ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-full absolute inset-0 pointer-events-none'}`}>
 
-                <div className="group/field">
-                    <label className="text-[11px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-3 block px-2 group-focus-within/field:text-emerald-500 transition-colors">{t.jobTitleLabel}</label>
-                    <input
-                        type="text"
-                        enterKeyHint="next"
-                        placeholder="e.g. Home Cleaning Service"
-                        maxLength={100}
-                        className="w-full bg-gray-50/50 dark:bg-gray-800/30 border-2 border-gray-100 dark:border-gray-800 rounded-[1.5rem] px-6 py-4.5 font-bold text-gray-900 dark:text-white focus:border-emerald-500/50 focus:bg-white dark:focus:bg-gray-800 outline-none transition-all shadow-sm group-focus-within/field:shadow-emerald-500/5"
-                        value={newJobTitle}
-                        onChange={(e) => setNewJobTitle(e.target.value)}
-                    />
-                </div>
-                <div className="group/field">
-                    <label className="text-[11px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-3 block px-2 group-focus-within/field:text-emerald-500 transition-colors">{t.categoryLabel}</label>
-                    <div className="relative">
-                        <select className="w-full bg-gray-50/50 dark:bg-gray-800/30 border-2 border-gray-100 dark:border-gray-800 rounded-[1.5rem] px-6 py-4.5 font-bold text-gray-900 dark:text-white focus:border-emerald-500/50 focus:bg-white dark:focus:bg-gray-800 outline-none appearance-none transition-all shadow-sm" value={newJobCategory} onChange={(e) => setNewJobCategory(e.target.value)}>{CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_TRANSLATIONS[c]?.[language] || c}</option>)}</select>
-                        <ArrowDownWideNarrow size={20} className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    {/* Title */}
+                    <div className="group/field relative">
+                        <input
+                            type="text"
+                            id="jobTitle"
+                            placeholder=" "
+                            maxLength={100}
+                            className="peer w-full bg-transparent border-0 border-b-2 border-gray-200 dark:border-gray-700 px-0 py-3 font-black text-xl text-gray-900 dark:text-white focus:ring-0 focus:border-emerald-500 transition-colors placeholder-transparent"
+                            value={newJobTitle}
+                            onChange={(e) => setNewJobTitle(e.target.value)}
+                        />
+                        <label htmlFor="jobTitle" className="absolute left-0 -top-3.5 text-xs font-black uppercase tracking-wider text-emerald-500 transition-all peer-placeholder-shown:text-base peer-placeholder-shown:font-bold peer-placeholder-shown:text-gray-400 peer-placeholder-shown:top-3 peer-placeholder-shown:tracking-normal peer-focus:-top-3.5 peer-focus:text-xs peer-focus:font-black peer-focus:text-emerald-500 peer-focus:tracking-wider">
+                            {t.jobTitleLabel}
+                        </label>
                     </div>
-                </div>
-                <div className="group/field">
-                    <div className="flex justify-between items-center mb-4 px-2">
-                        <label className="text-[11px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] group-focus-within/field:text-emerald-500 transition-colors">{t.descLabel}</label>
-                        <div className="flex gap-2.5 overflow-x-auto no-scrollbar py-1">
-                            <input
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                ref={fileInputRef}
-                                onChange={handleImageUpload}
-                            />
-                            <button
-                                onClick={triggerImageUpload}
-                                className={`text-[10px] flex items-center gap-1.5 font-black uppercase tracking-widest px-3 py-2 rounded-xl transition-all shadow-sm border ${!showLockIcon
-                                    ? 'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 border-purple-100 dark:border-purple-800/50 hover:scale-105 active:scale-95'
-                                    : 'bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-100/50 dark:border-gray-800'
-                                    }`}
-                            >
-                                {isAnalyzingImage ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
-                                {isAnalyzingImage ? t.uploading : 'Photo'}
-                                {!user.isPremium && remainingFreeTries > 0 && !isAnalyzingImage && (
-                                    <span className="bg-purple-600 text-white text-[8px] px-1.5 py-0.5 rounded-full ml-1 font-black">AI</span>
-                                )}
-                            </button>
-                            <button
-                                onClick={toggleVoiceInput}
-                                className={`text-[10px] flex items-center gap-1.5 font-black uppercase tracking-widest px-3 py-2 rounded-xl transition-all shadow-sm border ${isListening ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-100 animate-pulse' : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-500 border-gray-100/50 dark:border-gray-800 hover:scale-105 active:scale-95'}`}
-                            >
-                                {isListening ? <MicOff size={12} /> : <Mic size={12} />} {isListening ? t.stop : 'Voice'}
-                            </button>
-                            <button
-                                onClick={handleEnhanceDescription}
-                                disabled={isEnhancing}
-                                className={`text-[10px] flex items-center gap-1.5 font-black uppercase tracking-widest px-3 py-2 rounded-xl transition-all shadow-sm border ${!showLockIcon
-                                    ? 'bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800/50 hover:scale-105 active:scale-95'
-                                    : 'bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border-gray-100/50 dark:border-gray-800'
-                                    } ${remainingFreeTries > 0 && !user.isPremium ? 'animate-pulse-slow' : ''}`}
-                            >
-                                {isEnhancing ? (
-                                    <Loader2 size={12} className="animate-spin" />
-                                ) : (
-                                    !showLockIcon ? <Sparkles size={12} /> : <Lock size={12} />
-                                )}
-                                {isEnhancing ? t.enhancing : 'Magic'}
-                                {!user.isPremium && remainingFreeTries > 0 && (
-                                    <span className="bg-emerald-600 text-white text-[8px] px-1.5 py-0.5 rounded-full ml-1 font-black">
-                                        {remainingFreeTries}
-                                    </span>
-                                )}
-                            </button>
+
+                    {/* Category */}
+                    <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 block">{t.categoryLabel}</label>
+                        <div className="grid grid-cols-2 gap-3">
+                            {CATEGORY_CONFIG.map(cat => {
+                                const Icon = cat.icon;
+                                const isSelected = newJobCategory === cat.id;
+
+                                return (
+                                    <button
+                                        key={cat.id}
+                                        onClick={() => setNewJobCategory(cat.id)}
+                                        className={`relative overflow-hidden p-4 rounded-2xl text-left transition-all h-24 flex flex-col justify-between group ${isSelected
+                                            ? 'ring-2 ring-emerald-500 shadow-lg scale-[1.02]'
+                                            : 'bg-gray-50 dark:bg-gray-800 border-2 border-transparent hover:border-gray-200 dark:hover:border-gray-700'}`}
+                                    >
+                                        {/* Background Gradient */}
+                                        <div className={`absolute inset-0 bg-gradient-to-br ${cat.color} opacity-10 transition-opacity ${isSelected ? 'opacity-100' : 'group-hover:opacity-20'}`} />
+
+                                        {/* Icon */}
+                                        <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center transition-colors ${isSelected ? 'bg-white/20 text-white backdrop-blur-sm' : 'bg-white dark:bg-gray-700 text-gray-400'}`}>
+                                            <Icon size={16} strokeWidth={2.5} />
+                                        </div>
+
+                                        {/* Label */}
+                                        <span className={`relative z-10 text-xs font-black uppercase tracking-wider transition-colors ${isSelected ? 'text-white' : 'text-gray-500 dark:text-gray-400'}`}>
+                                            {cat.label[language] || cat.label.en}
+                                        </span>
+                                    </button>
+                                )
+                            })}
                         </div>
                     </div>
-                    <div className="relative group/field">
-                        {newJobImage && (
-                            <div className="mb-4 relative rounded-[2rem] overflow-hidden h-56 bg-gray-100 dark:bg-gray-800 border-4 border-white dark:border-gray-800 shadow-xl">
-                                <img src={newJobImage} alt="Job Preview" className="w-full h-full object-cover" />
-                                {isAnalyzingImage && (
-                                    <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center text-white backdrop-blur-md">
-                                        <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center mb-3 animate-pulse">
-                                            <Loader2 size={24} className="animate-spin" />
-                                        </div>
-                                        <span className="text-xs font-black uppercase tracking-widest">Analyzing photo...</span>
-                                    </div>
-                                )}
-                                <button onClick={() => setNewJobImage(undefined)} className="absolute top-4 right-4 bg-white/90 dark:bg-gray-900/90 text-gray-900 dark:text-white p-2.5 rounded-2xl shadow-lg hover:bg-red-500 hover:text-white transition-all transform active:scale-90">
-                                    <X size={20} />
+
+                    {/* Description */}
+                    <div>
+                        <div className="flex justify-between items-center mb-2">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{t.descLabel}</label>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={toggleVoiceInput}
+                                    className={`p-2 rounded-full transition-all ${isListening ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-gray-100 text-gray-500'}`}
+                                >
+                                    {isListening ? <MicOff size={14} /> : <Mic size={14} />}
+                                </button>
+                                <button
+                                    onClick={handleEnhanceDescription}
+                                    disabled={isEnhancing}
+                                    className={`flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider transition-all ${isEnhancing ? 'bg-gray-100 text-gray-400' : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/20'}`}
+                                >
+                                    {isEnhancing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                                    AI Enhance
                                 </button>
                             </div>
-                        )}
+                        </div>
                         <textarea
-                            className={`w-full bg-gray-50/50 dark:bg-gray-800/30 border-2 border-gray-100 dark:border-gray-800 rounded-[2rem] px-6 py-6 font-bold text-gray-900 dark:text-white focus:border-emerald-500/50 focus:bg-white dark:focus:bg-gray-800 outline-none h-48 resize-none transition-all shadow-sm ${isEnhancing ? 'border-emerald-400 ring-4 ring-emerald-500/10' : ''}`}
+                            className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-transparent focus:border-emerald-500 rounded-2xl p-4 text-sm font-medium text-gray-900 dark:text-white outline-none min-h-[160px] resize-none transition-all"
                             value={newJobDesc}
                             onChange={(e) => setNewJobDesc(e.target.value)}
-                            placeholder="Describe what needs to be done..."
+                            placeholder="Describe the task in detail..."
                         />
-                    </div>
-                </div>
-                <div className="flex gap-6">
-                    <div className="flex-1 group/field">
-                        <label className="text-[11px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-3 block px-2 group-focus-within/field:text-emerald-500 transition-colors uppercase">{t.startDate}</label>
-                        <input
-                            type="date"
-                            min={new Date().toISOString().split('T')[0]}
-                            className="w-full bg-gray-50/50 dark:bg-gray-800/30 border-2 border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-4 font-bold text-gray-900 dark:text-white focus:border-emerald-500/50 outline-none transition-all"
-                            value={newJobDate}
-                            onChange={(e) => setNewJobDate(e.target.value)}
-                        />
-                    </div>
-                    <div className="flex-1 group/field">
-                        <label className="text-[11px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-3 block px-2 group-focus-within/field:text-emerald-500 transition-colors uppercase">{t.duration}</label>
-                        <input type="text" className="w-full bg-gray-50/50 dark:bg-gray-800/30 border-2 border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-4 font-bold text-gray-900 dark:text-white focus:border-emerald-500/50 outline-none transition-all" value={newJobDuration} onChange={(e) => setNewJobDuration(e.target.value)} placeholder="e.g. 2 Days" />
-                    </div>
-                </div>
-                <div className="group/field">
-                    <div className="flex justify-between items-center mb-4 px-2">
-                        <label className="text-[11px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] group-focus-within/field:text-emerald-500 transition-colors uppercase">{t.budget} (₹)</label>
-                        <button
-                            onClick={handleEstimateWage}
-                            disabled={isEstimating}
-                            className={`text-[10px] flex items-center gap-2 font-black uppercase tracking-[0.1em] px-4 py-2.5 rounded-2xl transition-all shadow-sm border ${!showLockIcon
-                                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-800/50 hover:bg-white dark:hover:bg-gray-800'
-                                : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-200'
-                                }`}
-                        >
-                            {isEstimating ? <Loader2 size={12} className="animate-spin" /> : <Calculator size={14} />}
-                            {isEstimating ? t.estimating : 'AI Price'}
-                        </button>
-                    </div>
-                    <div className="relative">
-                        <input type="number" inputMode="numeric" className="w-full bg-gray-50/50 dark:bg-gray-800/30 border-2 border-gray-100 dark:border-gray-800 rounded-[1.5rem] px-6 py-5 font-black text-3xl text-emerald-600 dark:text-emerald-400 focus:border-emerald-500 focus:bg-white dark:focus:bg-gray-800 outline-none transition-all shadow-sm" value={newJobBudget} onChange={(e) => setNewJobBudget(e.target.value)} />
-                        {isEstimating && (
-                            <div className="absolute inset-x-2 inset-y-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-[1.25rem] flex items-center px-6 border-2 border-blue-200 dark:border-blue-800 animate-pulse">
-                                <div className="h-4 w-24 bg-blue-100 dark:bg-blue-900/50 rounded-full" />
-                            </div>
-                        )}
                     </div>
                 </div>
 
-                <div className="group/field">
-                    <label className="text-[11px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-3 block px-2 group-focus-within/field:text-emerald-500 transition-colors">
-                        {language === 'en' ? 'Work Location (Search or Drag)' : 'कार्य स्थान (खोजें या चुनें)'}
-                    </label>
+                {/* STEP 2: LOGISTICS */}
+                <div className={`p-6 space-y-8 transition-all duration-500 ${step === 2 ? 'opacity-100 translate-x-0' : step < 2 ? 'opacity-0 translate-x-full absolute inset-0 pointer-events-none' : 'opacity-0 -translate-x-full absolute inset-0 pointer-events-none'}`}>
+
+                    {/* Date & Duration */}
+                    <div className="flex gap-4">
+                        <div className="flex-1 group/field relative">
+                            <input
+                                type="date"
+                                id="jobDate"
+                                min={new Date().toISOString().split('T')[0]}
+                                className="peer w-full bg-transparent border-0 border-b-2 border-gray-200 dark:border-gray-700 px-0 py-3 font-bold text-gray-900 dark:text-white focus:ring-0 focus:border-emerald-500 transition-colors"
+                                value={newJobDate}
+                                onChange={(e) => setNewJobDate(e.target.value)}
+                            />
+                            <label htmlFor="jobDate" className="absolute left-0 -top-3.5 text-[10px] font-black uppercase tracking-widest text-emerald-500">
+                                {t.startDate}
+                            </label>
+                        </div>
+                        <div className="flex-1 group/field relative">
+                            <input
+                                type="text"
+                                id="jobDuration"
+                                placeholder=" "
+                                className="peer w-full bg-transparent border-0 border-b-2 border-gray-200 dark:border-gray-700 px-0 py-3 font-bold text-gray-900 dark:text-white focus:ring-0 focus:border-emerald-500 transition-colors placeholder-transparent"
+                                value={newJobDuration}
+                                onChange={(e) => setNewJobDuration(e.target.value)}
+                            />
+                            <label htmlFor="jobDuration" className="absolute left-0 -top-3.5 text-xs font-black uppercase tracking-wider text-emerald-500 transition-all peer-placeholder-shown:text-base peer-placeholder-shown:font-bold peer-placeholder-shown:text-gray-400 peer-placeholder-shown:top-3 peer-placeholder-shown:tracking-normal peer-focus:-top-3.5 peer-focus:text-xs peer-focus:font-black peer-focus:text-emerald-500 peer-focus:tracking-wider">
+                                {t.duration}
+                            </label>
+                        </div>
+                    </div>
+
+                    {/* Location */}
                     <div className="space-y-4">
-                        {/* Search & Detect */}
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">{t.location}</label>
+
+                        {/* Search & Detect Buttons */}
                         <div className="flex gap-2">
                             <div className="relative flex-1">
                                 <input
@@ -637,78 +667,130 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleAddressSearch()}
                                     placeholder={language === 'en' ? "Search area..." : "क्षेत्र खोजें..."}
-                                    className="w-full bg-gray-50/50 dark:bg-gray-800/30 border-2 border-gray-100 dark:border-gray-800 rounded-2xl px-4 py-3 text-sm font-bold text-gray-900 dark:text-white outline-none focus:border-emerald-500/50 transition-all shadow-sm"
+                                    className="w-full bg-gray-50 dark:bg-gray-800 border-none rounded-xl px-4 py-3 text-sm font-bold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/50"
                                 />
-                                <button
-                                    onClick={handleAddressSearch}
-                                    type="button"
-                                    className="absolute right-2 top-2 p-1.5 bg-emerald-100 text-emerald-600 rounded-lg hover:bg-emerald-200 transition-colors"
-                                >
-                                    <Sparkles size={16} />
-                                </button>
+                                <button onClick={handleAddressSearch} className="absolute right-2 top-2 p-1.5 bg-white dark:bg-gray-700 rounded-lg text-emerald-600 shadow-sm"><Sparkles size={16} /></button>
                             </div>
                             <button
-                                type="button"
                                 onClick={() => getDeviceLocation(async (coords) => {
                                     setNewJobCoords(coords);
                                     const address = await reverseGeocode(coords.lat, coords.lng);
                                     if (address) setNewJobLocation(address);
-                                    showAlert(t.locationCaptured || "Location Captured", 'success');
+                                    showAlert(t.locationCaptured, 'success');
                                 }, () => showAlert(t.alertGeoPermission, 'error'))}
-                                className={`px-4 py-3 rounded-2xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all active:scale-95 border-2 ${newJobCoords ? 'bg-emerald-50/50 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 shadow-lg shadow-emerald-500/5' : 'bg-gray-50/50 border-gray-100 dark:border-gray-800 text-gray-500 hover:bg-white dark:hover:bg-gray-800'}`}
+                                className="px-4 bg-emerald-50 text-emerald-700 rounded-xl font-bold text-xs uppercase tracking-wider border border-emerald-100 flex items-center gap-2"
                             >
-                                <MapPin size={16} className={newJobCoords ? 'animate-bounce' : ''} />
-                                {language === 'en' ? 'Detect' : 'ढूंढें'}
+                                <MapPin size={16} /> Detect
                             </button>
                         </div>
 
-                        {/* Map */}
-                        <div className="rounded-[2rem] overflow-hidden border-4 border-white dark:border-gray-800 shadow-sm h-56 relative z-0">
+                        {/* Map Preview */}
+                        <div className="h-48 rounded-2xl overflow-hidden border-2 border-gray-100 dark:border-gray-800 relative z-0">
                             <LeafletMap
                                 lat={newJobCoords?.lat || 20.5937}
                                 lng={newJobCoords?.lng || 78.9629}
-                                popupText={newJobLocation || "Set Job Location"}
+                                popupText={newJobLocation || "Set Location"}
                                 editable
                                 onLocationSelect={handleMapLocationSelect}
                                 height="h-full"
                             />
                         </div>
-
-                        {/* Read-only Address Display */}
-                        <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900/30 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 flex items-start gap-3">
-                            <MapPin size={16} className="text-emerald-500 mt-0.5 shrink-0" />
-                            <p className="text-xs text-gray-600 dark:text-gray-400 font-medium leading-relaxed">
-                                {newJobLocation || (language === 'en' ? "No location selected yet" : "अभी तक कोई स्थान नहीं चुना गया")}
-                            </p>
-                        </div>
+                        <p className="text-xs text-gray-500 font-medium px-1 truncate">
+                            <MapPin size={12} className="inline mr-1 text-emerald-500" />
+                            {newJobLocation || "No location selected"}
+                        </p>
                     </div>
                 </div>
+
+                {/* STEP 3: POLISH */}
+                <div className={`p-6 space-y-8 transition-all duration-500 ${step === 3 ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-full absolute inset-0 pointer-events-none'}`}>
+
+                    {/* Budget */}
+                    <div className="text-center">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-4">{t.budget} (₹)</label>
+                        <div className="relative inline-block w-full max-w-[200px]">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xl">₹</span>
+                            <input
+                                type="number"
+                                inputMode="numeric"
+                                className="w-full bg-gray-50 dark:bg-gray-800 border-none rounded-2xl py-4 pl-10 pr-4 text-3xl font-black text-center text-gray-900 dark:text-white focus:ring-4 focus:ring-emerald-500/20 outline-none"
+                                value={newJobBudget}
+                                onChange={(e) => setNewJobBudget(e.target.value)}
+                                placeholder="0"
+                            />
+                        </div>
+                        <div className="mt-4 flex justify-center">
+                            <button
+                                onClick={handleEstimateWage}
+                                disabled={isEstimating}
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-full text-xs font-bold uppercase tracking-wider hover:bg-blue-100 transition-colors"
+                            >
+                                {isEstimating ? <Loader2 size={12} className="animate-spin" /> : <Calculator size={14} />}
+                                {isEstimating ? 'Estimating...' : 'Get AI Estimate'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Image Upload */}
+                    <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-3">Add Photo (Optional)</label>
+
+                        <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageUpload} />
+
+                        {newJobImage ? (
+                            <div className="relative h-48 rounded-2xl overflow-hidden group">
+                                <img src={newJobImage} alt="Preview" className="w-full h-full object-cover" />
+                                <button
+                                    onClick={() => setNewJobImage(undefined)}
+                                    className="absolute top-2 right-2 p-2 bg-black/50 text-white rounded-full hover:bg-red-500 transition-colors"
+                                >
+                                    <X size={16} />
+                                </button>
+                            </div>
+                        ) : (
+                            <button
+                                onClick={triggerImageUpload}
+                                className="w-full h-32 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-emerald-500 hover:text-emerald-500 transition-all bg-gray-50/50 dark:bg-gray-800/30"
+                            >
+                                <Camera size={24} />
+                                <span className="text-xs font-bold uppercase tracking-wider">Tap to upload</span>
+                            </button>
+                        )}
+                    </div>
+                </div>
+
             </div>
 
-
-            <button
-                type="button"
-                onClick={handlePostJob}
-                disabled={isPosting || isUploadingImage || isAnalyzingImage || isEstimating || isEnhancing}
-                className={`btn btn-primary w-full mt-8 !py-5 !rounded-[1.5rem] shadow-[0_20px_40px_-10px_rgba(16,185,129,0.3)] font-black uppercase tracking-[0.2em] transform active:scale-95 transition-all text-sm ${isPosting || isUploadingImage || isAnalyzingImage || isEstimating || isEnhancing ? 'opacity-70 cursor-not-allowed' : 'hover:-translate-y-1 hover:shadow-[0_25px_50px_-12px_rgba(16,185,129,0.4)]'}`}
-            >
-                {isPosting || isUploadingImage || isAnalyzingImage || isEstimating || isEnhancing ? (
-                    <Loader2 size={24} className="animate-spin" />
-                ) : (
-                    <div className="flex items-center justify-center gap-3">
-                        {isEditing ? t.updateJob : t.postJobBtn} <ChevronRight size={20} strokeWidth={3} />
-                    </div>
-                )}
-            </button>
-            {onCancel && (
-                <button
-                    type="button"
-                    onClick={onCancel}
-                    className="btn btn-ghost w-full mt-2"
-                >
-                    {t.cancel}
-                </button>
-            )}
+            {/* Navigation Footer */}
+            <div className="fixed bottom-[84px] left-0 right-0 p-4 bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl border-t border-gray-100 dark:border-gray-800 z-[110] md:sticky md:bottom-0 md:bg-transparent md:border-none md:backdrop-blur-none transition-all duration-300">
+                <div className="max-w-4xl mx-auto flex gap-4">
+                    {step > 1 && (
+                        <button
+                            onClick={prevStep}
+                            className="flex-1 py-4 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white rounded-[1.5rem] font-bold text-sm uppercase tracking-wider hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                        >
+                            Back
+                        </button>
+                    )}
+                    {step < 3 ? (
+                        <button
+                            onClick={nextStep}
+                            className="flex-[2] py-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-[1.5rem] font-black text-sm uppercase tracking-[0.2em] shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                        >
+                            Next <ChevronRight size={18} />
+                        </button>
+                    ) : (
+                        <button
+                            onClick={handlePostJob}
+                            disabled={isPosting}
+                            className={`flex-[2] py-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-[1.5rem] font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 ${isPosting ? 'opacity-70 cursor-not-allowed' : ''}`}
+                        >
+                            {isPosting ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20} />}
+                            {isEditing ? 'Update Job' : 'Post Job'}
+                        </button>
+                    )}
+                </div>
+            </div>
 
         </div>
     );
