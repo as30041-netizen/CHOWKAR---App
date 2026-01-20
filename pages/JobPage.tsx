@@ -61,29 +61,42 @@ export const JobPage: React.FC = () => {
     const seoTitle = job ? `${job.title} | Chowkar` : 'Job Not Found | Chowkar';
     const seoDescription = job?.description?.substring(0, 155) || 'Find local jobs on Chowkar - India\'s #1 Marketplace for daily wage work.';
 
-    // Handler stubs for JobDetailsModal (these will be wired to App-level handlers)
+    // Handler implementations - navigate with state for App.tsx to handle modals
     const handleClose = () => navigate(-1); // Go back in history
-    const handleBid = (jobId: string) => {
-        // For now, just show an alert - full implementation would open BidModal
-        console.log('[JobPage] Bid requested for:', jobId);
+
+    const handleBid = (targetJobId: string) => {
+        // Navigate to home and let App.tsx open BidModal
+        navigate('/', { state: { openBid: targetJobId } });
     };
-    const handleViewBids = (job: Job) => {
-        console.log('[JobPage] View bids for:', job.id);
+
+    const handleViewBids = (targetJob: Job) => {
+        navigate('/', { state: { openViewBids: targetJob.id } });
     };
-    const handleChat = (job: Job) => {
-        console.log('[JobPage] Chat for:', job.id);
+
+    const handleChat = (targetJob: Job) => {
+        navigate('/', { state: { openChat: targetJob.id } });
     };
-    const handleEdit = (job: Job) => {
-        console.log('[JobPage] Edit:', job.id);
+
+    const handleEdit = (targetJob: Job) => {
+        navigate('/post', { state: { editJob: targetJob } });
     };
-    const handleDelete = (jobId: string) => {
-        console.log('[JobPage] Delete:', jobId);
+
+    const handleDelete = (targetJobId: string) => {
+        // For delete, show confirmation and navigate back
+        if (confirm(language === 'en' ? 'Are you sure you want to delete this job?' : 'क्या आप वाकई इस काम को हटाना चाहते हैं?')) {
+            console.log('[JobPage] Delete confirmed for:', targetJobId);
+            // TODO: Call delete API then navigate
+            navigate('/');
+        }
     };
+
     const handleViewProfile = (userId: string, name?: string, phoneNumber?: string) => {
-        console.log('[JobPage] View profile:', userId);
+        navigate('/', { state: { openProfile: userId, profileName: name, profilePhone: phoneNumber } });
     };
+
     const showAlert = (message: string, type: 'success' | 'error' | 'info') => {
-        console.log(`[JobPage] Alert [${type}]:`, message);
+        // For now, use browser alert - App-level alerts aren't accessible here
+        alert(message);
     };
 
     // Loading State

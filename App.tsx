@@ -292,6 +292,57 @@ const AppContent: React.FC = () => {
     };
   }, [isLoggedIn, jobs, navigate]);
 
+  // --- Handle Navigation State from JobPage ---
+  // When JobPage navigates with state (e.g., openBid, openChat), open the appropriate modal
+  useEffect(() => {
+    const state = location.state as {
+      openBid?: string;
+      openViewBids?: string;
+      openChat?: string;
+      openProfile?: string;
+      profileName?: string;
+      profilePhone?: string;
+    } | null;
+
+    if (!state || !isLoggedIn) return;
+
+    // Clear the state to prevent re-triggering on refresh
+    window.history.replaceState({}, document.title);
+
+    // Handle each action type
+    if (state.openBid) {
+      console.log('[App] Opening Bid modal from JobPage state:', state.openBid);
+      setBidModalOpen({ isOpen: true, jobId: state.openBid });
+    }
+
+    if (state.openViewBids) {
+      console.log('[App] Opening ViewBids modal from JobPage state:', state.openViewBids);
+      const job = jobs.find(j => j.id === state.openViewBids);
+      if (job) {
+        setViewBidsModal({ isOpen: true, job });
+        getJobWithFullDetails(job.id, true);
+      }
+    }
+
+    if (state.openChat) {
+      console.log('[App] Opening Chat from JobPage state:', state.openChat);
+      const job = jobs.find(j => j.id === state.openChat);
+      if (job) {
+        openChat(job);
+      }
+    }
+
+    if (state.openProfile) {
+      console.log('[App] Opening Profile modal from JobPage state:', state.openProfile);
+      setProfileModal({
+        isOpen: true,
+        userId: state.openProfile,
+        userName: state.profileName,
+        phoneNumber: state.profilePhone
+      });
+    }
+  }, [location.state, isLoggedIn, jobs, getJobWithFullDetails, openChat]);
+
   // --- Realtime Sync ---
   // When 'jobs' update in background, update the open Modal view
   useEffect(() => {
