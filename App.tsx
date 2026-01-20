@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy, useCallback } from 'react';
+import React, { useState, useEffect, Suspense, lazy, useCallback, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { UserProvider, useUser } from './contexts/UserContextDB';
 import { NotificationProvider, useNotification } from './contexts/NotificationContext';
@@ -294,6 +294,7 @@ const AppContent: React.FC = () => {
 
   // --- Handle Navigation State from JobPage ---
   // When JobPage navigates with state (e.g., openBid, openChat), open the appropriate modal
+  const processedStateRef = useRef<string | null>(null);
   useEffect(() => {
     const state = location.state as {
       openBid?: string;
@@ -306,8 +307,15 @@ const AppContent: React.FC = () => {
 
     if (!state || !isLoggedIn) return;
 
+    // Create a unique key to track if we've processed this state
+    const stateKey = JSON.stringify(state);
+    if (processedStateRef.current === stateKey) {
+      return; // Already processed this state
+    }
+    processedStateRef.current = stateKey;
+
     // Clear the state to prevent re-triggering on refresh
-    window.history.replaceState({}, document.title);
+    navigate(location.pathname, { replace: true, state: null });
 
     // Handle each action type
     if (state.openBid) {
@@ -341,7 +349,7 @@ const AppContent: React.FC = () => {
         phoneNumber: state.profilePhone
       });
     }
-  }, [location.state, isLoggedIn, jobs, getJobWithFullDetails, openChat]);
+  }, [location.state, location.pathname, isLoggedIn, jobs, getJobWithFullDetails, openChat, navigate]);
 
   // --- Realtime Sync ---
   // When 'jobs' update in background, update the open Modal view
