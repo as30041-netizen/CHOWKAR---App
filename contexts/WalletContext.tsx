@@ -23,7 +23,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
 
         try {
-            console.log('[Wallet] Fetching balance for:', user.id);
+
             const { safeFetch } = await import('../services/fetchUtils');
             const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
@@ -56,7 +56,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 table: 'wallets',
                 filter: `user_id=eq.${user.id}`
             }, (payload) => {
-                console.log('[Wallet] Realtime update:', payload);
+
                 if (payload.new && (payload.new as any).balance !== undefined) {
                     setWalletBalance((payload.new as any).balance);
                 }

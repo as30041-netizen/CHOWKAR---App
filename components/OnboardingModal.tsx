@@ -17,7 +17,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onComp
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-emerald-950/60 backdrop-blur-2xl animate-fade-in" />
 
-            <div className="bg-white dark:bg-gray-950 w-full max-w-lg rounded-[3.5rem] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col relative z-20 animate-pop border-8 border-white dark:border-gray-900 transition-all">
+            <div className="bg-white dark:bg-gray-950 w-full max-w-lg rounded-[3.5rem] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col relative z-20 animate-pop border-8 border-white dark:border-gray-900 transition-all pt-safe pb-safe">
 
                 {/* Visual Accent */}
                 <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-emerald-500/10 to-transparent pointer-events-none" />

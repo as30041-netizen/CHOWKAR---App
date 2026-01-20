@@ -23,8 +23,8 @@ export const signInWithGoogle = async (): Promise<{ success: boolean; error?: st
       isNative: Capacitor.isNativePlatform()
     });
 
-    // Set optimistic flag so we expect a session on return
-    localStorage.setItem('chowkar_isLoggedIn', 'true');
+    // NO OPTIMISTIC FLAG: Let UserContext handle strictly after verification
+    // localStorage.setItem('chowkar_isLoggedIn', 'true');
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',

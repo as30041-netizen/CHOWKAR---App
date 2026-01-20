@@ -74,11 +74,11 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, on
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div
-                className="absolute inset-0 bg-gray-900/60 backdrop-blur-md"
+                className="absolute inset-0 bg-black/60 backdrop-blur-md"
                 onClick={onClose}
             />
 
-            <div className="relative bg-white dark:bg-gray-900 w-full max-w-md rounded-[3rem] overflow-hidden shadow-2xl animate-scale-up border-4 border-amber-500/20">
+            <div className="relative bg-surface w-full max-w-md rounded-[3rem] overflow-hidden shadow-2xl animate-scale-up border-4 border-amber-500/20 pt-safe pb-safe">
                 {/* Header Gradient */}
                 <div className="bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600 p-8 text-white relative">
                     <button
@@ -101,24 +101,24 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, on
                     <div className="space-y-6 mb-8">
                         {features.map((f, i) => (
                             <div key={i} className="flex gap-5 items-start">
-                                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-sm">
+                                <div className="p-3 bg-background rounded-2xl shadow-sm border border-border">
                                     {f.icon}
                                 </div>
                                 <div className="flex-1">
-                                    <h4 className="font-black text-gray-900 dark:text-white leading-none mb-1">{f.title}</h4>
-                                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{f.desc}</p>
+                                    <h4 className="font-black text-text-primary leading-none mb-1">{f.title}</h4>
+                                    <p className="text-xs font-medium text-text-secondary">{f.desc}</p>
                                 </div>
                             </div>
                         ))}
                     </div>
 
-                    <div className="bg-amber-50 dark:bg-amber-900/20 rounded-[2rem] p-6 text-center border-2 border-amber-100 dark:border-amber-800/30 mb-8">
-                        <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-[0.2em] mb-1">Lifetime Access</p>
+                    <div className="bg-amber-500/10 rounded-[2rem] p-6 text-center border-2 border-amber-500/20 mb-8">
+                        <p className="text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] mb-1">Lifetime Access</p>
                         <div className="flex items-center justify-center gap-2">
-                            <span className="text-4xl font-black text-gray-900 dark:text-white">₹{PREMIUM_PRICE}</span>
+                            <span className="text-4xl font-black text-text-primary">₹{PREMIUM_PRICE}</span>
                             <div className="text-left">
-                                <p className="text-[10px] line-through text-gray-400 font-bold decoration-2">₹499</p>
-                                <p className="text-[10px] text-emerald-600 font-black tracking-tighter uppercase leading-none">60% OFF</p>
+                                <p className="text-[10px] line-through text-text-muted font-bold decoration-2">₹499</p>
+                                <p className="text-[10px] text-emerald-500 font-black tracking-tighter uppercase leading-none">60% OFF</p>
                             </div>
                         </div>
                     </div>
@@ -126,7 +126,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, on
                     <button
                         onClick={handleUpgrade}
                         disabled={loading}
-                        className="w-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 py-5 rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                        className="w-full bg-text-primary text-background py-5 rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
                     >
                         {loading ? (
                             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -138,7 +138,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, on
                         )}
                     </button>
 
-                    <p className="mt-4 text-[10px] text-center text-gray-400 font-bold uppercase tracking-widest">
+                    <p className="mt-4 text-[10px] text-center text-text-muted font-bold uppercase tracking-widest">
                         One-time payment • Secure Checkout
                     </p>
                 </div>

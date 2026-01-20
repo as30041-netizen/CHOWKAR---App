@@ -1,82 +1,75 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-type Theme = 'light' | 'dark' | 'system';
+type Theme = 'light' | 'dark';
+type Role = 'poster' | 'worker';
 
 interface ThemeContextType {
     theme: Theme;
-    resolvedTheme: 'light' | 'dark';
-    setTheme: (theme: Theme) => void;
+    role: Role;
     toggleTheme: () => void;
+    setRole: (role: Role) => void;
+    isDark: boolean;
+    isWorker: boolean;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export const useTheme = () => {
-    const context = useContext(ThemeContext);
-    if (!context) {
-        throw new Error('useTheme must be used within a ThemeProvider');
-    }
-    return context;
-};
-
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [theme, setThemeState] = useState<Theme>(() => {
-        // Check localStorage first
-        const stored = localStorage.getItem('chowkar-theme') as Theme | null;
-        if (stored && ['light', 'dark', 'system'].includes(stored)) {
-            return stored;
+    const [theme, setTheme] = useState<Theme>(() => {
+        // Check local storage or system preference
+        if (localStorage.getItem('theme')) {
+            return localStorage.getItem('theme') as Theme;
         }
-        return 'system';
+        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     });
 
-    const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(() => {
-        if (typeof window !== 'undefined' && window.matchMedia) {
-            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        }
-        return 'light';
+    const [role, setRoleState] = useState<Role>(() => {
+        return (localStorage.getItem('role') as Role) || 'poster';
     });
 
-    // Resolved theme based on preference
-    const resolvedTheme: 'light' | 'dark' = theme === 'system' ? systemTheme : theme;
-
-    // Listen for system theme changes
     useEffect(() => {
-        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        const root = window.document.documentElement;
 
-        const handleChange = (e: MediaQueryListEvent) => {
-            setSystemTheme(e.matches ? 'dark' : 'light');
-        };
+        root.classList.remove('light', 'dark');
+        root.classList.add(theme);
 
-        mediaQuery.addEventListener('change', handleChange);
-        return () => mediaQuery.removeEventListener('change', handleChange);
-    }, []);
-
-    // Apply theme class to document
-    useEffect(() => {
-        const root = document.documentElement;
-
-        if (resolvedTheme === 'dark') {
-            root.classList.add('dark');
-            root.classList.remove('light');
+        // Update Role Attribute on Root for CSS Selectors
+        if (role === 'worker') {
+            root.setAttribute('data-theme', 'worker');
         } else {
-            root.classList.remove('dark');
-            root.classList.add('light');
+            root.removeAttribute('data-theme');
         }
-    }, [resolvedTheme]);
 
-    const setTheme = (newTheme: Theme) => {
-        setThemeState(newTheme);
-        localStorage.setItem('chowkar-theme', newTheme);
-    };
+        localStorage.setItem('theme', theme);
+        localStorage.setItem('role', role);
+    }, [theme, role]);
 
     const toggleTheme = () => {
-        const newTheme = resolvedTheme === 'dark' ? 'light' : 'dark';
-        setTheme(newTheme);
+        setTheme(prev => prev === 'light' ? 'dark' : 'light');
+    };
+
+    const setRole = (newRole: Role) => {
+        setRoleState(newRole);
     };
 
     return (
-        <ThemeContext.Provider value={{ theme, resolvedTheme, setTheme, toggleTheme }}>
+        <ThemeContext.Provider value={{
+            theme,
+            role,
+            toggleTheme,
+            setRole,
+            isDark: theme === 'dark',
+            isWorker: role === 'worker'
+        }}>
             {children}
         </ThemeContext.Provider>
     );
+};
+
+export const useTheme = () => {
+    const context = useContext(ThemeContext);
+    if (context === undefined) {
+        throw new Error('useTheme must be used within a ThemeProvider');
+    }
+    return context;
 };

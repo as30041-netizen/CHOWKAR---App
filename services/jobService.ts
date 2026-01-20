@@ -29,6 +29,13 @@ interface DbJob {
   my_bid_amount?: number;
   my_bid_last_negotiation_by?: any; // Enum/String
   has_agreement?: boolean;
+  hired_worker_id?: string;
+  is_recommended?: boolean;
+  translations?: Record<string, {
+    title: string;
+    description: string;
+    cached_at: number;
+  }>;
 }
 
 interface DbBid {
@@ -78,7 +85,16 @@ const dbJobToApp = (dbJob: DbJob, bids: Bid[] = []): Job => {
     myBidStatus: dbJob.my_bid_status,
     myBidAmount: dbJob.my_bid_amount,
     myBidLastNegotiationBy: dbJob.my_bid_last_negotiation_by,
-    hasAgreement: !!dbJob.has_agreement
+    hiredWorkerId: dbJob.hired_worker_id,
+    isRecommended: !!dbJob.is_recommended,
+    translations: dbJob.translations ? Object.entries(dbJob.translations).reduce((acc, [lang, data]) => ({
+      ...acc,
+      [lang]: {
+        title: data.title,
+        description: data.description,
+        cachedAt: data.cached_at
+      }
+    }), {}) : undefined
   };
 };
 
@@ -133,6 +149,12 @@ export const fetchHomeFeed = async (
   filters?: {
     category?: string;
     searchQuery?: string;
+    feedMode?: string;
+    sortBy?: string;
+    minBudget?: number;
+    maxDistance?: number;
+    userLat?: number;
+    userLng?: number;
   }
 ): Promise<{ jobs: Job[]; hasMore: boolean }> => {
   logger.log(`[JobService] Fetching HOME FEED for user ${userId} (offset: ${offset}, filters: ${JSON.stringify(filters)})...`);
@@ -153,7 +175,13 @@ export const fetchHomeFeed = async (
           p_limit: limit,
           p_offset: offset,
           p_category: filters?.category !== 'All' ? filters?.category : null,
-          p_search_query: filters?.searchQuery || null
+          p_search_query: filters?.searchQuery || null,
+          p_feed_mode: filters?.feedMode || 'RECOMMENDED',
+          p_sort_by: filters?.sortBy || 'NEWEST',
+          p_min_budget: filters?.minBudget || null,
+          p_max_distance: filters?.maxDistance || null,
+          p_user_lat: filters?.userLat || null,
+          p_user_lng: filters?.userLng || null
         })
       }
     );
@@ -188,6 +216,8 @@ export const fetchHomeFeed = async (
       createdAt: new Date(row.created_at).getTime(),
       bidCount: row.bid_count || 0,
       hasMyReview: false, // Discovery jobs aren't reviewed yet
+      isRecommended: row.is_recommended || false, // Map RPC field
+      translations: row.translations || undefined, // Map translations
       bids: [] // Bids are not needed for the card view, saved bandwidth
     } as Job));
 
@@ -266,6 +296,7 @@ export const fetchMyJobsFeed = async (
       hiredWorkerName: row.hired_worker_name,
       hiredWorkerPhone: row.hired_worker_phone,
       hiredWorkerId: row.hired_worker_id,
+      translations: row.translations || undefined, // Map translations
       bids: [],
       reviews: []
     } as Job));
@@ -364,6 +395,7 @@ export const fetchMyApplicationsFeed = async (
       myBidLastNegotiationBy: row.my_bid_last_negotiation_by,
       acceptedBidId: row.accepted_bid_id,
       hasMyReview: row.has_my_review || false,
+      translations: row.translations || undefined, // Map translations
       bids: [],
       reviews: []
     } as Job));
@@ -479,21 +511,31 @@ export const fetchJobFullDetails = async (jobId: string): Promise<{ job: Job | n
 
     // Fetch bids for this job (Exclude REJECTED bids to match UI behavior)
     // [FIX] Use RPC to fetch bids to avoid RLS recursion issues
-    const { data: bidsRpcData, error: bidsRpcError } = await safeRPC('get_job_bids', { p_job_id: jobId });
-
+    // Only fetch if user is poster or has a bid to prevent 400 errors
     let bidsData: any[] = [];
-    if (!bidsRpcError && bidsRpcData) {
-      bidsData = bidsRpcData;
-      logger.log(`[JobService] RPC get_job_bids success: ${bidsData.length} bids`);
-    } else {
-      logger.warn(`[JobService] RPC get_job_bids failed:`, bidsRpcError);
-      // Fallback to legacy REST (just in case RPC isn't deployed yet)
-      const bidsUrl = `${supabaseUrl}/rest/v1/bids?job_id=eq.${jobId}&status=neq.REJECTED&order=created_at.desc`;
-      logger.log(`[JobService] Fallback fetching bids from: ${bidsUrl}`);
-      const bidsResponse = await safeFetch(bidsUrl);
-      if (bidsResponse.ok) {
-        bidsData = await bidsResponse.json();
+
+    // Check access rights before calling RPC to avoid "Access Denied" logs
+    const isPoster = jobBase.posterId === userId;
+    const hasBid = !!jobBase.myBidId;
+
+    if (isPoster || hasBid) {
+      const { data: bidsRpcData, error: bidsRpcError } = await safeRPC('get_job_bids', { p_job_id: jobId });
+
+      if (!bidsRpcError && bidsRpcData) {
+        bidsData = bidsRpcData;
+        logger.log(`[JobService] RPC get_job_bids success: ${bidsData.length} bids`);
+      } else {
+        logger.warn(`[JobService] RPC get_job_bids failed:`, bidsRpcError);
+        // Fallback to legacy REST (just in case RPC isn't deployed yet)
+        const bidsUrl = `${supabaseUrl}/rest/v1/bids?job_id=eq.${jobId}&status=neq.REJECTED&order=created_at.desc`;
+        logger.log(`[JobService] Fallback fetching bids from: ${bidsUrl}`);
+        const bidsResponse = await safeFetch(bidsUrl);
+        if (bidsResponse.ok) {
+          bidsData = await bidsResponse.json();
+        }
       }
+    } else {
+      logger.log(`[JobService] Skipping get_job_bids (User is not poster/bidder)`);
     }
 
     // Fetch reviews for this job
@@ -717,6 +759,28 @@ export const updateJob = async (job: Job): Promise<{ success: boolean; error?: s
   } catch (error: any) {
     logger.error('[JobService] Error updating job:', error);
     return { success: false, error: error.message || 'Failed to update job' };
+  }
+};
+
+// Save a translation to the database (Single-Fetch Caching)
+export const saveJobTranslation = async (jobId: string, lang: string, title: string, description: string): Promise<boolean> => {
+  try {
+    const { safeRPC } = await import('../lib/supabase');
+    const { error } = await safeRPC('action_save_job_translation', {
+      p_job_id: jobId,
+      p_lang: lang,
+      p_translated_title: title,
+      p_translated_desc: description
+    });
+
+    if (error) {
+      console.error('[JobService] Failed to save translation:', error);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('[JobService] Exception saving translation:', e);
+    return false;
   }
 };
 
@@ -1003,4 +1067,9 @@ export const fetchJobContact = async (jobId: string): Promise<{ phone: string | 
     return { phone: null, error: error.message };
   }
 };
+import { safeRPC } from './fetchUtils';
+
+/**
+ * Save a generated translation to the job cache
+ */
 

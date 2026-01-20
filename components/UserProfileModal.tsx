@@ -61,7 +61,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
         <div className="fixed inset-0 z-[110] flex items-center justify-center pointer-events-none md:p-6">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-lg pointer-events-auto transition-opacity" onClick={onClose} />
             <div
-                className="w-full h-full md:w-[900px] md:h-[85vh] bg-white dark:bg-gray-950 md:rounded-[2.5rem] p-0 pointer-events-auto animate-in slide-in-from-right duration-300 relative overflow-hidden flex flex-col md:flex-row transition-all shadow-2xl pb-safe md:pb-0 border-0 md:border border-white/10 dark:border-gray-800/50"
+                className="w-full h-full md:w-[900px] md:h-[85vh] bg-white dark:bg-gray-950 md:rounded-[2.5rem] p-0 pointer-events-auto animate-in slide-in-from-right duration-300 relative overflow-hidden flex flex-col md:flex-row transition-all shadow-2xl pt-safe pb-safe md:pt-0 md:pb-0 border-0 md:border border-white/10 dark:border-gray-800/50"
                 onTouchStart={onTouchStart}
                 onTouchMove={onTouchMove}
                 onTouchEnd={onTouchEnd}
@@ -70,7 +70,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                 {/* Navigation: Back Button (Top Left) */}
                 <button
                     onClick={onClose}
-                    className="absolute top-4 left-4 z-50 p-2.5 bg-black/20 backdrop-blur-md rounded-full text-white hover:bg-black/40 transition-all active:scale-90 border border-white/20 shadow-sm"
+                    className="absolute top-4 left-4 z-50 p-2.5 bg-black/20 backdrop-blur-md rounded-full text-white hover:bg-black/40 transition-all active:scale-90 border border-white/20 shadow-sm mt-safe md:mt-0"
                 >
                     <ArrowLeft size={24} strokeWidth={2.5} />
                 </button>
@@ -177,7 +177,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                                     </div>
                                 )}
 
-                                {user.experience && user.experience > 0 && (
+                                {user.experience && Number(user.experience) > 0 && (
                                     <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 text-center flex-1 min-w-[100px]">
                                         <div className="text-xl font-black text-gray-900 dark:text-white">
                                             {user.experience} <span className="text-xs text-gray-400">Yr</span>

@@ -36,6 +36,7 @@ interface HomeProps {
 import { useNotification } from '../contexts/NotificationContext';
 
 import { PosterHome } from '../components/PosterHome';
+import { WorkerHome } from '../components/WorkerHome';
 import { FilterPills } from '../components/FilterPills';
 import { WorkerActiveJobCard } from '../components/WorkerActiveJobCard';
 import { CategoryHero } from '../components/CategoryHero';
@@ -77,6 +78,7 @@ export const Home: React.FC<HomeProps> = ({
     const [showFilters, setShowFilters] = useState(false);
     const [sortBy, setSortBy] = useState<SortOption>(user.coordinates ? 'NEAREST' : 'NEWEST');
     const [viewMode, setViewMode] = useState<'LIST' | 'MAP'>('LIST');
+    const [feedMode, setFeedMode] = useState<'RECOMMENDED' | 'ALL'>('RECOMMENDED');
 
     // Quick Filters
     const [quickFilters, setQuickFilters] = useState({
@@ -95,6 +97,11 @@ export const Home: React.FC<HomeProps> = ({
 
         const loadData = async () => {
             const type = role === UserRole.POSTER ? 'POSTER' : (workerTab === 'FIND' ? 'HOME' : 'WORKER_APPS');
+
+            // For HOME (FIND tab), we rely on the more detailed filter effect below
+            // to avoid double loading on startup.
+            if (type === 'HOME') return;
+
             loadFeed(type, 0, user.id);
         };
 
@@ -103,11 +110,12 @@ export const Home: React.FC<HomeProps> = ({
 
     // Handle explicit refresh
     const handleRefresh = async () => {
-        if (user.id) {
-            await refreshJobs(user.id);
-        } else {
-            await refreshJobs();
-        }
+        const type = role === UserRole.WORKER ? 'HOME' : 'POSTER';
+        await refreshJobs(type, {
+            category: selectedCategory,
+            searchQuery: searchQuery,
+            feedMode: feedMode
+        }, user.id || undefined);
     };
 
     // Separate state for the "Active Jobs Rail" (since main "jobs" feed lacks bid details in discovery mode)
@@ -136,6 +144,26 @@ export const Home: React.FC<HomeProps> = ({
             }
         }
     }, [loading, jobs, onBid]);
+
+    // Trigger refresh when feed mode or filters change
+    useEffect(() => {
+        if (role === UserRole.WORKER && workerTab === 'FIND' && hasInitialized && user.id) {
+            // Map Quick Filters to API params
+            const effectiveMinBudget = quickFilters.highPay ? 800 : (filterMinBudget ? Number(filterMinBudget) : undefined);
+            const effectiveMaxDistance = quickFilters.nearby ? 5 : (filterMaxDistance ? Number(filterMaxDistance) : undefined);
+
+            refreshJobs('HOME', {
+                category: selectedCategory,
+                searchQuery: searchQuery,
+                feedMode: feedMode,
+                sortBy: sortBy,
+                minBudget: effectiveMinBudget,
+                maxDistance: effectiveMaxDistance,
+                userLat: user.coordinates?.lat,
+                userLng: user.coordinates?.lng
+            }, user.id);
+        }
+    }, [feedMode, selectedCategory, searchQuery, sortBy, filterMinBudget, filterMaxDistance, quickFilters.nearby, quickFilters.highPay, quickFilters.urgent, quickFilters.today, user.coordinates?.lat, user.coordinates?.lng, role, workerTab, hasInitialized, user.id]);
 
 
 
@@ -170,20 +198,6 @@ export const Home: React.FC<HomeProps> = ({
                     if (jobDate !== today) return false;
                 }
 
-                // QUICK FILTERS
-                if (quickFilters.nearby && (j.distance === undefined || j.distance > 5)) return false;
-                if (quickFilters.highPay && j.budget < 800) return false;
-                if (quickFilters.urgent && !j.title.toLowerCase().includes('urgent') && !j.description.toLowerCase().includes('urgent')) return false;
-                if (quickFilters.today) {
-                    const jobDate = new Date(j.jobDate).toDateString();
-                    const today = new Date().toDateString();
-                    if (jobDate !== today) return false;
-                }
-
-                // QUICK FILTERS
-                if (quickFilters.nearby && (j.distance === undefined || j.distance > 5)) return false;
-                if (quickFilters.highPay && j.budget < 800) return false;
-                if (quickFilters.urgent && !j.title.toLowerCase().includes('urgent') && !j.description.toLowerCase().includes('urgent')) return false;
                 if (quickFilters.today) {
                     const jobDate = new Date(j.jobDate).toDateString();
                     const today = new Date().toDateString();
@@ -204,39 +218,44 @@ export const Home: React.FC<HomeProps> = ({
                 }
 
                 // WORKER LOGIC
-                // Exclude my own jobs if I somehow have them
-                if (j.posterId === user.id) return false;
+                // 1. Discovery/Find Mode: Trust Server Filtering
+                // The server already excludes: my own jobs, jobs I've bid on, and non-OPEN jobs.
+                if (workerTab === 'FIND') {
+                    // Final safety only: exclude my own if I'm the poster
+                    if (j.posterId === user.id) return false;
+                    return true;
+                }
+
+                // 2. Active/History Mode: Pull from same Applications Feed
                 const myBidId = j.myBidId || j.bids.find(b => b.workerId === user.id)?.id;
                 const myBidStatus = j.myBidStatus || j.bids.find(b => b.workerId === user.id)?.status;
 
-                if (workerTab === 'FIND') {
-                    // Find: OPEN jobs I haven't bid on
-                    if (j.status !== JobStatus.OPEN || myBidId) return false;
-                } else if (workerTab === 'ACTIVE') {
-                    // Active: OPEN jobs with PENDING/ACCEPTED bid OR IN_PROGRESS jobs where I won (or am accepted)
-                    if (!myBidId) return false;
+                if (!myBidId) return false;
+
+                if (workerTab === 'ACTIVE') {
+                    // Active: PENDING/ACCEPTED bids on OPEN jobs OR IN_PROGRESS where I am the winner
                     const isWinner = (j.status === JobStatus.IN_PROGRESS && j.acceptedBidId === myBidId);
-                    // Fallback: If job is in progress and my bid is ACCEPTED, I'm the winner (handles data inconsistency)
                     const isWinnerFallback = (j.status === JobStatus.IN_PROGRESS && myBidStatus === 'ACCEPTED');
                     const isOpenAndRelevant = j.status === JobStatus.OPEN && (myBidStatus === 'PENDING' || myBidStatus === 'ACCEPTED');
 
-                    if (!isWinner && !isWinnerFallback && !isOpenAndRelevant) return false;
-                } else {
-                    // History: REJECTED bids, LOST jobs (won by others), COMPLETED/CANCELLED jobs
-                    if (!myBidId) return false;
-                    const isFinished = j.status === JobStatus.COMPLETED || j.status === JobStatus.CANCELLED;
-                    const isRejected = myBidStatus === 'REJECTED';
-                    // Lost: Job not open, and I am NOT the winner (checked via ID and Status)
-                    const isLost = j.status !== JobStatus.OPEN && j.acceptedBidId !== myBidId && myBidStatus !== 'ACCEPTED';
-
-                    if (!isFinished && !isRejected && !isLost) return false;
+                    return isWinner || isWinnerFallback || isOpenAndRelevant;
                 }
 
-                return true;
+                // History: REJECTED bids, LOST jobs, or FINISHED jobs
+                const isFinished = j.status === JobStatus.COMPLETED || j.status === JobStatus.CANCELLED;
+                const isRejected = myBidStatus === 'REJECTED';
+                const isLost = j.status !== JobStatus.OPEN && j.acceptedBidId !== myBidId && myBidStatus !== 'ACCEPTED';
+
+                return isFinished || isRejected || isLost;
             })
             .sort((a, b) => {
                 if (role === UserRole.POSTER) return b.createdAt - a.createdAt;
 
+                // 1. Discovery/Find Mode: Trust Server Sequence
+                // The server already sorts by Relevancy (Recommended) or SortBy (All)
+                if (workerTab === 'FIND') return 0;
+
+                // 2. Active/History Mode: Sort by newest status change / creation
                 switch (sortBy) {
                     case 'NEWEST': return b.createdAt - a.createdAt;
                     case 'BUDGET_HIGH': return b.budget - a.budget;
@@ -247,13 +266,13 @@ export const Home: React.FC<HomeProps> = ({
                     default: return b.createdAt - a.createdAt;
                 }
             });
-    }, [jobsWithDistance, role, posterTab, workerTab, user.id, searchQuery, selectedCategory, filterLocation, filterMinBudget, filterMaxDistance, sortBy]);
+    }, [jobsWithDistance, role, posterTab, workerTab, user.id, searchQuery, selectedCategory, filterLocation, filterMinBudget, filterMaxDistance, sortBy, feedMode]);
 
     const unreadNotificationsCount = notifications.filter(n => !n.read).length;
 
     if (role === UserRole.POSTER) {
         return (
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-500 overflow-x-hidden pt-safe">
+            <div className="min-h-screen bg-background transition-colors duration-500 overflow-x-hidden pt-safe">
                 <PosterHome
                     jobs={filteredJobs}
                     loading={loading}
@@ -266,13 +285,14 @@ export const Home: React.FC<HomeProps> = ({
                     posterTab={posterTab}
                     setPosterTab={setPosterTab}
                     onChat={onChat}
+                    onClick={onClick}
                 />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen transition-colors duration-500">
+        <div className="min-h-screen bg-background transition-colors duration-500">
             <FilterModal
                 isOpen={showFilters}
                 onClose={() => setShowFilters(false)}
@@ -292,229 +312,55 @@ export const Home: React.FC<HomeProps> = ({
                 }}
             />
 
-
-
             {/* --- SUPER APP HUB LAYOUT --- */}
-            <main className="flex flex-col pt-0 pb-32">
-
-                {/* 1. Category Shortcuts (Visual Discovery) */}
-                {location.pathname === '/find' && role === UserRole.WORKER && (
-                    <>
-                        {/* Location Warning for Personalization */}
-                        {!user.coordinates && (
-                            <div className="px-6 mb-4">
-                                <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/30 flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-800 flex items-center justify-center text-blue-600 dark:text-blue-300">
-                                            <MapPin size={20} />
-                                        </div>
-                                        <div>
-                                            <h4 className="text-xs font-bold text-gray-900 dark:text-white">
-                                                {language === 'en' ? 'Where are you?' : 'आप कहाँ हैं?'}
-                                            </h4>
-                                            <p className="text-[10px] text-blue-800 dark:text-blue-200">
-                                                {language === 'en' ? 'Enable location to see nearby jobs.' : 'पास के काम देखने के लिए लोकेशन चालू करें।'}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    {/* Link to profile for now, or could trigger permission prompt */}
-                                    <button
-                                        onClick={() => navigate('/profile')}
-                                        className="px-3 py-1.5 bg-blue-600 text-white text-[10px] font-bold rounded-lg uppercase tracking-wider shadow-lg shadow-blue-500/30"
-                                    >
-                                        {language === 'en' ? 'Enable' : 'चालू करें'}
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        <CategoryHero />
-                    </>
-                )}
-
-                {/* 2. Unified Control Bar (Pills + Actions) - Only on /find */}
-                {location.pathname === '/find' && (
-                    <div className="px-6 mt-2 mb-2 flex items-center justify-between gap-4">
-                        {/* Left: Quick Filter Pills */}
-                        {role === UserRole.WORKER && (
-                            <div className="flex-1 overflow-visible">
-                                <FilterPills
-                                    activeFilters={quickFilters}
-                                    onToggle={toggleQuickFilter}
-                                    language={language}
-                                />
-                            </div>
-                        )}
-
-                        {/* Right: Actions */}
-                        <div className="flex items-center gap-2 shrink-0">
-                            <button
-                                onClick={() => setViewMode(prev => prev === 'LIST' ? 'MAP' : 'LIST')}
-                                className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 text-[10px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400 hover:text-emerald-600 transition-all active:scale-95 whitespace-nowrap"
-                            >
-                                {viewMode === 'LIST' ? <><MapIcon size={14} /> Map</> : <><ListIcon size={14} /> List</>}
-                            </button>
-
-                            <button
-                                onClick={() => setShowFilters(true)}
-                                className={`flex items-center gap-2 px-3 py-2 rounded-xl shadow-sm border text-[10px] font-bold uppercase tracking-wider transition-all active:scale-95 whitespace-nowrap ${filterLocation || filterMinBudget || filterMaxDistance || selectedCategory !== 'All' ? 'bg-emerald-600 text-white border-transparent' : 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:text-emerald-600'}`}
-                            >
-                                <SlidersHorizontal size={14} />
-                                {t.filters}
-                                {(filterLocation || filterMinBudget || filterMaxDistance || selectedCategory !== 'All') && (
-                                    <span className="w-2 h-2 bg-red-400 rounded-full animate-pulse" />
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {/* 2. Sticky Tabs (Context Switcher) - Hide on /find */}
-                {location.pathname !== '/find' && (
-                    <div className="sticky top-0 z-20 px-6 pt-0 pb-4 bg-green-50/95 dark:bg-gray-950/95 backdrop-blur-md border-b border-white/5 dark:border-gray-800/50">
-                        <StickyTabs
-                            currentTab={role === UserRole.WORKER ? workerTab : posterTab}
-                            onTabChange={(tab) => {
-                                if (role === UserRole.WORKER) setWorkerTab(tab);
-                                else setPosterTab(tab);
-                                window.scrollTo({ top: 0, behavior: 'smooth' });
-                            }}
-                            tabs={role === UserRole.WORKER ? [
-                                {
-                                    id: 'ACTIVE',
-                                    label: language === 'en' ? 'My Work' : 'मेरा काम',
-                                    count: stats?.worker_active || 0
-                                },
-                                { id: 'HISTORY', label: language === 'en' ? 'History' : 'इतिहास' }
-                            ] : [
-                                { id: 'ACTIVE', label: t.myJobPosts }, // Poster "Active" is their main dashboard
-                                { id: 'HISTORY', label: language === 'en' ? 'History' : 'इतिहास' }
-                            ]}
-                        />
-                    </div>
-                )}
-
-                {/* 2. Active Jobs Rail REMOVED (Non-scalable, use My Work tab) */}
-
-                <div className="px-2 mt-2">
-                    {loading ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                            {[1, 2, 3, 4, 5, 6].map(i => <JobCardSkeleton key={i} />)}
-                        </div>
-                    ) : filteredJobs.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-                            {viewMode === 'LIST' ? (
-                                filteredJobs.map(job => (
-                                    <div key={job.id} className="h-full transform hover:-translate-y-2 transition-transform duration-500">
-                                        {(role === UserRole.WORKER && (workerTab === 'ACTIVE' || workerTab === 'HISTORY')) ? (
-                                            <WorkerActiveJobCard
-                                                job={job}
-                                                currentUserId={user.id}
-                                                onViewDetails={onClick}
-                                                onChat={(j) => onChat(j)}
-                                                language={language}
-                                                onHide={hideJob}
-                                            />
-                                        ) : (
-                                            <JobCard
-                                                job={job}
-                                                currentUserId={user.id}
-                                                userRole={role}
-                                                distance={job.distance}
-                                                language={language}
-                                                onBid={onBid}
-                                                onViewBids={onViewBids}
-                                                onChat={onChat}
-                                                onEdit={onEdit}
-                                                onClick={() => onClick(job)}
-                                                onReplyToCounter={onReplyToCounter}
-                                                onWithdrawBid={onWithdrawBid}
-                                                onHide={hideJob}
-                                                isPremium={user.isPremium}
-                                                userSkills={user.skills}
-                                                userBio={user.bio}
-                                            />
-                                        )}
-                                    </div>
-                                ))
-                            ) : (
-                                <div className="col-span-full">
-                                    <Suspense fallback={
-                                        <div className="h-[500px] w-full bg-gray-100 dark:bg-gray-800 rounded-3xl flex items-center justify-center">
-                                            <Loader2 className="animate-spin text-emerald-500" size={48} />
-                                        </div>
-                                    }>
-                                        <JobMap
-                                            jobs={filteredJobs}
-                                            onJobClick={onClick}
-                                            userLocation={user.coordinates}
-                                        />
-                                    </Suspense>
-                                    <p className="text-center text-gray-400 text-xs mt-4 font-bold uppercase tracking-widest animate-pulse">
-                                        Showing {filteredJobs.length} jobs on map
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-                    ) : jobsError ? (
-                        <div className="flex flex-col items-center justify-center py-20 px-10 bg-red-50/50 dark:bg-red-900/10 rounded-[3rem] border border-red-100 dark:border-red-900/30 animate-pop">
-                            <div className="w-20 h-20 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-6 text-red-500">
-                                <XCircle size={40} />
-                            </div>
-                            <h3 className="text-xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">
-                                {language === 'en' ? 'Oops! Something went wrong' : 'ओह! कुछ गलत हो गया'}
-                            </h3>
-                            <p className="text-gray-500 dark:text-gray-400 text-center max-w-xs font-medium text-sm">
-                                {jobsError}
-                            </p>
-                            <button
-                                onClick={() => handleRefresh()}
-                                className="flex items-center gap-2 px-10 py-4 rounded-[2rem] font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl active:scale-95 transition-all text-white mt-8 bg-red-600 shadow-red-600/20"
-                            >
-                                <RotateCw size={14} />
-                                {language === 'en' ? 'Retry Loading' : 'पुनः प्रयास करें'}
-                            </button>
-                        </div>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center py-32 px-10 bg-white/50 dark:bg-gray-900/50 rounded-[3rem] border-2 border-dashed border-gray-100 dark:border-gray-800 animate-pop">
-                            <div className="w-24 h-24 bg-gray-50 dark:bg-gray-800 rounded-full flex items-center justify-center mb-8 text-gray-300">
-                                <Sparkles size={48} />
-                            </div>
-                            <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">
-                                {language === 'en' ? 'No jobs found' : 'कोई काम नहीं मिला'}
-                            </h3>
-                            <p className="text-gray-500 text-center max-w-xs font-medium">
-                                {language === 'en'
-                                    ? 'Try adjusting your filters or search query to find more opportunities.'
-                                    : 'अधिक अवसर खोजने के लिए अपने फ़िल्टर या खोज क्वेरी को समायोजित करने का प्रयास करें।'}
-                            </p>
-                            <button
-                                onClick={() => { setSearchQuery(''); setSelectedCategory('All'); setFilterLocation(''); setFilterMinBudget(''); setFilterMaxDistance(''); }}
-                                className="px-12 py-5 rounded-[2rem] font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl active:scale-95 transition-all text-white mt-10 bg-emerald-600 shadow-emerald-600/20"
-                            >
-                                {language === 'en' ? 'Clear All Filters' : 'सभी फ़िल्ter साफ़ करें'}
-                            </button>
-                        </div>
-                    )}
-                </div>
-
-                {/* Load More Button */}
-                {
-                    hasMore && !loading && (
-                        <div className="flex justify-center mt-12 pb-10">
-                            <button
-                                onClick={fetchMoreJobs}
-                                disabled={isLoadingMore}
-                                className="px-12 py-6 rounded-[2.5rem] border font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl transition-all active:scale-95 flex items-center gap-6 border-emerald-500 text-emerald-600 hover:bg-emerald-600 hover:text-white"
-                            >
-                                {isLoadingMore ? <Loader2 size={24} className="animate-spin" /> : <RotateCw size={24} strokeWidth={3} />}
-                                {isLoadingMore ? t.loading : t.loadMore}
-                            </button>
-                        </div>
-                    )
-                }
-            </main >
-
-        </div >
+            <main className="flex flex-col pt-0 pb-0">
+                <WorkerHome
+                    workerTab={workerTab}
+                    setWorkerTab={setWorkerTab}
+                    filteredJobs={filteredJobs}
+                    loading={loading}
+                    error={jobsError}
+                    stats={stats}
+                    onBid={onBid}
+                    onViewBids={onViewBids}
+                    onChat={onChat}
+                    onEdit={onEdit}
+                    onClick={onClick}
+                    onReplyToCounter={onReplyToCounter}
+                    onWithdrawBid={onWithdrawBid}
+                    hideJob={hideJob}
+                    quickFilters={quickFilters}
+                    toggleQuickFilter={toggleQuickFilter}
+                    viewMode={viewMode}
+                    setViewMode={setViewMode}
+                    showFilters={showFilters}
+                    setShowFilters={setShowFilters}
+                    filterLocation={filterLocation}
+                    filterMinBudget={filterMinBudget}
+                    filterMaxDistance={filterMaxDistance}
+                    selectedCategory={selectedCategory}
+                    hasMore={hasMore}
+                    isLoadingMore={isLoadingMore}
+                    fetchMoreJobs={fetchMoreJobs}
+                    searchQuery={searchQuery}
+                    feedMode={feedMode}
+                    setFeedMode={setFeedMode}
+                    onClearFilters={() => {
+                        setSearchQuery('');
+                        setSelectedCategory('All');
+                        setFilterLocation('');
+                        setFilterMinBudget('');
+                        setFilterMaxDistance('');
+                        setQuickFilters({
+                            nearby: false,
+                            highPay: false,
+                            urgent: false,
+                            today: false
+                        });
+                        setFeedMode('RECOMMENDED');
+                    }}
+                />
+            </main>
+        </div>
     );
 };

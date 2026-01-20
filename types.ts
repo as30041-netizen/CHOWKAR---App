@@ -12,6 +12,8 @@ export enum JobStatus {
   CANCELLED = 'CANCELLED'
 }
 
+export type Language = 'en' | 'hi' | 'pa';
+
 export interface Coordinates {
   lat: number;
   lng: number;
@@ -110,6 +112,12 @@ export interface Job {
   hiredWorkerName?: string;
   hiredWorkerPhone?: string;
   hiredWorkerId?: string;
+  isRecommended?: boolean; // Personalization Flag
+  translations?: Record<string, {
+    title: string;
+    description: string;
+    cachedAt: number;
+  }>;
 }
 
 export interface DashboardStats {

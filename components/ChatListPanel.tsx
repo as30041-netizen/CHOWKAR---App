@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { XCircle, Search, Filter, Phone, Briefcase, ChevronRight, MoreVertical, Archive, Trash2, FileText, Star, ArrowLeft } from 'lucide-react';
+import { XCircle, Search, Filter, Phone, Briefcase, ChevronRight, MoreVertical, Archive, Trash2, FileText, Star, ArrowLeft, Check, CheckCheck } from 'lucide-react';
 import { useNotification } from '../contexts/NotificationContext';
 import { Job } from '../types';
+import { supabase } from '../lib/supabase';
 
 import { useUser } from '../contexts/UserContextDB';
 import { useJobs } from '../contexts/JobContextDB';
 import { useSwipe } from '../hooks/useSwipe';
+import { ListSkeleton } from './Skeleton';
 
 interface ChatListPanelProps {
     isOpen: boolean;
@@ -37,8 +39,75 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
         threshold: 50
     });
 
+    useEffect(() => {
+        if (!isOpen || !user.id) return;
+
+        // Subscribing to ALL messages for the user as recipient or sender to update previews
+        const previewChannel = supabase
+            .channel(`inbox_previews_${user.id}`)
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'chat_messages'
+            }, (payload) => {
+                const newMsg = payload.new as any;
+                if (!newMsg) return;
+
+                setInboxChats(prev => {
+                    const index = prev.findIndex(c => c.jobId === newMsg.job_id);
+                    if (index === -1) return prev; // Not in our currently loaded list
+
+                    const updated = [...prev];
+                    updated[index] = {
+                        ...updated[index],
+                        lastMessage: {
+                            text: newMsg.text,
+                            timestamp: new Date(newMsg.created_at).getTime(),
+                            senderId: newMsg.sender_id,
+                            isRead: false
+                        }
+                    };
+                    // Move to top
+                    const [chat] = updated.splice(index, 1);
+                    return [chat, ...updated];
+                });
+            })
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'chat_messages'
+            }, (payload) => {
+                const updatedMsg = payload.new as any;
+                if (!updatedMsg) return;
+
+                setInboxChats(prev => {
+                    const index = prev.findIndex(c => c.jobId === updatedMsg.job_id);
+                    if (index === -1) return prev;
+
+                    // Only update if it's the last message
+                    if (prev[index].lastMessage && prev[index].lastMessage?.timestamp === new Date(updatedMsg.created_at).getTime()) {
+                        const updated = [...prev];
+                        updated[index] = {
+                            ...updated[index],
+                            lastMessage: {
+                                ...updated[index].lastMessage!,
+                                isRead: updatedMsg.read,
+                                text: updatedMsg.is_deleted ? 'This message was deleted' : updatedMsg.text
+                            }
+                        };
+                        return updated;
+                    }
+                    return prev;
+                });
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(previewChannel);
+        };
+    }, [isOpen, user.id]);
+
     // Load available chats using Optimized RPC (Solves N+1 Query Problem)
-    // Only fetch once when panel opens, not on every message change
     useEffect(() => {
         if (!isOpen || !user.id) {
             return;
@@ -86,7 +155,7 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
         };
 
         loadChats();
-    }, [isOpen, user.id]); // Removed liveMessages.length - don't refetch on every message
+    }, [isOpen, user.id]);
 
     // 2. Filter Logic (Archive / Tabs / Search) 
     const filteredChats = useMemo(() => {
@@ -200,25 +269,25 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
             <div className="relative w-full sm:max-w-[360px] bg-white dark:bg-gray-900 h-full shadow-[-10px_0_30px_rgba(0,0,0,0.05)] animate-slide-in-right flex flex-col border-l border-gray-100 dark:border-gray-800 pt-safe pb-safe transition-all duration-500">
 
                 {/* Header - Ultra Compact */}
-                <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl px-4 py-3 border-b border-gray-100 dark:border-gray-800 z-10 sticky top-0 transition-colors">
+                <div className="bg-surface/95 backdrop-blur-xl px-4 py-3 border-b border-border z-10 sticky top-0 transition-colors">
                     <div className="flex items-center gap-3 mb-3">
-                        <button onClick={onClose} className="p-1.5 -ml-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full text-gray-500 dark:text-gray-400 transition-all active:scale-95 md:hidden">
-                            <ArrowLeft size={18} strokeWidth={2.5} />
+                        <button onClick={onClose} className="p-1.5 -ml-1.5 hover:bg-background rounded-full text-text-secondary transition-all active:scale-95 md:hidden">
+                            <ArrowLeft size={20} strokeWidth={2.5} />
                         </button>
                         <div>
-                            <h2 className="text-lg font-bold text-gray-900 dark:text-white tracking-tight leading-none">{t.chats || 'Messages'}</h2>
+                            <h2 className="text-xl font-bold text-text-primary tracking-tight leading-none">{t.chats || 'Messages'}</h2>
                         </div>
                     </div>
 
                     {/* Search Bar */}
                     <div className="relative mb-4">
-                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={18} />
+                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" size={18} />
                         <input
                             type="text"
                             placeholder="Search chats or jobs..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="input-base input-focus !pl-11 !py-3 shadow-inner bg-gray-50/50 dark:bg-gray-800/50"
+                            className="input-base !bg-background !pl-11 !py-3 shadow-inner border-border focus:border-primary/50"
                         />
                     </div>
 
@@ -239,13 +308,13 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                     </div>
 
                     {/* Archive Toggle */}
-                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 transition-colors">
-                        <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Show Archived</span>
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-border transition-colors">
+                        <span className="text-xs font-bold text-text-secondary uppercase tracking-wider">Show Archived</span>
                         <button
                             onClick={() => setShowArchived(!showArchived)}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${showArchived ? 'bg-emerald-600' : 'bg-gray-200 dark:bg-gray-700'}`}
+                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${showArchived ? 'bg-primary' : 'bg-border'}`}
                         >
-                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${showArchived ? 'translate-x-6' : 'translate-x-1'}`} />
+                            <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${showArchived ? 'translate-x-5' : 'translate-x-1'}`} />
                         </button>
                     </div>
                 </div>
@@ -255,22 +324,31 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                     {isLoading ? (
                         // Skeleton Loading State
                         Array.from({ length: 4 }).map((_, i) => (
-                            <div key={i} className="flex gap-4 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 animate-pulse bg-white/50 dark:bg-gray-900/50">
-                                <div className="w-14 h-14 bg-gray-200 dark:bg-gray-800 rounded-full"></div>
-                                <div className="flex-1 space-y-3 pt-1">
-                                    <div className="h-4 bg-gray-200 dark:bg-gray-800 rounded w-3/4"></div>
-                                    <div className="h-3 bg-gray-150 dark:bg-gray-800/50 rounded w-1/2"></div>
+                            <div key={i} className="flex gap-4 p-4 rounded-[2rem] border border-border/50 animate-pulse bg-surface/30">
+                                <div className="w-14 h-14 bg-background/80 rounded-full"></div>
+                                <div className="flex-1 space-y-4 pt-1">
+                                    <div className="flex justify-between">
+                                        <div className="h-4 bg-background/80 rounded-full w-2/3"></div>
+                                        <div className="h-2 bg-background/80 rounded-full w-1/4"></div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <div className="h-3 bg-background/50 rounded-full w-1/2"></div>
+                                        <div className="h-3 bg-background/30 rounded-full w-full"></div>
+                                    </div>
                                 </div>
                             </div>
                         ))
                     ) : filteredChats.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-64 text-center px-4">
-                            <div className="w-16 h-16 bg-gray-50 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
-                                <Briefcase className="text-gray-300 dark:text-gray-600" size={32} />
+                        <div className="flex flex-col items-center justify-center h-full text-center px-8 py-20">
+                            <div className="w-20 h-20 bg-background rounded-full flex items-center justify-center mb-6 border border-border/50 relative">
+                                <div className="absolute inset-0 bg-primary/5 rounded-full animate-ping [animation-duration:3s]" />
+                                <Briefcase className="text-text-muted relative z-10" size={32} />
                             </div>
-                            <p className="text-gray-500 dark:text-gray-400 font-medium">No conversations found</p>
-                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                                {searchTerm ? 'Try a different search term' : 'Active jobs will appear here'}
+                            <h3 className="text-base font-black text-text-primary tracking-tight mb-2">
+                                {language === 'en' ? 'No Conversations' : 'कोई बातचीत नहीं'}
+                            </h3>
+                            <p className="text-[10px] text-text-muted uppercase tracking-[0.15em] font-black max-w-[200px] leading-relaxed">
+                                {searchTerm ? (language === 'en' ? 'Try adjusting your search filters' : 'अपने खोज फ़िल्टर को बदलने का प्रयास करें') : (language === 'en' ? 'Active discussions for your jobs will appear here' : 'आपके काम के लिए सक्रिय चर्चाएं यहां दिखाई देंगी')}
                             </p>
                         </div>
                     ) : (
@@ -314,15 +392,15 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                                                 console.warn("Could not find or fetch job details for:", chat.jobId);
                                             }
                                         }}
-                                        className={`w-full text-left p-5 rounded-[2rem] border transition-all duration-500 relative overflow-hidden group/card ${hasUnreadRealtime
-                                            ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/50 shadow-lg shadow-emerald-500/5'
-                                            : 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:border-gray-200 dark:hover:border-gray-700'
+                                        className={`w-full text-left p-4 rounded-2xl border transition-all duration-300 relative overflow-hidden group/card ${hasUnreadRealtime
+                                            ? 'bg-primary/5 border-primary/20 shadow-sm'
+                                            : 'bg-surface border-border hover:bg-background hover:border-border-strong'
                                             }`}
                                     >
                                         <div className="flex items-center gap-4">
                                             {/* Avatar Area */}
                                             <div className="relative shrink-0">
-                                                <div className="w-16 h-16 rounded-[1.5rem] bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 border-2 border-white dark:border-gray-800 shadow-sm flex items-center justify-center text-gray-700 dark:text-gray-300 font-black text-xl overflow-hidden transition-all duration-500 group-hover/card:scale-105 group-hover/card:rotate-3">
+                                                <div className="w-14 h-14 rounded-full bg-background border border-border flex items-center justify-center text-text-secondary font-bold text-lg overflow-hidden shrink-0 shadow-sm transition-transform duration-300 group-hover/card:scale-105">
                                                     {chat.counterpartPhoto ? (
                                                         <img src={chat.counterpartPhoto} alt={chat.counterpartName} className="w-full h-full object-cover" />
                                                     ) : (
@@ -330,7 +408,7 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
                                                     )}
                                                 </div>
                                                 {hasUnreadRealtime && (
-                                                    <div className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-black min-w-[22px] h-[22px] px-1 rounded-full flex items-center justify-center shadow-lg border-2 border-emerald-50 dark:border-emerald-900 animate-bounce">
+                                                    <div className="absolute -top-1 -right-1 bg-primary text-white text-[9px] font-black min-w-[20px] h-[20px] px-1 rounded-full flex items-center justify-center shadow-lg border-2 border-surface animate-bounce">
                                                         {unreadRealtime > 9 ? '9+' : unreadRealtime}
                                                     </div>
                                                 )}
@@ -338,39 +416,50 @@ export const ChatListPanel: React.FC<ChatListPanelProps> = ({ isOpen, onClose, o
 
                                             {/* Content Area */}
                                             <div className="flex-1 min-w-0">
-                                                <div className="flex justify-between items-center mb-1">
-                                                    <h4 className="font-black text-gray-900 dark:text-white truncate pr-2 tracking-tight transition-colors group-hover/card:text-emerald-600 dark:group-hover/card:text-emerald-400 flex items-center gap-1.5">
+                                                <div className="flex justify-between items-center mb-0.5">
+                                                    <h4 className="font-bold text-text-primary truncate pr-2 tracking-tight transition-colors group-hover/card:text-primary flex items-center gap-1.5 text-[15px]">
                                                         {chat.counterpartName}
                                                         {chat.counterpartRating && chat.counterpartRating > 0 && (
-                                                            <span className="inline-flex items-center gap-0.5 text-[9px] bg-amber-50 dark:bg-amber-900/30 px-1.5 py-0.5 rounded-md text-amber-600 dark:text-amber-400 font-black border border-amber-100 dark:border-amber-800/30">
+                                                            <span className="inline-flex items-center gap-0.5 text-[9px] bg-primary/5 px-1.5 py-0.5 rounded text-primary font-bold border border-primary/10">
                                                                 <Star size={9} fill="currentColor" strokeWidth={0} /> {chat.counterpartRating.toFixed(1)}
                                                             </span>
                                                         )}
                                                     </h4>
                                                     {timeDisplay && (
-                                                        <span className={`text-[9px] font-black uppercase tracking-widest ${hasUnreadRealtime ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400'}`}>
+                                                        <span className={`text-[9px] font-bold uppercase tracking-wider ${hasUnreadRealtime ? 'text-primary' : 'text-text-muted'}`}>
                                                             {timeDisplay}
                                                         </span>
                                                     )}
                                                 </div>
 
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-lg border ${isPoster
-                                                        ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-800/50'
-                                                        : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800/50'}`}>
+                                                <div className="flex items-center gap-2 mb-1.5">
+                                                    <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${isPoster
+                                                        ? 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20'
+                                                        : 'bg-primary/10 text-primary border-primary/20'}`}>
                                                         {roleLabel}
                                                     </span>
-                                                    <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 truncate uppercase tracking-tighter">
+                                                    <p className="text-[10px] font-bold text-text-muted truncate uppercase tracking-tight opacity-70">
                                                         {chat.jobTitle}
                                                     </p>
                                                 </div>
 
-                                                <p className={`text-sm truncate ${hasUnreadRealtime ? 'font-black text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 font-medium'}`}>
-                                                    {lastMsgText
-                                                        ? (lastMsgIsDeleted ? <span className="italic opacity-40">Message deleted</span> : lastMsgText)
-                                                        : <span className="text-emerald-600/50 italic">Start chatting...</span>
-                                                    }
-                                                </p>
+                                                <div className="flex items-center gap-1.5">
+                                                    {fetchedLastMsg?.senderId === user.id && (
+                                                        <div className="shrink-0">
+                                                            {fetchedLastMsg.isRead ? (
+                                                                <CheckCheck size={14} className="text-primary" />
+                                                            ) : (
+                                                                <Check size={14} className="text-text-muted opacity-50" />
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    <p className={`text-sm truncate leading-tight ${hasUnreadRealtime ? 'font-bold text-text-primary' : 'text-text-secondary font-medium'}`}>
+                                                        {lastMsgText
+                                                            ? (lastMsgIsDeleted ? <span className="italic opacity-40">Message deleted</span> : lastMsgText)
+                                                            : <span className="text-primary/50 italic">Start chatting...</span>
+                                                        }
+                                                    </p>
+                                                </div>
                                             </div>
 
                                             <ChevronRight size={18} className="text-gray-300 dark:text-gray-700 opacity-0 group-hover/card:opacity-100 group-hover/card:translate-x-1 transition-all shrink-0" />

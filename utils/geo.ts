@@ -87,3 +87,26 @@ export const reverseGeocode = async (lat: number, lng: number): Promise<string |
     return null;
   }
 };
+
+export const searchPlaces = async (query: string): Promise<Array<{ lat: number; lng: number; displayName: string }>> => {
+  try {
+    const encoded = encodeURIComponent(query);
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encoded}&limit=5&addressdetails=1`,
+      { headers: { 'User-Agent': 'ChowkarApp/1.0' } }
+    );
+    const data = await response.json();
+
+    if (Array.isArray(data)) {
+      return data.map((item: any) => ({
+        lat: parseFloat(item.lat),
+        lng: parseFloat(item.lon),
+        displayName: item.display_name
+      }));
+    }
+    return [];
+  } catch (error) {
+    console.error("Place search failed", error);
+    return [];
+  }
+};

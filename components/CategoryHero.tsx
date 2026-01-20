@@ -16,11 +16,6 @@ export const CategoryHero: React.FC<CategoryHeroProps> = () => {
 
     return (
         <div className="w-full mb-6">
-            <div className="flex items-center justify-between mb-4 px-1">
-                <h3 className="text-lg font-black text-gray-900 dark:text-white tracking-tight">
-                    {language === 'en' ? 'Explore Categories' : 'श्रेणियाँ खोजें'}
-                </h3>
-            </div>
 
             {/* Mobile: Horizontal Snap Carousel */}
             <div className="md:hidden flex overflow-x-auto snap-x snap-mandatory gap-4 pb-4 px-1 -mx-4 px-4 no-scrollbar">

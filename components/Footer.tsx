@@ -1,8 +1,9 @@
 import React from 'react';
 import { MapPin, Facebook, Twitter, Instagram, Mail } from 'lucide-react';
+import { Language } from '../types';
 
 interface FooterProps {
-    language: 'en' | 'hi';
+    language: Language;
     onOpenModal: (type: 'safety' | 'guidelines' | 'terms') => void;
 }
 

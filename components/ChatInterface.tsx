@@ -31,7 +31,7 @@ interface ChatInterfaceProps {
   currentUser: User;
   onClose: () => void;
   // REMOVED: messages prop (internalized)
-  onSendMessage: (text: string) => void;
+  onSendMessage: (text: string, customId?: string) => void;
   onCompleteJob: (job?: Job) => void;
   onTranslateMessage: (messageId: string, text: string) => void;
   onDeleteMessage?: (messageId: string) => void;
@@ -78,6 +78,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const typingTimeoutRef = useRef<any>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [connectionStatus, setConnectionStatus] = useState<'SUBSCRIBED' | 'TIMED_OUT' | 'CLOSED' | 'CHANNEL_ERROR' | 'CONNECTING'>('CONNECTING');
 
   // Fetch job details
   useEffect(() => {
@@ -293,20 +294,20 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         }
       })
       .on('postgres_changes', {
-        event: 'UPDATE',
+        event: '*', // Listen for INSERT (new messages) and UPDATE (edits/deletes)
         schema: 'public',
         table: 'chat_messages',
         filter: `job_id=eq.${job.id}`
       }, (payload) => {
-        // Handle deletion or edit
-        const newMsg = payload.new as any;
+        // Handle insertion, deletion or edit
+        const newMsg = (payload.new || payload.old) as any;
         if (newMsg) {
           const updated: ChatMessage = {
             id: newMsg.id,
             jobId: newMsg.job_id,
             senderId: newMsg.sender_id,
             text: newMsg.is_deleted ? 'This message was deleted' : newMsg.text,
-            timestamp: new Date(newMsg.created_at).getTime(),
+            timestamp: new Date(newMsg.created_at || newMsg.timestamp).getTime(),
             translatedText: newMsg.translated_text,
             isDeleted: newMsg.is_deleted,
             read: newMsg.read,
@@ -315,12 +316,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
           // Update local state
           upsertMessages([updated]);
-
-          // Also notify parent component for consistency
-          // if (onMessageUpdate) onMessageUpdate(updated);
         }
       })
       .subscribe(async (status) => {
+        console.log(`[Chat] Channel status: ${status}`);
+        setConnectionStatus(status as any);
+
         if (status === 'SUBSCRIBED') {
           await newChannel.track({ online_at: new Date().toISOString() });
         }
@@ -401,33 +402,48 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     };
   }, []);
 
+  // Helper for generating UUIDs (Polyfill for older environments if needed)
+  const generateUUID = () => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
   const handleSend = async (text: string = inputText) => {
     if (text.trim()) {
-      // 1. Persistence (DB)
-      onSendMessage(text);
+      // CRITICAL FIX: Generate UUID on client to reconcile Broadcast vs DB events
+      // This prevents "Double Message" issue on receiver side
+      const messageId = generateUUID();
 
-      // 2. Broadcast (Instant UI for peer) & Optimistic UI for Self
+      const tempMsg: ChatMessage = {
+        id: messageId, // Use real UUID immediately
+        jobId: job.id,
+        senderId: currentUser.id,
+        text: text,
+        timestamp: Date.now()
+      };
+
+      // 1. Optimistic UI for Self
+      upsertMessages([tempMsg]);
+      setInputText('');
+      setShowQuickReplies(false);
+
+      // 2. Persistence (DB) - Pass ID to enforce consistency
+      // Note: onSendMessage now accepts (text, customId)
+      await onSendMessage(text, messageId);
+
+      // 3. Broadcast (Instant UI for peer) - Send the SAME ID
       if (channel) {
-        const tempMsg: ChatMessage = {
-          id: `temp_${Date.now()}_${Math.random()}`,
-          jobId: job.id,
-          senderId: currentUser.id,
-          text: text,
-          timestamp: Date.now()
-        };
-
-        // Optimistic update
-        upsertMessages([tempMsg]);
-
         await channel.send({
           type: 'broadcast',
           event: 'new_message',
           payload: tempMsg
         });
       }
-
-      setInputText('');
-      setShowQuickReplies(false); // Hide quick replies after interaction
     }
   };
 
@@ -538,13 +554,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   // Show loading state if job hasn't loaded yet (after all hooks are called)
   if (!job) {
     return (
-      <div className="fixed inset-0 z-[100] bg-gray-950 flex items-center justify-center">
-        <div className="text-white text-center">
-          <div className="animate-spin w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-          <p className="text-gray-400">Loading chat...</p>
+      <div className="fixed inset-0 z-[100] bg-background flex items-center justify-center">
+        <div className="text-text-primary text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-text-secondary">Loading chat...</p>
           <button
             onClick={onClose}
-            className="mt-4 text-gray-500 text-sm hover:text-white transition-colors"
+            className="mt-4 text-text-muted text-sm hover:text-text-primary transition-colors"
           >
             Cancel
           </button>
@@ -562,44 +578,58 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       />
 
       {/* Chat Interface - Mobile: Full Screen, Desktop: Right Drawer */}
-      <div className="fixed z-[100] flex flex-col h-full bg-gray-50 dark:bg-gray-950
+      <div className="fixed z-[100] flex flex-col h-full bg-background
         inset-0 
         md:inset-y-0 md:right-0 md:left-auto md:w-[450px] 
-        md:shadow-2xl md:border-l border-gray-100 dark:border-gray-800
+        md:shadow-2xl md:border-l border-border
         animate-in slide-in-from-bottom md:slide-in-from-right duration-300 transition-colors">
 
-        {/* Header - Ultra Compact (WhatsApp/Telegram style) */}
-        <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl px-3 py-2 shadow-sm border-b border-gray-100 dark:border-gray-800 flex items-center justify-between z-10 pt-safe transition-all duration-300">
-          <div className="flex items-center gap-2">
+        {/* Header - Premium Redesign */}
+        <div className="bg-surface/95 backdrop-blur-xl px-4 py-3 shadow-sm border-b border-border flex items-center justify-between z-10 pt-safe transition-all duration-300">
+          <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="btn-ghost !p-1.5 rounded-full !bg-transparent hover:!bg-gray-100 dark:hover:!bg-gray-800 text-gray-500 dark:text-gray-400 md:hidden"
+              className="btn-ghost !p-2 rounded-full !bg-transparent hover:!bg-background text-text-secondary md:hidden"
               title="Close"
             >
-              <ArrowLeft size={20} />
+              <ArrowLeft size={22} />
             </button>
 
             <div
-              className="flex items-center gap-2.5 cursor-pointer group active:opacity-70 transition-opacity"
+              className="flex items-center gap-3 cursor-pointer group active:opacity-70 transition-opacity"
               onClick={() => setShowProfileModal(true)}
             >
-              <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 font-semibold text-xs overflow-hidden shrink-0">
+              <div className="w-11 h-11 rounded-full bg-background border border-border flex items-center justify-center text-text-secondary font-bold text-lg overflow-hidden shrink-0 shadow-sm ring-2 ring-primary/5">
                 {otherPersonPhoto ? (
-                  <img src={otherPersonPhoto} alt={otherPersonName} className="w-full h-full object-cover" />
+                  <img src={otherPersonPhoto} alt={otherPersonName} className="w-full h-full object-cover" loading="lazy" />
                 ) : (
                   otherPersonName.charAt(0)
                 )}
               </div>
-              <div className="flex flex-col justify-center h-8">
-                <h2 className="font-semibold text-gray-900 dark:text-gray-100 leading-tight text-[13px] flex items-center gap-1">
+              <div className="flex flex-col justify-center">
+                <h2 className="font-bold text-text-primary leading-tight text-base flex items-center gap-1.5">
                   {otherPersonName}
-                  <ChevronRight size={10} className="text-gray-400 opacity-50" />
+                  {connectionStatus !== 'SUBSCRIBED' && (
+                    <span className="flex items-center gap-1 text-[10px] text-amber-500 font-bold animate-pulse">
+                      <Loader2 size={10} className="animate-spin" />
+                      Connecting...
+                    </span>
+                  )}
+                  <ChevronRight size={14} className="text-text-muted opacity-50 group-hover:translate-x-0.5 transition-transform" />
                 </h2>
-                {isOtherUserOnline ? (
-                  <span className="text-[10px] text-emerald-500 font-medium leading-none">Online</span>
-                ) : (
-                  <span className="text-[10px] text-gray-400 font-medium leading-none">Offline</span>
-                )}
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  {isOtherUserOnline ? (
+                    <>
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span className="text-xs text-emerald-500 font-bold uppercase tracking-wider">Online</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="w-2 h-2 rounded-full bg-text-muted opacity-30"></span>
+                      <span className="text-xs text-text-muted font-bold uppercase tracking-wider">Offline</span>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -617,11 +647,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               {showMenu && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
-                  <div className="absolute right-0 top-full mt-1 w-44 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-20 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                    <button onClick={() => { setShowMenu(false); setShowSafetyTips(true); }} className="w-full text-left px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                      <ShieldAlert size={14} className="text-emerald-600 dark:text-emerald-500" /> Safety Tips
+                  <div className="absolute right-0 top-full mt-1 w-44 bg-surface rounded-xl shadow-xl border border-border z-20 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                    <button onClick={() => { setShowMenu(false); setShowSafetyTips(true); }} className="w-full text-left px-3 py-2.5 hover:bg-background text-xs font-medium text-text-primary flex items-center gap-2">
+                      <ShieldAlert size={14} className="text-primary" /> Safety Tips
                     </button>
-                    <button onClick={() => { setShowMenu(false); setShowReportModal(true); }} className="w-full text-left px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 text-xs font-medium text-red-600 dark:text-red-400 flex items-center gap-2">
+                    <button onClick={() => { setShowMenu(false); setShowReportModal(true); }} className="w-full text-left px-3 py-2.5 hover:bg-background text-xs font-medium text-red-600 flex items-center gap-2">
                       <Flag size={14} /> Report User
                     </button>
                     <button
@@ -639,9 +669,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                           }
                         }
                       }}
-                      className="w-full text-left px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 text-xs font-medium text-gray-500 dark:text-gray-400 flex items-center gap-2 border-t border-gray-100 dark:border-gray-700"
+                      className="w-full text-left px-3 py-2.5 hover:bg-background text-xs font-medium text-text-secondary flex items-center gap-2 border-t border-border"
                     >
-                      <Ban size={14} className={blockingStatus.iBlocked ? "text-emerald-500" : "text-gray-400"} />
+                      <Ban size={14} className={blockingStatus.iBlocked ? "text-primary" : "text-text-muted"} />
                       {blockingStatus.iBlocked ? 'Unblock User' : 'Block User'}
                     </button>
                   </div>
@@ -651,15 +681,36 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           </div>
         </div>
 
-        {/* Job Context Banner - Minimalist */}
-        <div className="bg-gray-50 dark:bg-gray-900/50 px-4 py-1.5 flex justify-between items-center border-b border-gray-100 dark:border-gray-800 relative z-0">
-          <div className="flex items-center gap-1.5 overflow-hidden text-gray-500 dark:text-gray-400">
-            <FileText size={10} strokeWidth={2.5} />
-            <span className="font-semibold text-[10px] line-clamp-1 tracking-wide">{job.title}</span>
+        {/* Job Status & Actions Banner (Safety Fix) */}
+        <div className="bg-surface border-b border-border z-[5] overflow-hidden">
+          <div className="px-4 py-2.5 flex justify-between items-center bg-background/30 backdrop-blur-sm">
+            <div className="flex items-center gap-2 overflow-hidden text-text-secondary">
+              <div className="p-1.5 bg-primary/10 rounded-lg text-primary">
+                <FileText size={14} strokeWidth={2.5} />
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="font-bold text-[11px] line-clamp-1 tracking-tight">{job.title}</span>
+                <span className="text-[10px] font-bold text-primary tabular-nums">₹{acceptedBid?.amount || job.budget}</span>
+              </div>
+            </div>
+
+            {isPoster && job.status === 'IN_PROGRESS' && (
+              <button
+                onClick={() => onCompleteJob(job)}
+                className="btn btn-primary !py-1.5 !px-3 !text-[10px] !h-auto font-black uppercase tracking-widest gap-1.5 shadow-sm active:scale-95 transition-all"
+              >
+                <CheckCircle size={14} />
+                Finish Job
+              </button>
+            )}
+
+            {job.status === 'COMPLETED' && (
+              <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 text-emerald-600 rounded-full border border-emerald-500/20">
+                <CheckCircle size={12} fill="currentColor" className="text-emerald-500/20" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Completed</span>
+              </div>
+            )}
           </div>
-          <span className="text-[10px] font-semibold text-gray-900 dark:text-gray-200 bg-white dark:bg-gray-800 px-2 py-0.5 rounded border border-gray-200 dark:border-gray-700 ml-2 whitespace-nowrap">
-            ₹{acceptedBid?.amount || job.budget}
-          </span>
         </div>
 
         {/* Phone Number Prompt Banner */}
@@ -684,7 +735,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         )}
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-[#e5ddd5] dark:bg-gray-950 bg-opacity-10 transition-colors"
+        <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-background/50 bg-opacity-10 transition-colors"
           style={{ backgroundImage: 'radial-gradient(var(--bg-pattern-color, #cbd5e1) 1px, transparent 1px)', backgroundSize: '20px 20px' }}
           ref={messagesContainerRef}
         >
@@ -796,9 +847,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                         )}
 
                         <div
-                          className={`relative px-5 py-3 rounded-2xl text-sm shadow-md transition-all duration-300 transform font-medium ${isMe
-                            ? 'bg-gradient-to-br from-emerald-600 to-teal-600 text-white rounded-br-none shadow-emerald-500/10'
-                            : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 border border-gray-100/50 dark:border-gray-800 rounded-bl-none shadow-gray-400/5'
+                          className={`relative px-4 py-2.5 rounded-[20px] text-[13.5px] shadow-sm transition-all duration-300 transform font-medium tracking-tight ${isMe
+                            ? 'bg-primary text-white rounded-br-none shadow-primary/10'
+                            : 'bg-surface text-text-primary border border-border rounded-bl-none shadow-black/5'
                             }`}
                         >
                           <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
@@ -879,7 +930,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         </div>
 
         {/* Footer / Input */}
-        <div className="bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 flex-none z-20 pb-safe transition-colors">
+        <div
+          className="bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 flex-none z-20 transition-colors"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + var(--keyboard-height, 0px))' }}
+        >
 
           {/* Quick Replies */}
           {showQuickReplies && (
@@ -899,40 +953,29 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           <div className="p-3">
             {/* Archive Banner for COMPLETED jobs */}
             {isArchived && (
-              <div className="mb-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 p-4 rounded-xl text-center">
-                <div className="inline-flex items-center gap-2 text-emerald-600 dark:text-emerald-500 font-bold bg-emerald-50 dark:bg-emerald-900/20 px-4 py-2 rounded-full mb-3 text-xs">
-                  <CheckCircle size={14} />
-                  This job has been completed
-                </div>
-
+              <div className="mb-3 bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-700 p-4 rounded-2xl text-center shadow-inner">
                 {job.hasMyReview ? (
-                  <div className="flex-1 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 py-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 border border-green-100 dark:border-green-800">
-                    <Heart size={16} fill="currentColor" /> You have reviewed this user
+                  <div className="flex items-center justify-center gap-3 text-emerald-600 dark:text-emerald-400 font-bold text-xs">
+                    <div className="p-2 bg-emerald-500/10 rounded-full">
+                      <Heart size={20} fill="currentColor" />
+                    </div>
+                    <span>You've completed and reviewed this job.</span>
                   </div>
                 ) : (
-                  <button
-                    onClick={() => onCompleteJob(job)}
-                    className="btn btn-primary w-full bg-amber-500 hover:bg-amber-600 mb-2"
-                  >
-                    <Sparkles size={18} fill="white" />
-                    Rate Your Experience
-                  </button>
+                  <div>
+                    <p className="text-xs font-bold text-text-primary mb-3">Job phase is over. Please share your feedback.</p>
+                    <button
+                      onClick={() => onCompleteJob(job)}
+                      className="btn btn-primary w-full bg-amber-500 hover:bg-amber-600 !h-12 shadow-lg shadow-amber-500/20"
+                    >
+                      <Sparkles size={18} fill="white" />
+                      Rate Your Experience
+                    </button>
+                  </div>
                 )}
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-none">
-                  Chat is archived and read-only.
-                </p>
-              </div>
-            )}
-
-            {/* Complete Job button - only for poster in IN_PROGRESS */}
-            {isPoster && job.status === 'IN_PROGRESS' && (
-              <div className="mb-3 px-1">
-                <button
-                  onClick={() => onCompleteJob(job)}
-                  className="btn btn-outline w-full !text-emerald-800 dark:!text-emerald-400"
-                >
-                  <CheckCircle size={18} className="mr-2 text-emerald-600 dark:text-emerald-500" /> Mark Job as Completed
-                </button>
+                <div className="mt-3 pt-3 border-t border-border opacity-40">
+                  <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">Read-only Archive</p>
+                </div>
               </div>
             )}
 

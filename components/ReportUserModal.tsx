@@ -78,7 +78,7 @@ export const ReportUserModal: React.FC<ReportUserModalProps> = ({
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 animate-fade-in transition-all">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-xl pointer-events-auto" onClick={onClose} />
 
-            <div className="bg-white dark:bg-gray-950 w-full max-w-lg rounded-[3.5rem] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.4)] overflow-hidden flex flex-col relative z-20 animate-slide-up sm:animate-pop border-4 border-white dark:border-gray-800 transition-all max-h-[90vh] pb-safe">
+            <div className="bg-white dark:bg-gray-950 w-full max-w-lg rounded-[3.5rem] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.4)] overflow-hidden flex flex-col relative z-20 animate-slide-up sm:animate-pop border-4 border-white dark:border-gray-800 transition-all max-h-[90vh] pt-safe pb-safe">
 
                 {/* Header Section */}
                 <div className={`p-8 pb-4 flex items-center gap-6 transition-colors ${step === 'SUCCESS' ? 'bg-emerald-50/50 dark:bg-emerald-950/20' : ''}`}>

@@ -1,7 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { TRANSLATIONS } from '../constants';
+import { Language } from '../types';
 
-type Language = 'en' | 'hi';
+export const getNextLanguage = (current: Language): Language => {
+    if (current === 'en') return 'hi';
+    if (current === 'hi') return 'pa';
+    return 'en';
+};
+
 
 interface LanguageContextType {
     language: Language;

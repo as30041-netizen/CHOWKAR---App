@@ -110,6 +110,26 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         }
     }, [isLoggedIn, user.id, isAuthLoading]);
 
+    // 1b. Foreground Resync Logic
+    useEffect(() => {
+        if (!isLoggedIn || !user.id) return;
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                console.log('[Notification] App foregrounded, refreshing list...');
+                RefreshData();
+            }
+        };
+
+        window.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('focus', handleVisibilityChange);
+
+        return () => {
+            window.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('focus', handleVisibilityChange);
+        };
+    }, [isLoggedIn, user.id]);
+
     const RefreshData = async () => {
         if (!user.id) return;
         setLoading(true);
@@ -169,6 +189,10 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
                 if (!newNotif.read) {
                     // We use setTimeout to avoid state update conflicts
                     setTimeout(() => showAlert(`${newNotif.title}: ${newNotif.message}`, 'info'), 0);
+
+                    // REMOVED: Redundant LocalNotification.
+                    // We now rely on Server-Side Push (FCM) for background notifications.
+                    // When foregrounded, the In-App Alert above is sufficient.
                 }
 
                 return [newNotif, ...prev].slice(0, 100);

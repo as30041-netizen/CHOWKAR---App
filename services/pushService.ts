@@ -1,4 +1,5 @@
 import { PushNotifications, Token, PushNotificationSchema, ActionPerformed } from '@capacitor/push-notifications';
+import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 import { supabase } from '../lib/supabase';
 
@@ -22,6 +23,12 @@ export const registerPushNotifications = async (userId: string): Promise<{ succe
                 console.log('[Push] Permission denied after request');
                 return { success: false, error: 'Permission denied' };
             }
+        }
+
+        // Also ensure LocalNotifications permission for foreground alerts
+        const localPermission = await LocalNotifications.checkPermissions();
+        if (localPermission.display !== 'granted') {
+            await LocalNotifications.requestPermissions();
         }
 
         // Create Notification Channel for Android 8+

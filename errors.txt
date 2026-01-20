@@ -1,0 +1,4 @@
+components/UserProfileModal.tsx(180,53): error TS2365: Operator '>' cannot be applied to types 'string' and 'number'.
+hooks/useJobActions.ts(50,35): error TS2345: Argument of type 'string' is not assignable to parameter of type '"POSTER" | "HOME" | "WORKER_APPS"'.
+pages/CategoryJobs.tsx(220,33): error TS2322: Type '{ jobs: { distance: number; id: string; posterId: string; posterName: string; posterPhone: string; posterPhoto?: string; posterRating?: number; title: string; description: string; category: string; ... 26 more ...; isRecommended?: boolean; }[]; onMarkerClick: (job: any) => void; userLocation: Coordinates; }' is not assignable to type 'IntrinsicAttributes & JobMapProps'.
+  Property 'onMarkerClick' does not exist on type 'IntrinsicAttributes & JobMapProps'.

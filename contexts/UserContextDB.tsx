@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect, useRef, startTransition, useCallback } from 'react';
-import { User, UserRole, Notification, ChatMessage } from '../types';
+import { User, UserRole, Notification, ChatMessage, Language } from '../types';
 import { TRANSLATIONS, FREE_AI_USAGE_LIMIT } from '../constants';
 import { supabase } from '../lib/supabase';
 import { incrementAIUsage as incrementAIUsageDB, updateUserProfile, getCurrentUser, getUserProfile, signOut } from '../services/authService';
@@ -14,8 +14,8 @@ interface UserContextType {
   setUser: React.Dispatch<React.SetStateAction<User>>;
   role: UserRole;
   setRole: React.Dispatch<React.SetStateAction<UserRole>>;
-  language: 'en' | 'hi';
-  setLanguage: React.Dispatch<React.SetStateAction<'en' | 'hi'>>;
+  language: Language;
+  setLanguage: React.Dispatch<React.SetStateAction<Language>>;
   isLoggedIn: boolean;
   setIsLoggedIn: React.Dispatch<React.SetStateAction<boolean>>;
   isAuthLoading: boolean;
@@ -72,13 +72,8 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     window.location.href.includes('refresh_token=')
   );
 
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      if (isAuthCallback) return true;
-      return localStorage.getItem('chowkar_isLoggedIn') === 'true';
-    }
-    return false;
-  });
+  // CRITICAL FIX: isLoggedIn should strictly reflect session presence, NOT optimistic guesses
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
 
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
@@ -153,8 +148,11 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Listen for App Resume (Foreground) to refresh session
     const cleanupListener = addAppStateListener(async (isActive) => {
+      // Only act if coming to FOREGROUND and we think we are logged in
       if (isActive && isLoggedIn) {
         console.log('[Auth] App resumed. Validating session...');
+
+        // Silent Check: Don't show loading spinner, just verify token validity
         const { data: { session }, error } = await supabase.auth.getSession();
 
         if (error || !session) {
@@ -163,6 +161,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           logout();
         } else {
           console.log('[Auth] Session valid on resume. Refreshing data...');
+          // Refresh Profile & Wallet (Silent)
           fetchUserData();
         }
       }
@@ -192,20 +191,30 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           currentUserIdRef.current = session.user.id;
           setUser(prev => ({ ...prev, id: session.user.id, email: session.user.email }));
         } else {
-          console.log('[Auth] No active session on init.');
-          // If we were optimistically logged in, we MUST clear it now because the server said "No".
+          console.log('[Auth] No active session returned by getSession().');
+
+          // CRITICAL FIX FOR MOBILE: 
+          // Supabase's async storage on mobile (Capacitor) might be slower than this execution.
+          // Do NOT logout immediately if localStorage claims we are logged in.
+          // Wait for onAuthStateChange to fire 'SIGNED_OUT' or 'INITIAL_SESSION' to confirm.
           if (localStorage.getItem('chowkar_isLoggedIn') === 'true') {
-            console.warn('[Auth] Optimistic login failed. Logging out.');
-            logout();
+            console.warn('[Auth] Local state says logged in, but no session yet. Waiting for Auth State Change...');
+            // Do NOT call logout() here. Let the subscription handle it or the safety timeout.
+          } else {
+            // Truly no session and no local record
+            if (isLoggedIn) logout();
           }
         }
       } catch (err) {
         console.error('[Auth] Init session check failed:', err);
-        logout();
+        // Don't logout on error, retrying is safer
       } finally {
         if (mounted) {
-          setIsAuthLoading(false);
-          setHasInitialized(true);
+          // Only stop loading if we aren't waiting for a potential restoration
+          if (localStorage.getItem('chowkar_isLoggedIn') !== 'true') {
+            setIsAuthLoading(false);
+            setHasInitialized(true);
+          }
         }
       }
     };
@@ -218,13 +227,22 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const safetyTimeout = setTimeout(() => {
       if (mounted && isAuthLoading) {
         console.warn('[Auth] Initialization took too long using fallback.');
+
+        // ZOMBIE PROTECTION: If we think we're logged in but have no user, force a reset
+        if (localStorage.getItem('chowkar_isLoggedIn') === 'true' && !currentUserIdRef.current) {
+          console.error('[Auth] Stuck in Zombie State (isLoggedIn=true, userId=null). Forcing Hard Reset...');
+          logout();
+        }
+
         setIsAuthLoading(false);
         setHasInitialized(true);
       }
-    }, 10000);
+    }, 12000);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log(`[Auth Event] ${event}`, { userId: session?.user?.id, email: session?.user?.email });
       if (!mounted) return;
+
       if (event === 'INITIAL_SESSION' && !session?.user) {
         if (isAuthCallbackRef.current) return;
         if (Capacitor.isNativePlatform()) {
@@ -265,18 +283,20 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             isAuthCallbackRef.current = false;
           }
 
+          // OPTIMIZATION: Unblock UI immediately. Don't wait for profile fetch.
+          if (mountedRef.current) {
+            setIsAuthLoading(false); // Hide splash screen
+            setHasInitialized(true); // Allow components to load
+          }
+
           try {
             const { user: fullUser, error: fetchError } = await getCurrentUser(session.user);
             if (fullUser && mountedRef.current) {
               setUser(fullUser);
             }
           } catch (err) {
-          } finally {
-            if (mountedRef.current) {
-              setIsAuthLoading(false);
-              setHasInitialized(true);
-            }
           }
+          // finally block removed as it's handled above
         } else if (event === 'INITIAL_SESSION') {
           if (localStorage.getItem('chowkar_isLoggedIn') !== 'true') {
             setIsAuthLoading(false);
@@ -422,7 +442,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       localStorage.removeItem('chowkar_user');
       localStorage.removeItem('chowkar_onboarding_complete');
       localStorage.removeItem('chowkar_role');
-      localStorage.removeItem('chowkar_language');
+      // localStorage.removeItem('chowkar_language'); // Keep language preference across sessions
       localStorage.removeItem('chowkar_feed_cache');
       localStorage.removeItem('chowkar_pending_navigation');
       if (typeof window !== 'undefined') {

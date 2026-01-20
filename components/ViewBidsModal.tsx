@@ -256,16 +256,16 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4">
             <div className="absolute inset-0 bg-black/40 backdrop-blur-md pointer-events-auto" onClick={onClose}></div>
-            <div className="bg-white dark:bg-gray-900 w-full max-w-lg rounded-[2.5rem] p-0 pointer-events-auto relative shadow-[0_-8px_32px_rgba(0,0,0,0.1)] transition-all max-h-[90vh] overflow-hidden flex flex-col animate-slide-up pb-safe">
+            <div className="bg-surface w-full max-w-lg rounded-[2.5rem] p-0 pointer-events-auto relative shadow-[0_-8px_32px_rgba(0,0,0,0.1)] transition-all max-h-[90vh] overflow-hidden flex flex-col animate-slide-up pt-safe pb-safe">
 
-                <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center gap-4 bg-white dark:bg-gray-900 z-10 sticky top-0">
-                    <button onClick={onClose} className="p-2.5 bg-gray-50 dark:bg-gray-900 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all active:scale-90 shadow-sm group">
+                <div className="p-6 border-b border-border flex items-center gap-4 bg-surface z-10 sticky top-0">
+                    <button onClick={onClose} className="p-2.5 bg-background rounded-xl text-text-secondary hover:bg-border transition-all active:scale-90 shadow-sm group">
                         <ArrowLeft size={22} strokeWidth={2.5} className="group-hover:-translate-x-0.5 transition-transform" />
                     </button>
                     <div>
-                        <h3 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight leading-none uppercase tracking-widest text-xs opacity-50 mb-1">Applications</h3>
+                        <h3 className="text-2xl font-black text-text-primary tracking-tight leading-none uppercase tracking-widest text-xs opacity-50 mb-1">Applications</h3>
                         <div className="flex items-center gap-2">
-                            <h4 className="font-black text-lg text-gray-900 dark:text-white line-clamp-1">{localJob.title}</h4>
+                            <h4 className="font-black text-lg text-text-primary line-clamp-1">{localJob.title}</h4>
                             <span className="badge badge-success !py-1 !px-2 !text-[10px] !rounded-lg">{localJob.bids?.length || 0}</span>
                         </div>
                     </div>
@@ -278,8 +278,8 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                                 <div
                                     key={bid.id}
                                     className={`relative p-5 rounded-[2.5rem] border-2 transition-all duration-300 shadow-sm ${isNew
-                                        ? 'border-emerald-500/30 dark:border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-900/10'
-                                        : 'border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/50'
+                                        ? 'border-primary/30 bg-primary/5'
+                                        : 'border-border bg-background/50'
                                         }`}
                                 >
                                     {/* NEW Badge */}
@@ -290,28 +290,28 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                                     )}
 
                                     <div className="flex items-start gap-4 mb-4 cursor-pointer group" onClick={() => onViewProfile(bid.workerId, bid.workerName)}>
-                                        <div className="w-12 h-12 rounded-2xl bg-gray-100 dark:bg-gray-800 overflow-hidden ring-4 ring-white dark:ring-gray-900 shadow-md group-hover:scale-110 transition-transform">
-                                            {bid.workerPhoto ? <img src={bid.workerPhoto} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-50 dark:bg-gray-800"><UserCircle size={28} /></div>}
+                                        <div className="w-12 h-12 rounded-2xl bg-surface overflow-hidden ring-4 ring-background shadow-md group-hover:scale-110 transition-transform">
+                                            {bid.workerPhoto ? <img src={bid.workerPhoto} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-text-muted bg-background"><UserCircle size={28} /></div>}
                                         </div>
                                         <div className="flex-1">
-                                            <h4 className="font-black text-gray-900 dark:text-white group-hover:text-emerald-600 transition-colors flex items-center gap-1.5 pt-0.5">
+                                            <h4 className="font-black text-text-primary group-hover:text-primary transition-colors flex items-center gap-1.5 pt-0.5">
                                                 {bid.workerName}
-                                                <ExternalLink size={14} className="text-gray-400 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                                                <ExternalLink size={14} className="text-text-muted group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                                             </h4>
                                             <div className="flex items-center gap-1.5 mt-0.5">
-                                                <div className="flex items-center px-1.5 py-0.5 bg-amber-50 dark:bg-amber-900/30 rounded-lg text-amber-600 dark:text-amber-400 text-[10px] font-black border border-amber-100 dark:border-amber-800/50">
+                                                <div className="flex items-center px-1.5 py-0.5 bg-amber-500/10 rounded-lg text-amber-500 text-[10px] font-black border border-amber-500/20">
                                                     <Star size={10} fill="currentColor" className="mr-1" /> {bid.workerRating}
                                                 </div>
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight">₹{bid.amount}</div>
-                                            <div className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mt-1">
+                                            <div className="text-2xl font-black text-primary tracking-tight">₹{bid.amount}</div>
+                                            <div className="text-[10px] font-black text-text-muted uppercase tracking-widest mt-1">
                                                 {getRelativeTime(bid.createdAt || Date.now())}
                                             </div>
                                         </div>
                                     </div>
-                                    <p className="text-sm text-gray-600 dark:text-gray-300 bg-gray-50/50 dark:bg-gray-900/50 p-4 rounded-2xl mb-4 italic font-medium leading-relaxed border border-gray-100/50 dark:border-gray-800/50 shadow-inner">
+                                    <p className="text-sm text-text-secondary bg-surface p-4 rounded-2xl mb-4 italic font-medium leading-relaxed border border-border shadow-inner">
                                         "{bid.message}"
                                     </p>
 
@@ -346,26 +346,26 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
 
                                     {/* Visibility hint */}
                                     {localJob.status === 'OPEN' && (
-                                        <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-3 flex items-center gap-1">
+                                        <p className="text-[10px] text-text-muted mb-3 flex items-center gap-1">
                                             🔒 Contact details visible after accepting this bid
                                         </p>
                                     )}
 
                                     {/* Negotiation History */}
                                     {bid.negotiationHistory && bid.negotiationHistory.length > 1 && (
-                                        <div className="mb-3 pl-3 border-l-2 border-gray-200 dark:border-gray-700 space-y-2">
-                                            <div className="text-[10px] text-gray-500 dark:text-gray-400 font-semibold uppercase mb-1">Negotiation History</div>
+                                        <div className="mb-3 pl-3 border-l-2 border-border space-y-2">
+                                            <div className="text-[10px] text-text-muted font-semibold uppercase mb-1">Negotiation History</div>
                                             {bid.negotiationHistory.map((h, i) => {
                                                 const isPosterViewing = user.id === localJob?.posterId;
                                                 const isFromWorker = h.by === UserRole.WORKER;
                                                 return (
                                                     <div key={i} className="text-xs flex items-center gap-2 flex-wrap">
-                                                        <span className={`px-1.5 py-0.5 rounded text-[10px] ${isFromWorker ? "bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300 font-bold" : "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-300 font-bold"}`}>
+                                                        <span className={`px-1.5 py-0.5 rounded text-[10px] ${isFromWorker ? "bg-blue-500/10 text-blue-500 font-bold" : "bg-primary/10 text-primary font-bold"}`}>
                                                             {isFromWorker ? (isPosterViewing ? 'Worker' : 'You') : (isPosterViewing ? 'You' : 'Poster')}
                                                         </span>
-                                                        <span className="text-gray-700 dark:text-gray-300 font-semibold">₹{h.amount}</span>
+                                                        <span className="text-text-primary font-semibold">₹{h.amount}</span>
                                                         {h.timestamp && (
-                                                            <span className="text-[10px] text-gray-400 dark:text-gray-500">
+                                                            <span className="text-[10px] text-text-muted">
                                                                 {getRelativeTime(h.timestamp)}
                                                             </span>
                                                         )}
@@ -431,13 +431,13 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                                                     </button>
                                                     <button
                                                         onClick={() => onCounter(bid.id, bid.amount)}
-                                                        className="flex-1 py-4 px-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-100 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-1.5"
+                                                        className="flex-1 py-4 px-3 bg-background border border-border text-text-primary rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-surface transition-all flex items-center justify-center gap-1.5"
                                                     >
                                                         {language === 'en' ? 'Counter' : 'मोलभाव'}
                                                     </button>
                                                     <button
                                                         onClick={() => handleRejectBid(localJob!.id, bid.id, bid.workerName, bid.workerId)}
-                                                        className="w-14 items-center justify-center flex bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 text-red-500 dark:text-red-400 rounded-2xl hover:bg-red-100 transition-all"
+                                                        className="w-14 items-center justify-center flex bg-red-500/10 border border-red-500/20 text-red-500 rounded-2xl hover:bg-red-500/20 transition-all"
                                                         title="Reject this bid"
                                                     >
                                                         ✕
@@ -461,11 +461,11 @@ export const ViewBidsModal: React.FC<ViewBidsModalProps> = ({ isOpen, onClose, j
                         })
                     ) : isLoadingDetails && (localJob?.bidCount || 0) > 0 ? (
                         <div className="flex flex-col items-center justify-center py-12">
-                            <Loader2 size={32} className="text-emerald-600 animate-spin mb-4" />
-                            <p className="text-gray-500 dark:text-gray-400 font-medium">Loading bids...</p>
+                            <Loader2 size={32} className="text-primary animate-spin mb-4" />
+                            <p className="text-text-muted font-medium">Loading bids...</p>
                         </div>
                     ) : (
-                        <p className="text-center text-gray-400 dark:text-gray-500 py-8">No bids yet.</p>
+                        <p className="text-center text-text-muted py-8">No bids yet.</p>
                     )}
                 </div>
             </div>

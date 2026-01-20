@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNotification } from '../contexts/NotificationContext';
+import { useLoading } from '../contexts/LoadingContext';
 
 import { useUser } from '../contexts/UserContextDB';
 import { useJobs } from '../contexts/JobContextDB';
 import { Job, Coordinates, JobStatus } from '../types';
 import { CATEGORIES, CATEGORY_CONFIG, FREE_AI_USAGE_LIMIT, DRAFT_STORAGE_KEY, CATEGORY_TRANSLATIONS } from '../constants';
 import { uploadJobImage, isBase64Image } from '../services/storageService';
-import { getDeviceLocation, reverseGeocode, forwardGeocode } from '../utils/geo';
+import { getDeviceLocation, reverseGeocode, forwardGeocode, searchPlaces } from '../utils/geo';
 import { enhanceJobDescriptionStream, estimateWage, analyzeImageForJob } from '../services/geminiService';
 import { LeafletMap } from './LeafletMap';
 import { Sparkles, MapPin, Calendar, Clock, Image as ImageIcon, IndianRupee, Loader2, X, Plus, ChevronRight, AlertCircle, Wand2, Lightbulb, Map as MapIcon, Languages, CheckCircle2, ArrowDownWideNarrow, Calculator, Mic, MicOff, Camera, Lock, ArrowLeft } from 'lucide-react';
@@ -39,6 +40,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
     const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
     const [isUploadingImage, setIsUploadingImage] = useState(false);
     const [isPosting, setIsPosting] = useState(false);
+    const { showLoading, hideLoading } = useLoading();
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -179,6 +181,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
         }
 
         setIsPosting(true);
+        showLoading(isEditing ? 'Updating Job...' : 'Publishing Job...');
         try {
             if (isEditing && initialJob) {
                 // CHECK: Can only edit OPEN jobs
@@ -306,6 +309,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
         } finally {
             console.log('[JobPostingForm] Setting isPosting to false');
             setIsPosting(false);
+            hideLoading();
         }
     };
 
@@ -456,22 +460,60 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
     };
 
     const [searchQuery, setSearchQuery] = useState('');
+    const [suggestions, setSuggestions] = useState<Array<{ lat: number; lng: number; displayName: string }>>([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Sync local search query when location is set externally (e.g. drafts or map click)
+    useEffect(() => {
+        if (newJobLocation && searchQuery !== newJobLocation) {
+            setSearchQuery(newJobLocation);
+        }
+    }, [newJobLocation]);
+
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const query = e.target.value;
+        setSearchQuery(query);
+
+        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
+        if (query.length > 2) {
+            searchTimeoutRef.current = setTimeout(async () => {
+                const results = await searchPlaces(query);
+                setSuggestions(results);
+                setShowSuggestions(true);
+            }, 500);
+        } else {
+            setSuggestions([]);
+            setShowSuggestions(false);
+        }
+    };
+
+    const handleSuggestionClick = (place: { lat: number; lng: number; displayName: string }) => {
+        setNewJobCoords({ lat: place.lat, lng: place.lng });
+        setNewJobLocation(place.displayName);
+        setSearchQuery(place.displayName);
+        setSuggestions([]);
+        setShowSuggestions(false);
+    };
 
     const handleMapLocationSelect = async (lat: number, lng: number) => {
         setNewJobCoords({ lat, lng });
         const address = await reverseGeocode(lat, lng);
         if (address) {
             setNewJobLocation(address);
+            setSearchQuery(address); // Sync the input box
         }
     };
 
+    // Manual trigger fallback
     const handleAddressSearch = async () => {
         if (!searchQuery.trim()) return;
-        // Search logic
         const result = await forwardGeocode(searchQuery);
         if (result) {
             setNewJobCoords({ lat: result.lat, lng: result.lng });
             setNewJobLocation(result.displayName);
+            setShowSuggestions(false);
         } else {
             showAlert("Location not found", "error");
         }
@@ -482,9 +524,9 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
     if (isEditing && !showEditForm) {
         return (
             <div className="p-4 animate-fade-in pb-10">
-                <h2 className="text-2xl font-bold text-emerald-900 dark:text-emerald-500 mb-6">{t.editJob}</h2>
-                <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-emerald-100 dark:border-emerald-900/30 text-center transition-colors">
-                    <p className="text-gray-600 dark:text-gray-300 mb-6">Update the details for <strong>{initialJob?.title}</strong></p>
+                <h2 className="text-2xl font-bold text-primary mb-6">{t.editJob}</h2>
+                <div className="bg-surface p-6 rounded-2xl shadow-sm border border-border text-center transition-colors">
+                    <p className="text-text-secondary mb-6">Update the details for <strong>{initialJob?.title}</strong></p>
                     <button
                         onClick={() => setShowEditForm(true)}
                         className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 active:scale-95 transition-all"
@@ -503,20 +545,20 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
     }
 
     return (
-        <div className="pb-32 animate-fade-in">
+        <div className="pb-32 animate-fade-in pt-safe">
             {/* Header with Progress */}
             <div className="mb-8">
                 <div className="flex items-center gap-3 mb-6">
                     {onCancel && (
-                        <button onClick={onCancel} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
-                            <ArrowLeft size={20} className="text-gray-600 dark:text-gray-300" />
+                        <button onClick={onCancel} className="p-2 bg-background rounded-full hover:bg-border transition-colors">
+                            <ArrowLeft size={20} className="text-text-secondary" />
                         </button>
                     )}
                     <div>
-                        <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight leading-none">
+                        <h2 className="text-2xl font-black text-text-primary tracking-tight leading-none">
                             {isEditing ? t.editJob : t.postJobHeader}
                         </h2>
-                        <p className="text-xs font-bold text-gray-400 mt-1">
+                        <p className="text-xs font-bold text-text-muted mt-1">
                             {step === 1 && "Let's start with the basics"}
                             {step === 2 && "Where and when?"}
                             {step === 3 && "Final details & Review"}
@@ -525,19 +567,19 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                 </div>
 
                 {/* Progress Bar */}
-                <div className="h-1.5 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden flex">
-                    <div className={`h-full transition-all duration-500 ease-out bg-emerald-500 ${step >= 1 ? 'w-1/3' : 'w-0'}`} />
-                    <div className={`h-full transition-all duration-500 ease-out ${step >= 2 ? 'bg-emerald-500 w-1/3' : 'bg-transparent w-1/3'}`} />
-                    <div className={`h-full transition-all duration-500 ease-out ${step >= 3 ? 'bg-emerald-500 w-1/3' : 'bg-transparent w-1/3'}`} />
+                <div className="h-1.5 w-full bg-background rounded-full overflow-hidden flex">
+                    <div className={`h-full transition-all duration-500 ease-out bg-primary ${step >= 1 ? 'w-1/3' : 'w-0'}`} />
+                    <div className={`h-full transition-all duration-500 ease-out ${step >= 2 ? 'bg-primary w-1/3' : 'bg-transparent w-1/3'}`} />
+                    <div className={`h-full transition-all duration-500 ease-out ${step >= 3 ? 'bg-primary w-1/3' : 'bg-transparent w-1/3'}`} />
                 </div>
-                <div className="flex justify-between mt-2 text-[10px] font-black uppercase tracking-widest text-gray-300 dark:text-gray-700">
-                    <span className={step >= 1 ? 'text-emerald-600 dark:text-emerald-400' : ''}>Basics</span>
-                    <span className={step >= 2 ? 'text-emerald-600 dark:text-emerald-400' : ''}>Logistics</span>
-                    <span className={step >= 3 ? 'text-emerald-600 dark:text-emerald-400' : ''}>Polish</span>
+                <div className="flex justify-between mt-2 text-[10px] font-black uppercase tracking-widest text-text-muted">
+                    <span className={step >= 1 ? 'text-primary' : ''}>Basics</span>
+                    <span className={step >= 2 ? 'text-primary' : ''}>Logistics</span>
+                    <span className={step >= 3 ? 'text-primary' : ''}>Polish</span>
                 </div>
             </div>
 
-            <div className="bg-white dark:bg-gray-900 rounded-[2rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden relative min-h-[400px]">
+            <div className="bg-surface rounded-[2rem] shadow-sm border border-border overflow-hidden relative min-h-[400px]">
 
                 {/* STEP 1: BASICS */}
                 <div className={`p-6 space-y-6 transition-all duration-500 ${step === 1 ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-full absolute inset-0 pointer-events-none'}`}>
@@ -549,18 +591,18 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                             id="jobTitle"
                             placeholder=" "
                             maxLength={100}
-                            className="peer w-full bg-transparent border-0 border-b-2 border-gray-200 dark:border-gray-700 px-0 py-3 font-black text-xl text-gray-900 dark:text-white focus:ring-0 focus:border-emerald-500 transition-colors placeholder-transparent"
+                            className="peer w-full bg-transparent border-0 border-b-2 border-border px-0 py-3 font-black text-xl text-text-primary focus:ring-0 focus:border-primary transition-colors placeholder-transparent"
                             value={newJobTitle}
                             onChange={(e) => setNewJobTitle(e.target.value)}
                         />
-                        <label htmlFor="jobTitle" className="absolute left-0 -top-3.5 text-xs font-black uppercase tracking-wider text-emerald-500 transition-all peer-placeholder-shown:text-base peer-placeholder-shown:font-bold peer-placeholder-shown:text-gray-400 peer-placeholder-shown:top-3 peer-placeholder-shown:tracking-normal peer-focus:-top-3.5 peer-focus:text-xs peer-focus:font-black peer-focus:text-emerald-500 peer-focus:tracking-wider">
+                        <label htmlFor="jobTitle" className="absolute left-0 -top-3.5 text-xs font-black uppercase tracking-wider text-primary transition-all peer-placeholder-shown:text-base peer-placeholder-shown:font-bold peer-placeholder-shown:text-text-muted peer-placeholder-shown:top-3 peer-placeholder-shown:tracking-normal peer-focus:-top-3.5 peer-focus:text-xs peer-focus:font-black peer-focus:text-primary peer-focus:tracking-wider">
                             {t.jobTitleLabel}
                         </label>
                     </div>
 
                     {/* Category */}
                     <div>
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 block">{t.categoryLabel}</label>
+                        <label className="text-[10px] font-black text-text-muted uppercase tracking-widest mb-3 block">{t.categoryLabel}</label>
                         <div className="grid grid-cols-2 gap-3">
                             {CATEGORY_CONFIG.map(cat => {
                                 const Icon = cat.icon;
@@ -571,19 +613,19 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                                         key={cat.id}
                                         onClick={() => setNewJobCategory(cat.id)}
                                         className={`relative overflow-hidden p-4 rounded-2xl text-left transition-all h-24 flex flex-col justify-between group ${isSelected
-                                            ? 'ring-2 ring-emerald-500 shadow-lg scale-[1.02]'
-                                            : 'bg-gray-50 dark:bg-gray-800 border-2 border-transparent hover:border-gray-200 dark:hover:border-gray-700'}`}
+                                            ? 'ring-2 ring-primary shadow-lg scale-[1.02]'
+                                            : 'bg-background border-2 border-transparent hover:border-border'}`}
                                     >
                                         {/* Background Gradient */}
                                         <div className={`absolute inset-0 bg-gradient-to-br ${cat.color} opacity-10 transition-opacity ${isSelected ? 'opacity-100' : 'group-hover:opacity-20'}`} />
 
                                         {/* Icon */}
-                                        <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center transition-colors ${isSelected ? 'bg-white/20 text-white backdrop-blur-sm' : 'bg-white dark:bg-gray-700 text-gray-400'}`}>
+                                        <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center transition-colors ${isSelected ? 'bg-white/20 text-white backdrop-blur-sm' : 'bg-surface text-text-muted'}`}>
                                             <Icon size={16} strokeWidth={2.5} />
                                         </div>
 
                                         {/* Label */}
-                                        <span className={`relative z-10 text-xs font-black uppercase tracking-wider transition-colors ${isSelected ? 'text-white' : 'text-gray-500 dark:text-gray-400'}`}>
+                                        <span className={`relative z-10 text-xs font-black uppercase tracking-wider transition-colors ${isSelected ? 'text-white' : 'text-text-secondary'}`}>
                                             {cat.label[language] || cat.label.en}
                                         </span>
                                     </button>
@@ -614,7 +656,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                             </div>
                         </div>
                         <textarea
-                            className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-transparent focus:border-emerald-500 rounded-2xl p-4 text-sm font-medium text-gray-900 dark:text-white outline-none min-h-[160px] resize-none transition-all"
+                            className="w-full bg-background border-2 border-transparent focus:border-primary rounded-2xl p-4 text-sm font-medium text-text-primary outline-none min-h-[160px] resize-none transition-all"
                             value={newJobDesc}
                             onChange={(e) => setNewJobDesc(e.target.value)}
                             placeholder="Describe the task in detail..."
@@ -660,25 +702,45 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">{t.location}</label>
 
                         {/* Search & Detect Buttons */}
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 relative z-50">
                             <div className="relative flex-1">
                                 <input
                                     value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    onChange={handleSearchChange}
+                                    onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+                                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} // Delay to allow click
                                     onKeyDown={(e) => e.key === 'Enter' && handleAddressSearch()}
-                                    placeholder={language === 'en' ? "Search area..." : "क्षेत्र खोजें..."}
+                                    placeholder={language === 'en' ? "Search for area, city..." : "क्षेत्र, शहर खोजें..."}
                                     className="w-full bg-gray-50 dark:bg-gray-800 border-none rounded-xl px-4 py-3 text-sm font-bold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                    autoComplete="off"
                                 />
-                                <button onClick={handleAddressSearch} className="absolute right-2 top-2 p-1.5 bg-white dark:bg-gray-700 rounded-lg text-emerald-600 shadow-sm"><Sparkles size={16} /></button>
+                                {showSuggestions && suggestions.length > 0 && (
+                                    <div className="absolute top-full left-0 right-0 mt-2 bg-surface/95 backdrop-blur-xl border border-border rounded-xl shadow-xl overflow-hidden max-h-60 overflow-y-auto z-[100]">
+                                        {suggestions.map((place, idx) => (
+                                            <button
+                                                key={idx}
+                                                onClick={() => handleSuggestionClick(place)}
+                                                className="w-full text-left px-4 py-3 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/20 border-b border-border/50 last:border-0 flex items-start gap-3 transition-colors group"
+                                            >
+                                                <MapPin size={16} className="mt-0.5 text-emerald-500 group-hover:scale-110 transition-transform flex-shrink-0" />
+                                                <span className="text-sm font-medium text-text-primary line-clamp-2">{place.displayName}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                <button onClick={handleAddressSearch} className="absolute right-2 top-2 p-1.5 bg-white dark:bg-gray-700 rounded-lg text-emerald-600 shadow-sm hover:scale-105 transition-transform"><Sparkles size={16} /></button>
                             </div>
                             <button
                                 onClick={() => getDeviceLocation(async (coords) => {
                                     setNewJobCoords(coords);
                                     const address = await reverseGeocode(coords.lat, coords.lng);
-                                    if (address) setNewJobLocation(address);
+                                    if (address) {
+                                        setNewJobLocation(address);
+                                        setSearchQuery(address);
+                                    }
                                     showAlert(t.locationCaptured, 'success');
                                 }, () => showAlert(t.alertGeoPermission, 'error'))}
-                                className="px-4 bg-emerald-50 text-emerald-700 rounded-xl font-bold text-xs uppercase tracking-wider border border-emerald-100 flex items-center gap-2"
+                                className="px-4 bg-emerald-50 text-emerald-700 rounded-xl font-bold text-xs uppercase tracking-wider border border-emerald-100 flex items-center gap-2 hover:bg-emerald-100 transition-colors"
                             >
                                 <MapPin size={16} /> Detect
                             </button>
@@ -694,6 +756,10 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                                 onLocationSelect={handleMapLocationSelect}
                                 height="h-full"
                             />
+                            {/* Overlay Pointer Hint */}
+                            <div className="absolute bottom-2 right-2 bg-surface/90 backdrop-blur px-2 py-1 rounded-lg text-[10px] font-bold shadow-sm pointer-events-none">
+                                Tap map to adjust
+                            </div>
                         </div>
                         <p className="text-xs text-gray-500 font-medium px-1 truncate">
                             <MapPin size={12} className="inline mr-1 text-emerald-500" />
@@ -762,12 +828,12 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
             </div>
 
             {/* Navigation Footer */}
-            <div className="fixed bottom-[84px] left-0 right-0 p-4 bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl border-t border-gray-100 dark:border-gray-800 z-[110] md:sticky md:bottom-0 md:bg-transparent md:border-none md:backdrop-blur-none transition-all duration-300">
+            <div className="fixed bottom-0 left-0 right-0 p-4 pb-safe bg-surface/95 backdrop-blur-xl border-t border-border z-[110] md:sticky md:bottom-0 md:bg-transparent md:border-none md:backdrop-blur-none transition-all duration-300">
                 <div className="max-w-4xl mx-auto flex gap-4">
                     {step > 1 && (
                         <button
                             onClick={prevStep}
-                            className="flex-1 py-4 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white rounded-[1.5rem] font-bold text-sm uppercase tracking-wider hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                            className="flex-1 py-4 bg-background text-text-primary rounded-[1.5rem] font-bold text-sm uppercase tracking-wider hover:bg-border transition-colors"
                         >
                             Back
                         </button>
@@ -775,7 +841,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                     {step < 3 ? (
                         <button
                             onClick={nextStep}
-                            className="flex-[2] py-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-[1.5rem] font-black text-sm uppercase tracking-[0.2em] shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                            className="flex-[2] py-4 bg-text-primary text-background rounded-[1.5rem] font-black text-sm uppercase tracking-[0.2em] shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                         >
                             Next <ChevronRight size={18} />
                         </button>
@@ -783,7 +849,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({ onSuccess, onCan
                         <button
                             onClick={handlePostJob}
                             disabled={isPosting}
-                            className={`flex-[2] py-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-[1.5rem] font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 ${isPosting ? 'opacity-70 cursor-not-allowed' : ''}`}
+                            className={`flex-[2] py-4 bg-primary text-white rounded-[1.5rem] font-black text-sm uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 ${isPosting ? 'opacity-70 cursor-not-allowed' : ''}`}
                         >
                             {isPosting ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20} />}
                             {isEditing ? 'Update Job' : 'Post Job'}

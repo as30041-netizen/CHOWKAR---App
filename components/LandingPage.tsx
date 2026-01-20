@@ -13,12 +13,12 @@ import { useUser } from '../contexts/UserContextDB';
 
 interface LandingPageProps {
     onGetStarted: () => void;
-    language: 'en' | 'hi';
+    language: 'en' | 'hi' | 'pa';
     onLanguageToggle: () => void;
     isSigningIn: boolean;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSigningIn }) => {
+export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSigningIn, onLanguageToggle }) => {
     const navigate = useNavigate();
     const { language, setLanguage, user, t } = useUser();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -62,10 +62,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
         }
     }, [user]);
 
+    const cycleLanguage = () => {
+        if (onLanguageToggle) {
+            onLanguageToggle();
+        } else {
+            setLanguage(l => l === 'en' ? 'hi' : l === 'hi' ? 'pa' : 'en');
+        }
+    };
+
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 font-sans text-gray-900 dark:text-white transition-colors duration-300">
+        <div className="min-h-screen bg-background font-sans text-text-primary transition-colors duration-300">
             <SEO
-                title={language === 'en' ? "Hire Local Workers & Find Jobs" : "स्थानीय कामगारों को काम पर रखें"}
+                title={language === 'en' ? "Hire Local Workers & Find Jobs" : language === 'hi' ? "स्थानीय कामगारों को काम पर रखें" : "ਸਥਾਨਕ ਕਾਮੇ ਹਾਇਰ ਕਰੋ ਅਤੇ ਕੰਮ ਲੱਭੋ"}
                 description="India's most trusted marketplace for daily wage work. Hire drivers, laborers, maids, and more instantly."
             />
 
@@ -78,7 +86,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
 
 
             {/* --- Navigation --- */}
-            <nav className="fixed top-0 left-0 right-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md z-40 border-b border-gray-100 dark:border-gray-800 transition-colors pt-safe">
+            <nav className="fixed top-0 left-0 right-0 bg-surface/80 backdrop-blur-md z-40 border-b border-border transition-colors pt-safe">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center h-16">
                         {/* Logo */}
@@ -93,24 +101,26 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
 
                         {/* Desktop Links */}
                         <div className="hidden md:flex items-center gap-8">
-                            <button onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })} className="text-gray-600 dark:text-gray-300 hover:text-emerald-600 font-medium transition-colors">
-                                {language === 'en' ? 'Features' : 'सुविधाएँ'}
+                            <button onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })} className="text-text-secondary hover:text-primary font-medium transition-colors">
+                                {language === 'en' ? 'Features' : language === 'hi' ? 'सुविधाएँ' : 'ਵਿਸ਼ੇਸ਼ਤਾਵਾਂ'}
                             </button>
-                            <button onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })} className="text-gray-600 dark:text-gray-300 hover:text-emerald-600 font-medium transition-colors">
+                            <button onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })} className="text-text-secondary hover:text-primary font-medium transition-colors">
                                 {t.howItWorks}
                             </button>
 
                             {/* Language Toggle */}
                             <button
-                                onClick={() => setLanguage(language === 'en' ? 'hi' : 'en')}
-                                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700"
+                                onClick={cycleLanguage}
+                                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-background hover:bg-surface border border-border transition-colors text-text-primary"
                             >
-                                <Globe size={16} className="text-emerald-600 dark:text-emerald-400" />
-                                <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{language === 'en' ? 'हिंदी' : 'English'}</span>
+                                <Globe size={16} className="text-primary" />
+                                <span className="text-sm font-bold">
+                                    {language === 'en' ? 'हिन्दी' : language === 'hi' ? 'ਪੰਜਾਬੀ' : 'English'}
+                                </span>
                             </button>
 
                             <button onClick={onGetStarted} disabled={isSigningIn} className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-lg shadow-emerald-600/20 transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed">
-                                {isSigningIn ? t.loading : t.heroBtnPoster}
+                                {isSigningIn ? t.loading : (language === 'en' ? 'Post a Job' : language === 'hi' ? 'जॉब पोस्ट करें' : 'ਕੰਮ ਪੋਸਟ ਕਰੋ')}
                             </button>
                         </div>
 
@@ -126,12 +136,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
 
                 {/* Mobile Menu */}
                 {isMenuOpen && (
-                    <div className="md:hidden absolute top-16 left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800 p-4 pt-safe space-y-4 shadow-2xl animate-slide-down z-30">
+                    <div className="md:hidden absolute top-16 left-0 right-0 bg-surface/95 backdrop-blur-xl border-b border-border p-4 pt-safe space-y-4 shadow-2xl animate-slide-down z-30">
                         <button onClick={onGetStarted} disabled={isSigningIn} className="btn btn-primary w-full py-4 text-lg">
-                            {isSigningIn ? t.loading : t.heroBtnPoster}
+                            {isSigningIn ? t.loading : (language === 'en' ? 'Post a Job' : language === 'hi' ? 'जॉब पोस्ट करें' : 'ਕੰਮ ਪੋਸਟ ਕਰੋ')}
                         </button>
-                        <button onClick={() => setLanguage(language === 'en' ? 'hi' : 'en')} className="btn btn-secondary w-full py-4 text-lg">
-                            <Globe size={18} /> {language === 'en' ? 'Switch to Hindi' : 'हिंदी में बदलें'}
+                        <button onClick={cycleLanguage} className="btn btn-secondary w-full py-4 text-lg">
+                            <Globe size={18} /> {language === 'en' ? 'Switch to Hindi' : language === 'hi' ? 'ਪੰਜਾਬੀ ਵਿੱਚ ਬਦਲੋ' : 'Switch to English'}
                         </button>
                     </div>
                 )}
@@ -153,11 +163,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                             {language === 'en' ? '#1 App for Local Work' : 'स्थानीय काम के लिए #1 ऐप'}
                         </div>
 
-                        <h1 className="text-5xl md:text-7xl font-black text-gray-900 dark:text-white tracking-tight mb-6 leading-tight animate-fade-in-up delay-100">
+                        <h1 className="text-5xl md:text-7xl font-black text-text-primary tracking-tight mb-6 leading-tight animate-fade-in-up delay-100">
                             {t.heroTitle}
                         </h1>
 
-                        <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto mb-10 leading-relaxed animate-fade-in-up delay-200">
+                        <p className="text-xl md:text-2xl text-text-secondary max-w-3xl mx-auto mb-10 leading-relaxed animate-fade-in-up delay-200">
                             {t.heroSubtitle}
                         </p>
 
@@ -191,20 +201,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                 </section>
 
                 {/* --- Persona Split Section (NEW) --- */}
-                <section className="py-12 bg-white dark:bg-gray-900 relative">
+                <section className="py-12 bg-surface relative">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="grid md:grid-cols-2 gap-8">
                             {/* Card 1: For Employers */}
-                            <div className="group relative overflow-hidden rounded-3xl bg-white dark:bg-gray-800 border-2 border-transparent hover:border-blue-500/30 p-8 shadow-xl hover:shadow-2xl transition-all duration-500">
+                            <div className="group relative overflow-hidden rounded-3xl bg-background border-2 border-transparent hover:border-blue-500/30 p-8 shadow-xl hover:shadow-2xl transition-all duration-500">
                                 <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl group-hover:bg-blue-500/10 transition-all" />
                                 <div className="relative z-10">
                                     <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center shadow-sm mb-6 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform duration-500">
                                         <Briefcase size={32} />
                                     </div>
-                                    <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-3">
+                                    <h3 className="text-2xl font-black text-text-primary mb-3">
                                         {t.forEmployers}
                                     </h3>
-                                    <p className="text-gray-600 dark:text-gray-400 mb-6 h-12 font-medium leading-relaxed">
+                                    <p className="text-text-secondary mb-6 h-12 font-medium leading-relaxed">
                                         {t.employerDesc}
                                     </p>
                                     <ul className="space-y-4 mb-8">
@@ -230,10 +240,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                                     <div className="w-16 h-16 bg-emerald-50 dark:bg-emerald-900/30 rounded-2xl flex items-center justify-center shadow-sm mb-6 text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform duration-500">
                                         <Users size={32} />
                                     </div>
-                                    <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-3">
+                                    <h3 className="text-2xl font-black text-text-primary mb-3">
                                         {t.forWorkers}
                                     </h3>
-                                    <p className="text-gray-600 dark:text-gray-400 mb-6 h-12 font-medium leading-relaxed">
+                                    <p className="text-text-secondary mb-6 h-12 font-medium leading-relaxed">
                                         {t.workerDesc}
                                     </p>
                                     <ul className="space-y-4 mb-8">
@@ -285,13 +295,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                 </section>
 
                 {/* --- Categories / Services Grid --- */}
-                <section id="features" className="py-24 bg-gray-50 dark:bg-gray-900/50">
+                <section id="features" className="py-24 bg-background/50">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="text-center mb-16">
-                            <h2 className="text-3xl font-black text-gray-900 dark:text-white mb-4">
+                            <h2 className="text-3xl font-black text-text-primary mb-4">
                                 {t.popularServices}
                             </h2>
-                            <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+                            <p className="text-xl text-text-secondary max-w-2xl mx-auto">
                                 {t.popularServicesDesc}
                             </p>
                         </div>
@@ -318,13 +328,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                 </section>
 
                 {/* --- Testimonials Grid (NEW) --- */}
-                <section className="py-24 bg-white dark:bg-gray-900 overflow-hidden relative">
+                <section className="py-24 bg-surface overflow-hidden relative">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="text-center mb-16">
-                            <h2 className="text-3xl font-black text-gray-900 dark:text-white mb-4">
+                            <h2 className="text-3xl font-black text-text-primary mb-4">
                                 {t.successStories}
                             </h2>
-                            <p className="text-xl text-gray-600 dark:text-gray-400">
+                            <p className="text-xl text-text-secondary">
                                 {t.successStoriesDesc}
                             </p>
                         </div>
@@ -347,18 +357,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, isSignin
                                     img: "https://images.unsplash.com/photo-1629859265738-4e141a27e742?auto=format&fit=crop&q=80&w=200"
                                 }
                             ].map((t, i) => (
-                                <div key={i} className="p-8 bg-gray-50 dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 relative">
+                                <div key={i} className="p-8 bg-background rounded-3xl border border-border relative">
                                     <div className="flex items-center gap-4 mb-6">
-                                        <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-emerald-500">
+                                        <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-primary">
                                             <img src={t.img} alt={t.name} className="w-full h-full object-cover" />
                                         </div>
                                         <div>
-                                            <h4 className="font-bold text-gray-900 dark:text-white">{t.name}</h4>
-                                            <p className="text-xs text-emerale-600 font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">{t.role}</p>
-                                            <p className="text-xs text-gray-500">{t.loc}</p>
+                                            <h4 className="font-bold text-text-primary">{t.name}</h4>
+                                            <p className="text-xs font-bold uppercase tracking-wider text-primary">{t.role}</p>
+                                            <p className="text-xs text-text-muted">{t.loc}</p>
                                         </div>
                                     </div>
-                                    <p className="text-gray-600 dark:text-gray-300 italic">"{t.text}"</p>
+                                    <p className="text-text-secondary italic">"{t.text}"</p>
                                     <div className="flex gap-1 mt-4 text-amber-500">
                                         {[1, 2, 3, 4, 5].map(s => <Star key={s} size={14} fill="currentColor" />)}
                                     </div>

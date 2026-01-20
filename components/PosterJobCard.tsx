@@ -1,6 +1,6 @@
 import React from 'react';
-import { Job, JobStatus } from '../types';
-import { MapPin, Calendar, IndianRupee, Users, Edit2, Trash2, MessageCircle, Phone } from 'lucide-react';
+import { Job, JobStatus, Language } from '../types';
+import { MapPin, Calendar, IndianRupee, Users, Edit2, Trash2, MessageCircle, Phone, AlertCircle, CheckCircle, Sparkles } from 'lucide-react';
 
 interface PosterJobCardProps {
     job: Job;
@@ -8,13 +8,14 @@ interface PosterJobCardProps {
     onEdit: (job: Job) => void;
     onHide: (jobId: string) => void;
     currentUserId?: string; // Not strictly needed but keeps API consistent
-    language: 'en' | 'hi';
+    language: Language;
     isHistory?: boolean;
     onChat?: (job: Job) => void;
+    onClick?: () => void;
 }
 
 export const PosterJobCard: React.FC<PosterJobCardProps> = ({
-    job, onViewBids, onEdit, onHide, language, isHistory = false, onChat
+    job, onViewBids, onEdit, onHide, language, isHistory = false, onChat, onClick
 }) => {
 
     const applicantCount = job.bids?.length || job.bidCount || 0;
@@ -39,7 +40,10 @@ export const PosterJobCard: React.FC<PosterJobCardProps> = ({
     const hasAction = actionRequiredCount > 0;
 
     return (
-        <div className={`bg-white dark:bg-gray-900 border ${hasAction ? 'border-amber-400 dark:border-amber-600 ring-1 ring-amber-400/30' : 'border-gray-100 dark:border-gray-800'} rounded-3xl p-5 shadow-sm relative overflow-hidden transition-all hover:shadow-md active:scale-[0.99] group`}>
+        <div
+            onClick={onClick}
+            className={`bg-surface border ${hasAction ? 'border-amber-500/50 ring-1 ring-amber-500/20' : 'border-border'} rounded-3xl p-5 shadow-sm relative overflow-hidden transition-all hover:shadow-elevation active:scale-[0.99] group cursor-pointer`}
+        >
 
             {/* Status Strip */}
             <div className={`absolute top-0 left-0 w-1.5 h-full ${hasAction ? 'bg-amber-500 animate-pulse' :
@@ -53,21 +57,21 @@ export const PosterJobCard: React.FC<PosterJobCardProps> = ({
                 {/* 1. Top Row: Title & Status Badge */}
                 <div className="flex justify-between items-start">
                     <div>
-                        <h3 className="text-lg font-black text-gray-900 dark:text-white leading-tight mb-1 line-clamp-1">{job.title}</h3>
-                        <div className="flex items-center gap-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                        <h3 className="text-lg font-black text-text-primary leading-tight mb-1 line-clamp-1">{job.title}</h3>
+                        <div className="flex items-center gap-3 text-[10px] font-bold text-text-muted uppercase tracking-wider">
                             <span className="flex items-center gap-1">
                                 <Calendar size={12} />
-                                {new Date(job.createdAt).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                {new Date(job.createdAt).toLocaleDateString(language === 'hi' ? 'hi-IN' : language === 'pa' ? 'pa-IN' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                             </span>
                             {!isHistory && (
                                 <>
                                     <span>•</span>
                                     {hasAction ? (
-                                        <span className="text-amber-600 dark:text-amber-500 flex items-center gap-1">
+                                        <span className="text-amber-500 flex items-center gap-1">
                                             Action Required ({actionRequiredCount})
                                         </span>
                                     ) : (
-                                        <span className={job.status === JobStatus.OPEN ? 'text-emerald-600' : 'text-gray-400'}>
+                                        <span className={job.status === JobStatus.OPEN ? 'text-emerald-500' : 'text-text-muted'}>
                                             {job.status.replace('_', ' ')}
                                         </span>
                                     )}
@@ -76,22 +80,42 @@ export const PosterJobCard: React.FC<PosterJobCardProps> = ({
                         </div>
                     </div>
 
-                    {/* Applicant Counter Badge (Active Only) */}
+                    {/* Applicant Counter Badge (Active Only) - MOVED TO ACCOMMODATE STATUS CHIPS */}
+                </div>
+
+                {/* 2. Premium Status Row (New) */}
+                <div className="flex flex-wrap gap-2 mb-2">
+                    {hasAction ? (
+                        <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white py-1.5 px-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-1.5 shadow-lg shadow-amber-500/20 animate-pulse border border-white/10">
+                            <AlertCircle size={12} strokeWidth={3} /> {language === 'en' ? 'Action Required' : 'कारवाई आवश्यक'}
+                        </div>
+                    ) : job.hasAgreement ? (
+                        <div className="bg-emerald-500 text-white py-1.5 px-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-1.5 shadow-emerald-500/30 shadow-lg animate-pulse-subtle border border-white/20">
+                            <CheckCircle size={12} strokeWidth={3} /> {language === 'en' ? 'Agreement Reached' : 'सहमति बन गई'}
+                        </div>
+                    ) : job.hasNewBid ? (
+                        <div className="bg-blue-600 text-white py-1.5 px-3 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-blue-500/20 animate-bounce-subtle flex items-center gap-1.5">
+                            <Sparkles size={12} strokeWidth={3} /> {language === 'en' ? 'Fresh Bids' : 'नई बोलियां'}
+                        </div>
+                    ) : null}
+
+                    {/* Applicant Counter Badge */}
                     {!isHistory && (
-                        <div className={`flex flex-col items-center justify-center rounded-xl px-3 py-2 min-w-[60px] ${hasAction ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-gray-50 dark:bg-gray-800'}`}>
-                            <span className={`text-sm font-black ${hasAction ? 'text-amber-700 dark:text-amber-400' : 'text-gray-900 dark:text-white'}`}>{applicantCount}</span>
-                            <span className={`text-[8px] font-bold uppercase tracking-widest ${hasAction ? 'text-amber-600/70 dark:text-amber-400/70' : 'text-gray-400'}`}>Bids</span>
+                        <div className={`flex items-center gap-1.5 px-2 py-1.5 rounded-xl border ${hasAction ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-background border-border text-text-muted'}`}>
+                            <Users size={12} strokeWidth={2.5} />
+                            <span className="text-[10px] font-black">{applicantCount}</span>
+                            <span className="text-[9px] uppercase font-bold tracking-wider">{language === 'en' ? 'Bids' : 'बोलियां'}</span>
                         </div>
                     )}
                 </div>
 
                 {/* 2. Middle Row: Quick Stats */}
-                <div className="flex items-center gap-4 text-xs font-bold text-gray-600 dark:text-gray-400">
-                    <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800 px-2 py-1 rounded-lg">
+                <div className="flex items-center gap-4 text-xs font-bold text-text-secondary">
+                    <div className="flex items-center gap-1.5 bg-background px-2 py-1 rounded-lg border border-border">
                         <span>₹{job.budget}</span>
                     </div>
-                    <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800 px-2 py-1 rounded-lg">
-                        <MapPin size={12} />
+                    <div className="flex items-center gap-1.5 bg-background px-2 py-1 rounded-lg border border-border">
+                        <MapPin size={12} className="text-text-muted" />
                         <span className="truncate max-w-[100px]">{job.location}</span>
                     </div>
                 </div>
@@ -135,7 +159,7 @@ export const PosterJobCard: React.FC<PosterJobCardProps> = ({
                             <>
                                 <button
                                     onClick={(e) => { e.stopPropagation(); onViewBids(job); }}
-                                    className="flex-1 bg-gray-900 dark:bg-white text-white dark:text-gray-900 h-10 rounded-xl flex items-center justify-center gap-2 text-xs font-black uppercase tracking-wider shadow-lg shadow-gray-200 dark:shadow-none hover:bg-gray-800 transition-colors"
+                                    className="flex-1 bg-text-primary text-background h-10 rounded-xl flex items-center justify-center gap-2 text-xs font-black uppercase tracking-wider shadow-lg shadow-black/5 hover:bg-text-primary/90 transition-colors"
                                 >
                                     <Users size={14} />
                                     {language === 'en' ? 'Manage Applications' : 'आवेदन प्रबंधित करें'}
@@ -143,14 +167,14 @@ export const PosterJobCard: React.FC<PosterJobCardProps> = ({
 
                                 <button
                                     onClick={(e) => { e.stopPropagation(); onEdit(job); }}
-                                    className="w-10 h-10 rounded-xl border border-gray-200 dark:border-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                                    className="w-10 h-10 rounded-xl border border-border flex items-center justify-center text-text-secondary hover:bg-background transition-colors"
                                 >
                                     <Edit2 size={16} />
                                 </button>
 
                                 <button
                                     onClick={(e) => { e.stopPropagation(); onHide(job.id); }}
-                                    className="w-10 h-10 rounded-xl border border-gray-200 dark:border-gray-700 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                    className="w-10 h-10 rounded-xl border border-border flex items-center justify-center text-text-muted hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                                     title={language === 'en' ? "Delete Job" : "काम हटाएं"}
                                 >
                                     <Trash2 size={16} />
@@ -159,7 +183,7 @@ export const PosterJobCard: React.FC<PosterJobCardProps> = ({
                         )}
                     </div>
                 ) : (
-                    <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                    <div className="mt-3 pt-3 border-t border-border flex items-center justify-between">
                         <div>
                             {job.status === JobStatus.CANCELLED ? (
                                 <div className="text-xs font-black text-red-500 uppercase tracking-wider flex items-center gap-1">
@@ -167,8 +191,8 @@ export const PosterJobCard: React.FC<PosterJobCardProps> = ({
                                 </div>
                             ) : (
                                 <div className="flex flex-col">
-                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">HIRED</span>
-                                    <span className="text-sm font-bold text-gray-900 dark:text-white">
+                                    <span className="text-[9px] font-black text-text-muted uppercase tracking-widest">HIRED</span>
+                                    <span className="text-sm font-bold text-text-primary">
                                         {hiredWorkerName || (language === 'en' ? 'Worker' : 'कामगार')}
                                     </span>
                                 </div>
@@ -176,7 +200,7 @@ export const PosterJobCard: React.FC<PosterJobCardProps> = ({
                         </div>
                         <button
                             onClick={(e) => { e.stopPropagation(); onViewBids(job); }}
-                            className="px-4 py-2 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-gray-100 transition-colors"
+                            className="px-4 py-2 bg-background text-text-secondary rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-border transition-colors"
                         >
                             {language === 'en' ? 'View Details' : 'विवरण देखें'}
                         </button>
@@ -184,7 +208,7 @@ export const PosterJobCard: React.FC<PosterJobCardProps> = ({
                         {/* History Archive Button */}
                         <button
                             onClick={(e) => { e.stopPropagation(); onHide(job.id); }}
-                            className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors ml-2"
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-text-muted hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors ml-2"
                             title={language === 'en' ? "Remove from History" : "इतिहास से हटाएं"}
                         >
                             <Trash2 size={14} />

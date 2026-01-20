@@ -8,40 +8,29 @@ export default {
     ],
     theme: {
         extend: {
-            animation: {
-                'fade-in': 'fadeIn 0.3s ease-out',
-                'slide-up': 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-                'slide-down': 'slideDown 0.3s ease-out',
-                'slide-in-right': 'slideInRight 0.3s ease-out',
-                'slide-in-left': 'slideInLeft 0.3s ease-out',
-                'pop': 'pop 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-                'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            fontFamily: {
+                sans: ['Inter', 'system-ui', 'sans-serif'],
+                heading: ['Plus Jakarta Sans', 'Inter', 'sans-serif'],
             },
-            keyframes: {
-                fadeIn: {
-                    '0%': { opacity: '0' },
-                    '100%': { opacity: '1' },
-                },
-                slideUp: {
-                    '0%': { transform: 'translateY(100%)' },
-                    '100%': { transform: 'translateY(0)' },
-                },
-                slideDown: {
-                    '0%': { transform: 'translateY(-20px)', opacity: '0' },
-                    '100%': { transform: 'translateY(0)', opacity: '1' },
-                },
-                slideInRight: {
-                    '0%': { transform: 'translateX(20px)', opacity: '0' },
-                    '100%': { transform: 'translateX(0)', opacity: '1' },
-                },
-                slideInLeft: {
-                    '0%': { transform: 'translateX(-20px)', opacity: '0' },
-                    '100%': { transform: 'translateX(0)', opacity: '1' },
-                },
-                pop: {
-                    '0%': { transform: 'scale(0.95)', opacity: '0' },
-                    '100%': { transform: 'scale(1)', opacity: '1' },
-                }
+            colors: {
+                // Semantic Colors (Mapped to CSS Variables)
+                background: 'var(--bg-base)',
+                surface: 'var(--bg-card)',
+                primary: 'var(--primary)',
+                'primary-foreground': '#ffffff',
+                border: 'var(--border-subtle)',
+                muted: 'var(--text-muted)',
+                'text-primary': 'var(--text-primary)',
+                'text-secondary': 'var(--text-secondary)',
+            },
+            borderRadius: {
+                'squircle': '1.25rem', // ~20px
+                '2xl': '1rem',
+                '3xl': '1.5rem',
+            },
+            boxShadow: {
+                'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.12)',
+                'elevation': '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
             }
         },
     },

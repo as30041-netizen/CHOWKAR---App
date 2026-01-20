@@ -1,4 +1,7 @@
 {
+    "css.validate": false,
+    "less.validate": false,
+    "scss.validate": false,
     "deno.enable": true,
     "deno.enablePaths": [
         "supabase/functions"

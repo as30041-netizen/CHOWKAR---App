@@ -47,7 +47,7 @@ export const useJobActions = () => {
             if (result.success) {
                 showAlert(t.jobCancelledRefunded || 'Job cancelled successfully.', 'success');
                 // Refresh jobs to update the UI
-                await refreshJobs(user.id);
+                await refreshJobs();
                 return true;
             } else {
                 showAlert(result.error || 'Failed to cancel job', 'error');

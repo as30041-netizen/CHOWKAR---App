@@ -66,25 +66,25 @@ export const Analytics: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-24 pt-safe">
+        <div className="min-h-screen bg-background pb-24 pt-safe">
             {/* Header */}
-            <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-6 py-6 sticky top-0 z-30 backdrop-blur-xl bg-opacity-80">
+            <div className="bg-surface/80 border-b border-border px-6 py-6 sticky top-0 z-30 backdrop-blur-xl">
                 <div className="max-w-7xl mx-auto flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <button
                             onClick={() => navigate(-1)}
-                            className="p-3 rounded-2xl bg-gray-50 dark:bg-gray-800 text-gray-500 hover:text-gray-900 dark:hover:text-white transition-all active:scale-95"
+                            className="p-3 rounded-2xl bg-background border border-border text-text-secondary hover:text-text-primary transition-all active:scale-95"
                         >
                             <ArrowLeft size={20} />
                         </button>
                         <div>
-                            <h1 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">Market Insights</h1>
-                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Real-time Business Intelligence</p>
+                            <h1 className="text-xl font-black text-text-primary tracking-tight">Market Insights</h1>
+                            <p className="text-[10px] font-bold text-primary uppercase tracking-widest">Real-time Business Intelligence</p>
                         </div>
                     </div>
                     <button
                         onClick={fetchData}
-                        className={`p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 transition-all active:scale-95 ${loading ? 'animate-spin' : ''}`}
+                        className={`p-3 rounded-2xl bg-primary/10 text-primary transition-all active:scale-95 ${loading ? 'animate-spin' : ''}`}
                     >
                         <RefreshCw size={20} />
                     </button>
@@ -104,7 +104,7 @@ export const Analytics: React.FC = () => {
                     <StatCard
                         title="Completed Value"
                         value={stats ? formatCurrency(stats.market_cap_completed) : '₹0'}
-                        icon={<IndianRupee className="text-emerald-500" />}
+                        icon={<IndianRupee className="text-primary" />}
                         description="Total wealth generated"
                         loading={loading}
                     />
@@ -134,42 +134,42 @@ export const Analytics: React.FC = () => {
                 {/* Detailed Trends */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     {/* Category Table */}
-                    <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border-2 border-gray-100 dark:border-gray-800 p-8 shadow-sm">
+                    <div className="card p-8 bg-surface border border-border">
                         <div className="flex items-center gap-3 mb-8">
-                            <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-2xl text-blue-600">
+                            <div className="p-3 bg-primary/10 rounded-2xl text-primary">
                                 <PieChart size={24} />
                             </div>
-                            <h3 className="text-lg font-black dark:text-white">Category Performance</h3>
+                            <h3 className="text-lg font-black text-text-primary">Category Performance</h3>
                         </div>
 
                         <div className="space-y-6">
                             {loading ? (
                                 Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} />)
                             ) : trends.map((trend, i) => (
-                                <div key={i} className="group hover:bg-gray-50 dark:hover:bg-gray-800/50 p-4 -mx-4 rounded-3xl transition-all">
+                                <div key={i} className="group hover:bg-background p-4 -mx-4 rounded-3xl transition-all border border-transparent hover:border-border">
                                     <div className="flex items-center justify-between mb-2">
                                         <div className="flex items-center gap-3">
-                                            <span className="text-sm font-black text-gray-900 dark:text-white">{trend.category}</span>
-                                            <span className="text-[10px] bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-lg text-gray-500">{trend.job_count} posts</span>
+                                            <span className="text-sm font-black text-text-primary">{trend.category}</span>
+                                            <span className="text-[10px] bg-background border border-border px-2 py-0.5 rounded-lg text-text-muted">{trend.job_count} posts</span>
                                         </div>
-                                        <span className="text-sm font-black text-blue-600">{formatCurrency(trend.avg_budget)} <span className="text-[10px] text-gray-400 font-medium">avg</span></span>
+                                        <span className="text-sm font-black text-primary">{formatCurrency(trend.avg_budget)} <span className="text-[10px] text-text-muted font-medium">avg</span></span>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-1">
-                                            <div className="flex justify-between text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                            <div className="flex justify-between text-[10px] font-bold text-text-muted uppercase tracking-widest">
                                                 <span>Completion</span>
                                                 <span className="text-emerald-500">{trend.completion_rate}%</span>
                                             </div>
-                                            <div className="h-1.5 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                                            <div className="h-1.5 w-full bg-border rounded-full overflow-hidden">
                                                 <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${trend.completion_rate}%` }} />
                                             </div>
                                         </div>
                                         <div className="space-y-1">
-                                            <div className="flex justify-between text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                            <div className="flex justify-between text-[10px] font-bold text-text-muted uppercase tracking-widest">
                                                 <span>Withdrawals</span>
                                                 <span className="text-red-500">{trend.withdrawal_rate}%</span>
                                             </div>
-                                            <div className="h-1.5 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                                            <div className="h-1.5 w-full bg-border rounded-full overflow-hidden">
                                                 <div className="h-full bg-red-500 transition-all duration-1000" style={{ width: `${trend.withdrawal_rate}%` }} />
                                             </div>
                                         </div>
@@ -205,7 +205,7 @@ export const Analytics: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="bg-emerald-500 rounded-[2.5rem] p-8 text-white shadow-xl shadow-emerald-500/20 overflow-hidden relative">
+                        <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-[2.5rem] p-8 text-white shadow-xl path-grid relative overflow-hidden">
                             <div className="relative z-10 flex items-center justify-between">
                                 <div>
                                     <h3 className="text-lg font-black mb-1">Growth Forecast</h3>
@@ -224,31 +224,31 @@ export const Analytics: React.FC = () => {
 };
 
 const StatCard: React.FC<{ title: string; value: string | number; icon: React.ReactNode; description: string; loading: boolean }> = ({ title, value, icon, description, loading }) => (
-    <div className="bg-white dark:bg-gray-900 p-8 rounded-[2.5rem] border-2 border-gray-100 dark:border-gray-800 shadow-sm transition-all hover:scale-[1.02] active:scale-95 group">
+    <div className="card bg-surface border border-border p-8 hover:scale-[1.02] active:scale-95 group">
         <div className="flex items-center justify-between mb-6">
-            <div className="w-12 h-12 rounded-2xl bg-gray-50 dark:bg-gray-800 flex items-center justify-center transition-transform group-hover:rotate-12">
+            <div className="w-12 h-12 rounded-2xl bg-background border border-border flex items-center justify-center transition-transform group-hover:rotate-12">
                 {icon}
             </div>
-            <span className="text-[10px] font-black text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1.5 rounded-xl uppercase tracking-widest">+12%</span>
+            <span className="text-[10px] font-black text-primary bg-primary/10 px-3 py-1.5 rounded-xl uppercase tracking-widest">+12%</span>
         </div>
         <div>
             {loading ? (
-                <div className="h-8 w-24 bg-gray-100 dark:bg-gray-800 rounded-lg animate-pulse mb-2" />
+                <div className="h-8 w-24 bg-border rounded-lg animate-pulse mb-2" />
             ) : (
-                <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-1 tracking-tight">{value}</h3>
+                <h3 className="text-2xl font-black text-text-primary mb-1 tracking-tight">{value}</h3>
             )}
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{title}</p>
-            <p className="text-[10px] text-gray-400 font-medium leading-tight">{description}</p>
+            <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1">{title}</p>
+            <p className="text-[10px] text-text-secondary font-medium leading-tight">{description}</p>
         </div>
     </div>
 );
 
 const SkeletonRow = () => (
-    <div className="space-y-3 p-4 bg-gray-50/50 dark:bg-gray-800/30 rounded-3xl animate-pulse">
+    <div className="space-y-3 p-4 bg-background rounded-3xl animate-pulse">
         <div className="flex justify-between">
-            <div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded" />
-            <div className="h-4 w-12 bg-gray-200 dark:bg-gray-700 rounded" />
+            <div className="h-4 w-32 bg-border rounded" />
+            <div className="h-4 w-12 bg-border rounded" />
         </div>
-        <div className="h-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full" />
+        <div className="h-2 w-full bg-border rounded-full" />
     </div>
 );

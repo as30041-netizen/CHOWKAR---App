@@ -79,7 +79,7 @@ export const useChatHandlers = (setShowEditProfile: (show: boolean) => void, set
         setActiveJobId(null);
     };
 
-    const sendMessage = async (text: string) => {
+    const sendMessage = async (text: string, customId?: string) => {
         if (!chatState.job) return;
         const job = chatState.job;
         const isPoster = user.id === job.posterId;
@@ -102,7 +102,7 @@ export const useChatHandlers = (setShowEditProfile: (show: boolean) => void, set
 
 
         const newMessage: ChatMessage = {
-            id: 'temp_' + Date.now(),
+            id: customId || ('temp_' + Date.now()),
             jobId: job.id,
             senderId: user.id,
             receiverId: receiverId || '',
@@ -119,18 +119,26 @@ export const useChatHandlers = (setShowEditProfile: (show: boolean) => void, set
             const { safeFetch } = await import('../services/fetchUtils');
             const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
+            const payload: any = {
+                job_id: newMessage.jobId,
+                sender_id: newMessage.senderId,
+                receiver_id: newMessage.receiverId,
+                text: newMessage.text
+            };
+
+            // CRITICAL: If customId is provided (UUID), use it as the PK.
+            // This ensures Broadcast (Client) and DB (Server) share the same ID, preventing duplicates.
+            if (customId) {
+                payload.id = customId;
+            }
+
             await safeFetch(`${supabaseUrl}/rest/v1/chat_messages`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Prefer': 'return=representation'
                 },
-                body: JSON.stringify({
-                    job_id: newMessage.jobId,
-                    sender_id: newMessage.senderId,
-                    receiver_id: newMessage.receiverId,
-                    text: newMessage.text
-                })
+                body: JSON.stringify(payload)
             });
         } catch (err) {
             console.error('Error sending message:', err);

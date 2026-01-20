@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { deleteAccount } from '../services/authService';
 import { useWallet } from '../contexts/WalletContext';
 import { Trash2, AlertTriangle, X, Wallet as WalletIcon, BrainCircuit } from 'lucide-react';
+import { ProfileSkeleton } from '../components/Skeleton';
 
 interface ProfileProps {
     setShowSubscriptionModal: (show: boolean) => void;
@@ -20,6 +21,7 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
     const [postedJobsCount, setPostedJobsCount] = useState(0);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
     React.useEffect(() => {
         const fetchJobCount = async () => {
@@ -34,6 +36,10 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
             if (!error && count !== null) {
                 setPostedJobsCount(count);
             }
+            if (!error && count !== null) {
+                setPostedJobsCount(count);
+            }
+            setIsLoading(false);
         };
         if (user.id) fetchJobCount();
     }, [user.id]);
@@ -69,25 +75,31 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
         }
     };
 
+    if (isLoading) return (
+        <div className="pb-32 md:pb-10 pt-safe px-6 max-w-4xl mx-auto space-y-10">
+            <ProfileSkeleton />
+        </div>
+    );
+
     return (
-        <div className="pb-32 md:pb-10 animate-fade-in px-6 max-w-4xl mx-auto space-y-10 pt-8">
+        <div className="pb-32 md:pb-10 animate-fade-in px-6 max-w-4xl mx-auto space-y-10 pt-safe transition-all">
             {/* Navigation Header - Hidden on desktop as main header is visible */}
-            <div className="flex md:hidden items-center gap-4">
+            <div className="flex md:hidden items-center gap-4 pt-4">
                 <button
                     onClick={() => window.history.back()}
-                    className="p-4 bg-white dark:bg-gray-900 rounded-3xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-all active:scale-90 shadow-glass border border-gray-100 dark:border-gray-800 group"
+                    className="p-4 bg-surface rounded-3xl text-text-secondary hover:text-text-primary transition-all active:scale-90 shadow-glass border border-border group"
                     title="Go Back"
                 >
                     <ArrowLeft size={24} strokeWidth={2.5} className="group-hover:-translate-x-0.5 transition-transform" />
                 </button>
                 <div>
-                    <h3 className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-[0.3em] leading-none mb-1">{t.myProfile || 'Profile'}</h3>
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight leading-none">{user.name}</h2>
+                    <h3 className="text-[10px] font-bold text-primary uppercase tracking-[0.3em] leading-none mb-1">{t.myProfile || 'Profile'}</h3>
+                    <h2 className="text-xl font-bold text-text-primary tracking-tight leading-none">{user.name}</h2>
                 </div>
             </div>
 
             {/* Header Profile Card */}
-            <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800/50 overflow-hidden transition-all group relative">
+            <div className="bg-surface rounded-3xl shadow-sm border border-border overflow-hidden transition-all group relative">
                 <div className="h-56 bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 relative overflow-hidden group-hover:scale-[1.02] transition-transform duration-1000">
                     <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
@@ -109,12 +121,12 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
                 </div>
 
                 <div className="px-8 pb-10 -mt-20 flex flex-col items-center relative z-10">
-                    <div className="w-32 h-32 bg-white dark:bg-gray-900 p-1.5 rounded-3xl shadow-xl mb-4 relative group/avatar">
-                        <div className="w-full h-full rounded-[1.25rem] overflow-hidden bg-gray-50 dark:bg-gray-800 flex items-center justify-center border-2 border-gray-100 dark:border-gray-800">
+                    <div className="w-32 h-32 bg-surface p-1.5 rounded-3xl shadow-xl mb-4 relative group/avatar">
+                        <div className="w-full h-full rounded-[1.25rem] overflow-hidden bg-background flex items-center justify-center border-2 border-border">
                             {user.profilePhoto ? (
                                 <img src={user.profilePhoto} className="w-full h-full object-cover group-hover/avatar:scale-110 transition-transform duration-700" alt={user.name} />
                             ) : (
-                                <span className="text-4xl font-bold text-emerald-600 dark:text-emerald-400">{(user.name || '?').charAt(0)}</span>
+                                <span className="text-4xl font-bold text-primary">{(user.name || '?').charAt(0)}</span>
                             )}
                         </div>
                         {user.verified && (
@@ -123,9 +135,9 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
                             </div>
                         )}
                     </div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight mb-2">{user.name}</h2>
-                    <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 font-bold text-[9px] uppercase tracking-[0.2em] bg-gray-50 dark:bg-gray-800/50 px-5 py-2 rounded-full border border-gray-100 dark:border-gray-800 shadow-sm">
-                        <MapPin size={12} className="text-emerald-500" strokeWidth={3} /> {user.location || 'Location not set'}
+                    <h2 className="text-2xl font-bold text-text-primary tracking-tight mb-2">{user.name}</h2>
+                    <div className="flex items-center gap-2 text-text-secondary font-bold text-[9px] uppercase tracking-[0.2em] bg-background px-5 py-2 rounded-full border border-border shadow-sm">
+                        <MapPin size={12} className="text-primary" strokeWidth={3} /> {user.location || 'Location not set'}
                     </div>
                 </div>
             </div>
@@ -160,12 +172,12 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
                     { icon: CheckCircle2, value: user.jobsCompleted || 0, label: t.jobsDone, color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/10', border: 'border-blue-100 dark:border-blue-900/30' },
                     { icon: Briefcase, value: postedJobsCount, label: t.jobsPosted, color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/10', border: 'border-orange-100 dark:border-orange-900/30' }
                 ].map((stat, i) => (
-                    <div key={i} className={`bg-white dark:bg-gray-900 p-6 rounded-3xl border ${stat.border} shadow-sm text-center group hover:-translate-y-1 transition-all duration-300`}>
+                    <div key={i} className={`bg-surface p-6 rounded-3xl border ${stat.border} shadow-sm text-center group hover:-translate-y-1 transition-all duration-300`}>
                         <div className={`${stat.bg} ${stat.color} w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform`}>
                             <stat.icon size={22} strokeWidth={2.5} />
                         </div>
-                        <div className="font-bold text-gray-900 dark:text-white text-xl tracking-tight mb-0.5">{stat.value}</div>
-                        <div className="text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">{stat.label}</div>
+                        <div className="font-bold text-text-primary text-xl tracking-tight mb-0.5">{stat.value}</div>
+                        <div className="text-[9px] font-bold text-text-muted uppercase tracking-[0.2em]">{stat.label}</div>
                     </div>
                 ))}
             </div>
@@ -175,7 +187,7 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
                 {/* Wallet Balance Card */}
                 <div
                     onClick={() => navigate('/wallet')}
-                    className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-amber-500/20 dark:border-amber-500/10 shadow-sm cursor-pointer hover:scale-[1.01] active:scale-95 transition-all group overflow-hidden relative"
+                    className="bg-surface rounded-3xl p-6 border border-amber-500/20 dark:border-amber-500/10 shadow-sm cursor-pointer hover:scale-[1.01] active:scale-95 transition-all group overflow-hidden relative"
                 >
                     <div className="absolute -right-4 -top-4 w-32 h-32 bg-amber-50 dark:bg-amber-900/10 rounded-full blur-3xl group-hover:bg-amber-100 transition-colors" />
                     <div className="relative z-10 flex items-center justify-between">
@@ -184,7 +196,7 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
                                 <WalletIcon size={24} strokeWidth={2.5} />
                             </div>
                             <div>
-                                <h3 className="text-base font-bold text-gray-900 dark:text-white leading-none mb-1">My Wallet</h3>
+                                <h3 className="text-base font-bold text-text-primary leading-none mb-1">My Wallet</h3>
                                 <p className="text-xl font-bold text-amber-600 tracking-tight">{walletBalance} <span className="text-[10px] uppercase tracking-widest text-amber-400">Coins</span></p>
                             </div>
                         </div>
@@ -197,7 +209,7 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
 
                 {/* AI usage Tracker Card */}
                 <div
-                    className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-indigo-500/20 dark:border-indigo-500/10 shadow-sm transition-all group overflow-hidden relative"
+                    className="bg-surface rounded-3xl p-6 border border-indigo-500/20 dark:border-indigo-500/10 shadow-sm transition-all group overflow-hidden relative"
                 >
                     <div className="absolute -right-4 -top-4 w-32 h-32 bg-indigo-50 dark:bg-indigo-900/10 rounded-full blur-3xl" />
                     <div className="relative z-10 flex items-center justify-between">
@@ -206,9 +218,9 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
                                 <BrainCircuit size={24} strokeWidth={2.5} />
                             </div>
                             <div>
-                                <h3 className="text-base font-bold text-gray-900 dark:text-white leading-none mb-1">AI Usage</h3>
+                                <h3 className="text-base font-bold text-text-primary leading-none mb-1">AI Usage</h3>
                                 <div className="flex items-center gap-2">
-                                    <div className="h-1.5 w-20 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                                    <div className="h-1.5 w-20 bg-background rounded-full overflow-hidden">
                                         <div
                                             className="h-full bg-indigo-500 rounded-full transition-all duration-1000"
                                             style={{ width: `${Math.min(100, (user.aiUsageCount || 0) * 10)}%` }}
@@ -235,38 +247,38 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
             {/* Double Column Info Section */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* About Me */}
-                <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 border border-gray-100 dark:border-gray-800 shadow-sm space-y-4">
-                    <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em] flex items-center gap-2">
-                        <div className="w-1 h-3 bg-emerald-500 rounded-full" />
+                <div className="bg-surface rounded-3xl p-8 border border-border shadow-sm space-y-4">
+                    <h3 className="text-[10px] font-bold text-text-muted uppercase tracking-[0.3em] flex items-center gap-2">
+                        <div className="w-1 h-3 bg-primary rounded-full" />
                         {t.aboutMe}
                     </h3>
-                    <p className="text-gray-600 dark:text-gray-300 text-base leading-relaxed font-medium">
+                    <p className="text-text-secondary text-base leading-relaxed font-medium">
                         {user.bio || "No bio added yet. Tell people more about your professional background and service quality."}
                     </p>
                 </div>
 
                 {/* Skills */}
-                <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 border border-gray-100 dark:border-gray-800 shadow-sm space-y-4">
-                    <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em] flex items-center gap-2">
-                        <div className="w-1 h-3 bg-teal-500 rounded-full" />
+                <div className="bg-surface rounded-3xl p-8 border border-border shadow-sm space-y-4">
+                    <h3 className="text-[10px] font-bold text-text-muted uppercase tracking-[0.3em] flex items-center gap-2">
+                        <div className="w-1 h-3 bg-primary rounded-full" />
                         Professional Skills
                     </h3>
                     <div className="flex flex-wrap gap-2">
                         {user.skills && user.skills.length > 0 ? user.skills.map((s, i) => (
-                            <span key={i} className="bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 text-[9px] font-bold uppercase tracking-widest px-4 py-2 rounded-xl border border-emerald-100 dark:border-emerald-800/50 shadow-sm flex items-center gap-1.5">
+                            <span key={i} className="bg-primary/10 text-primary text-[9px] font-bold uppercase tracking-widest px-4 py-2 rounded-xl border border-primary/20 shadow-sm flex items-center gap-1.5">
                                 <Zap size={11} fill="currentColor" /> {s}
                             </span>
                         )) : (
-                            <div className="py-2 px-1 text-gray-400 dark:text-gray-600 italic text-sm">No skills added yet. Skill up to get noticed!</div>
+                            <div className="py-2 px-1 text-text-muted italic text-sm">No skills added yet. Skill up to get noticed!</div>
                         )}
                     </div>
                 </div>
             </div>
 
             {/* Reviews Section */}
-            <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 border border-gray-100 dark:border-gray-800 shadow-sm space-y-8">
+            <div className="bg-surface rounded-3xl p-8 border border-border shadow-sm space-y-8">
                 <div className="flex items-center justify-between">
-                    <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em] flex items-center gap-2">
+                    <h3 className="text-[10px] font-bold text-text-muted uppercase tracking-[0.3em] flex items-center gap-2">
                         <div className="w-1 h-3 bg-amber-500 rounded-full" />
                         Community Reviews
                     </h3>
@@ -282,12 +294,12 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
                             <div key={review.id} className="relative group/review">
                                 <div className="flex justify-between items-start mb-4">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center font-bold text-emerald-600 text-base">
+                                        <div className="w-10 h-10 rounded-xl bg-background flex items-center justify-center font-bold text-primary text-base">
                                             {review.reviewerName?.charAt(0)}
                                         </div>
                                         <div>
-                                            <span className="font-bold text-gray-900 dark:text-white block text-base mb-0.5">{review.reviewerName}</span>
-                                            <span className="text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">{new Date(review.date).toLocaleDateString()}</span>
+                                            <span className="font-bold text-text-primary block text-base mb-0.5">{review.reviewerName}</span>
+                                            <span className="text-[9px] font-bold text-text-muted uppercase tracking-[0.2em]">{new Date(review.date).toLocaleDateString()}</span>
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-900/10 px-3 py-1.5 rounded-xl border border-amber-100 dark:border-amber-900/30">
@@ -299,21 +311,21 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
                                 {review.tags && review.tags.length > 0 && (
                                     <div className="flex flex-wrap gap-1.5 mb-3 pl-13 px-1">
                                         {review.tags.map((tag, i) => (
-                                            <span key={i} className="text-[8px] font-bold uppercase tracking-widest text-gray-400 bg-gray-50 dark:bg-gray-800/50 px-2.5 py-1 rounded-lg border border-gray-100 dark:border-gray-800">
+                                            <span key={i} className="text-[8px] font-bold uppercase tracking-widest text-text-muted bg-background px-2.5 py-1 rounded-lg border border-border">
                                                 {REVIEW_TAGS_TRANSLATIONS[tag]?.[language === 'hi' ? 'hi' : 'en'] || tag}
                                             </span>
                                         ))}
                                     </div>
                                 )}
 
-                                <blockquote className="text-base text-gray-600 dark:text-gray-400 italic font-medium leading-relaxed pl-4 border-l-2 border-gray-100 dark:border-gray-800">
+                                <blockquote className="text-base text-text-secondary italic font-medium leading-relaxed pl-4 border-l-2 border-border">
                                     "{review.comment}"
                                 </blockquote>
                             </div>
                         ))
                     ) : (
-                        <div className="text-center py-10 bg-gray-100/50 dark:bg-gray-800/50 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700">
-                            <h4 className="text-lg font-bold text-gray-400 dark:text-gray-600 uppercase tracking-widest">No Feedback Yet</h4>
+                        <div className="text-center py-10 bg-background/50 rounded-2xl border border-dashed border-border">
+                            <h4 className="text-lg font-bold text-text-muted uppercase tracking-widest">No Feedback Yet</h4>
                         </div>
                     )}
                 </div>
@@ -342,7 +354,7 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
 
                 <button
                     onClick={() => setShowDeleteConfirm(true)}
-                    className="w-full flex items-center justify-center gap-3 text-gray-400 dark:text-gray-500 py-3 hover:text-red-500 transition-colors font-bold uppercase tracking-[0.2em] text-[9px]"
+                    className="w-full flex items-center justify-center gap-3 text-text-muted py-3 hover:text-red-500 transition-colors font-bold uppercase tracking-[0.2em] text-[9px]"
                 >
                     <Trash2 size={12} /> {language === 'hi' ? 'खाता हटाएं' : 'Delete Account'}
                 </button>

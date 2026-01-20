@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { UserCircle, Loader2, MapPin, ArrowLeft, Camera, Plus, ChevronRight, Gift, CheckCircle2 as CheckCircle, Sparkles } from 'lucide-react';
+import { UserCircle, Loader2, MapPin, ArrowLeft, Camera, Plus, ChevronRight, Gift, CheckCircle2 as CheckCircle, Sparkles, X } from 'lucide-react';
 import { useUser } from '../contexts/UserContextDB';
 import { useNotification } from '../contexts/NotificationContext';
 import { uploadProfileImage, isBase64Image } from '../services/storageService';
 import { getDeviceLocation, reverseGeocode, forwardGeocode } from '../utils/geo';
 import { LeafletMap } from './LeafletMap';
+import { CATEGORY_CONFIG } from '../constants';
 
 interface EditProfileModalProps {
     isOpen: boolean;
@@ -23,13 +24,14 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
     const [editProfileLocation, setEditProfileLocation] = useState('');
     const [editProfileBio, setEditProfileBio] = useState('');
     const [editProfileExp, setEditProfileExp] = useState('');
-    const [editProfileSkills, setEditProfileSkills] = useState('');
+    const [editProfileSkills, setEditProfileSkills] = useState<string[]>([]);
     const [editProfilePhoto, setEditProfilePhoto] = useState('');
     const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [isLocating, setIsLocating] = useState(false);
     const [newCoordinates, setNewCoordinates] = useState<{ lat: number; lng: number } | undefined>(undefined);
     const [searchQuery, setSearchQuery] = useState('');
+    const [customSkillInput, setCustomSkillInput] = useState('');
 
     // Initialize state when modal opens
     useEffect(() => {
@@ -39,7 +41,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
             setEditProfileLocation(user.location || '');
             setEditProfileBio(user.bio || '');
             setEditProfileExp(user.experience || '');
-            setEditProfileSkills(user.skills?.join(', ') || '');
+            setEditProfileSkills(user.skills || []);
             setEditProfilePhoto(user.profilePhoto || '');
         }
     }, [isOpen, user]);
@@ -84,7 +86,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                 location: editProfileLocation.trim(),
                 bio: editProfileBio.trim(),
                 experience: editProfileExp.trim(),
-                skills: editProfileSkills.split(',').map(s => s.trim()).filter(s => s),
+                skills: editProfileSkills,
                 profilePhoto: finalPhotoUrl,
                 coordinates: newCoordinates
             };
@@ -182,10 +184,20 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
         setIsLocating(false);
     };
 
+    const handleAddCustomSkill = () => {
+        if (!customSkillInput.trim()) return;
+        if (editProfileSkills.includes(customSkillInput.trim())) {
+            setCustomSkillInput('');
+            return;
+        }
+        setEditProfileSkills(prev => [...prev, customSkillInput.trim()]);
+        setCustomSkillInput('');
+    };
+
     return (
         <div className="fixed inset-0 z-[120] flex items-center justify-center pointer-events-none p-4">
             <div className={`absolute inset-0 bg-black/60 backdrop-blur-xl pointer-events-auto transition-opacity animate-fade-in ${!isMandatory ? 'cursor-pointer' : ''}`} onClick={!isMandatory ? onClose : undefined} />
-            <div className="bg-white dark:bg-gray-950 w-full max-w-xl rounded-[3rem] p-0 relative z-10 max-h-[95vh] overflow-hidden flex flex-col pointer-events-auto animate-slide-up shadow-[0_32px_128px_-16px_rgba(0,0,0,0.5)] transition-all pb-safe border-4 border-white/20 dark:border-gray-800/50">
+            <div className="bg-white dark:bg-gray-950 w-full max-w-xl rounded-[3rem] p-0 relative z-10 max-h-[95vh] overflow-hidden flex flex-col pointer-events-auto animate-slide-up shadow-[0_32px_128px_-16px_rgba(0,0,0,0.5)] transition-all pt-safe pb-safe border-4 border-white/20 dark:border-gray-800/50">
 
                 {/* Header */}
                 <div className="px-8 pt-4 pb-6 border-b border-gray-100 dark:border-gray-800 flex items-center gap-4 bg-white/90 dark:bg-gray-950/90 backdrop-blur-xl sticky top-0 z-20">
@@ -233,10 +245,10 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                         </div>
                     </div>
 
-                    <div className="grid gap-8">
+                    <div className="grid gap-6">
                         {/* Name Input */}
-                        <div className="space-y-3 group">
-                            <label className="text-[11px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.3em] ml-1 flex items-center gap-2 group-focus-within:text-emerald-500 transition-colors">
+                        <div className="group">
+                            <label className="label group-focus-within:text-primary transition-colors flex items-center gap-2">
                                 <Sparkles size={14} className="opacity-50" />
                                 {language === 'en' ? 'Full Name' : 'पूरा नाम'}
                             </label>
@@ -245,14 +257,14 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                                 onChange={(e) => setEditProfileName(e.target.value)}
                                 placeholder={language === 'en' ? "e.g. Rahul Kumar" : "उदा. राहुल कुमार"}
                                 maxLength={50}
-                                className="w-full bg-gray-50 dark:bg-gray-900/50 border-4 border-white dark:border-gray-800 rounded-3xl px-6 py-5 text-lg font-black text-gray-900 dark:text-white outline-none focus:border-emerald-500/30 transition-all shadow-glass"
+                                className="input text-lg"
                             />
                         </div>
 
                         {/* Phone & Location Row */}
-                        <div className="grid sm:grid-cols-2 gap-8">
-                            <div className="space-y-3 group">
-                                <label className="text-[11px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.3em] ml-1 group-focus-within:text-emerald-500 transition-colors">
+                        <div className="grid sm:grid-cols-2 gap-6">
+                            <div className="group">
+                                <label className="label group-focus-within:text-primary transition-colors">
                                     {language === 'en' ? 'Phone Number' : 'फोन नंबर'}
                                 </label>
                                 <input
@@ -261,12 +273,12 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                                     placeholder="+91 XXXX-XXXXXX"
                                     maxLength={15}
                                     type="tel"
-                                    className="w-full bg-gray-50 dark:bg-gray-900/50 border-4 border-white dark:border-gray-800 rounded-3xl px-6 py-5 text-lg font-black text-gray-900 dark:text-white outline-none focus:border-emerald-500/30 transition-all shadow-glass"
+                                    className="input text-lg"
                                 />
                             </div>
 
-                            <div className="space-y-3 group md:col-span-2">
-                                <label className="text-[11px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.3em] ml-1 group-focus-within:text-emerald-500 transition-colors">
+                            <div className="group md:col-span-2">
+                                <label className="label group-focus-within:text-primary transition-colors">
                                     {language === 'en' ? 'Detailed Location' : 'विस्तृत स्थान'}
                                 </label>
                                 <div className="space-y-4">
@@ -278,11 +290,11 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                                                 onChange={(e) => setSearchQuery(e.target.value)}
                                                 onKeyDown={(e) => e.key === 'Enter' && handleAddressSearch()}
                                                 placeholder={language === 'en' ? "Search city..." : "शहर खोजें..."}
-                                                className="w-full bg-gray-50 dark:bg-gray-900/50 border-4 border-white dark:border-gray-800 rounded-2xl px-4 py-3 text-sm font-bold text-gray-900 dark:text-white outline-none focus:border-emerald-500/30 transition-all"
+                                                className="input pr-10"
                                             />
                                             <button
                                                 onClick={handleAddressSearch}
-                                                className="absolute right-2 top-2 p-1.5 bg-emerald-100 text-emerald-600 rounded-lg hover:bg-emerald-200 transition-colors"
+                                                className="absolute right-2 top-2 p-1.5 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors"
                                             >
                                                 <Sparkles size={16} />
                                             </button>
@@ -290,7 +302,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                                         <button
                                             onClick={handleGetLocation}
                                             disabled={isLocating}
-                                            className="px-4 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                            className="px-4 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                                         >
                                             {isLocating ? <Loader2 size={16} className="animate-spin" /> : <MapPin size={16} />}
                                             {language === 'en' ? 'Locate Me' : 'मुझे ढूंढें'}
@@ -298,7 +310,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                                     </div>
 
                                     {/* Interactive Map */}
-                                    <div className="rounded-3xl overflow-hidden border-4 border-white dark:border-gray-800 shadow-sm h-64 relative z-0">
+                                    <div className="rounded-3xl overflow-hidden border border-border shadow-elevation h-64 relative z-0">
                                         <LeafletMap
                                             lat={newCoordinates?.lat || 20.5937} // Default to India center if null
                                             lng={newCoordinates?.lng || 78.9629}
@@ -310,7 +322,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                                     </div>
 
                                     {/* Read-only Display of Selected Address */}
-                                    <div className="px-4 py-2 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-dashed border-gray-200 dark:border-gray-800 text-xs text-gray-500 font-mono break-all">
+                                    <div className="px-4 py-2 bg-background/50 rounded-xl border border-dashed border-border text-xs text-text-muted font-mono break-all">
                                         📍 {editProfileLocation || "No location selected"}
                                     </div>
                                 </div>
@@ -318,8 +330,8 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                         </div>
 
                         {/* Bio Textarea */}
-                        <div className="space-y-3 group">
-                            <label className="text-[11px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.3em] ml-1 group-focus-within:text-emerald-500 transition-colors">
+                        <div className="group">
+                            <label className="label group-focus-within:text-primary transition-colors">
                                 {language === 'en' ? 'About You' : 'परिचय'}
                             </label>
                             <textarea
@@ -327,14 +339,14 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                                 onChange={(e) => setEditProfileBio(e.target.value)}
                                 placeholder={language === 'en' ? "Tell others about your work experience..." : "अपने काम के अनुभव के बारे में बताएं..."}
                                 maxLength={500}
-                                className="w-full bg-gray-50 dark:bg-gray-900/50 border-4 border-white dark:border-gray-800 rounded-[2.5rem] px-8 py-6 text-lg font-medium text-gray-700 dark:text-gray-200 outline-none focus:border-emerald-500/30 transition-all shadow-glass h-40 resize-none leading-relaxed"
+                                className="textarea h-40 text-base"
                             />
                         </div>
 
                         {/* Experience & Skills */}
-                        <div className="grid sm:grid-cols-2 gap-8">
-                            <div className="space-y-3 group">
-                                <label className="text-[11px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.3em] ml-1 group-focus-within:text-emerald-500 transition-colors">
+                        <div className="grid sm:grid-cols-2 gap-6">
+                            <div className="group">
+                                <label className="label group-focus-within:text-primary transition-colors">
                                     {language === 'en' ? 'Experience' : 'अनुभव'}
                                 </label>
                                 <input
@@ -342,21 +354,91 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                                     onChange={(e) => setEditProfileExp(e.target.value)}
                                     placeholder="e.g. 5 Years"
                                     maxLength={50}
-                                    className="w-full bg-gray-50 dark:bg-gray-900/50 border-4 border-white dark:border-gray-800 rounded-3xl px-6 py-5 text-lg font-black text-gray-900 dark:text-white outline-none focus:border-emerald-500/30 transition-all shadow-glass"
+                                    className="input text-lg"
                                 />
                             </div>
 
-                            <div className="space-y-3 group">
-                                <label className="text-[11px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.3em] ml-1 group-focus-within:text-emerald-500 transition-colors">
-                                    {language === 'en' ? 'Skills' : 'कौशल'}
+                            <div className="group md:col-span-2">
+                                <label className="label group-focus-within:text-primary transition-colors mb-3 block">
+                                    {language === 'en' ? 'Your Skills (Select all that apply)' : 'आपके कौशल (लागू होने वाले चुनें)'}
                                 </label>
-                                <input
-                                    value={editProfileSkills}
-                                    onChange={(e) => setEditProfileSkills(e.target.value)}
-                                    placeholder="e.g. Cleaning, Painting"
-                                    maxLength={200}
-                                    className="w-full bg-gray-50 dark:bg-gray-900/50 border-4 border-white dark:border-gray-800 rounded-3xl px-6 py-5 text-lg font-black text-gray-900 dark:text-white outline-none focus:border-emerald-500/30 transition-all shadow-glass"
-                                />
+                                <div className="flex flex-wrap gap-3">
+                                    {CATEGORY_CONFIG.filter(c => c.id !== 'Other').map((category) => {
+                                        const isSelected = editProfileSkills.includes(category.id);
+                                        const Icon = category.icon;
+                                        return (
+                                            <button
+                                                key={category.id}
+                                                onClick={() => {
+                                                    setEditProfileSkills(prev =>
+                                                        prev.includes(category.id)
+                                                            ? prev.filter(id => id !== category.id)
+                                                            : [...prev, category.id]
+                                                    );
+                                                }}
+                                                className={`flex items-center gap-2 px-4 py-3 rounded-xl border-2 transition-all active:scale-95 ${isSelected
+                                                    ? `border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 shadow-md`
+                                                    : 'border-transparent bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                                                    }`}
+                                            >
+                                                <Icon size={18} className={isSelected ? 'text-emerald-500' : ''} />
+                                                <span className="font-bold text-sm tracking-wide">
+                                                    {language === 'en' ? category.label.en : category.label.hi}
+                                                </span>
+                                                {isSelected && <CheckCircle size={16} className="text-emerald-600 animate-in zoom-in" />}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Custom Skills Input */}
+                                <div className="mt-4">
+                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">
+                                        {language === 'en' ? 'Other Specific Skills' : 'अन्य विशिष्ट कौशल'}
+                                    </label>
+                                    <div className="flex gap-2 mb-3">
+                                        <input
+                                            value={customSkillInput}
+                                            onChange={(e) => setCustomSkillInput(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    handleAddCustomSkill();
+                                                }
+                                            }}
+                                            placeholder={language === 'en' ? "e.g. Tile Setting, Wallpaper..." : "उदा. टाइल लगाना, वॉलपेपर..."}
+                                            className="flex-1 px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-emerald-500/50 outline-none text-sm"
+                                        />
+                                        <button
+                                            onClick={(e) => { e.preventDefault(); handleAddCustomSkill(); }}
+                                            className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-xl font-bold text-xs uppercase hover:bg-emerald-200 transition-colors"
+                                        >
+                                            {language === 'en' ? 'Add' : 'जोड़ें'}
+                                        </button>
+                                    </div>
+
+                                    {/* Custom Chips */}
+                                    <div className="flex flex-wrap gap-2">
+                                        {editProfileSkills
+                                            .filter(s => !CATEGORY_CONFIG.some(c => c.id === s))
+                                            .map((skill, idx) => (
+                                                <span key={idx} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-medium group border border-gray-200 dark:border-gray-700">
+                                                    {skill}
+                                                    <button
+                                                        onClick={() => setEditProfileSkills(prev => prev.filter(p => p !== skill))}
+                                                        className="text-gray-400 hover:text-red-500 transition-colors"
+                                                    >
+                                                        <X size={14} />
+                                                    </button>
+                                                </span>
+                                            ))
+                                        }
+                                    </div>
+                                </div>
+
+                                <p className="text-[10px] text-gray-400 mt-2 font-medium ml-1">
+                                    {language === 'en' ? '* These will be used to recommend jobs to you.' : '* इनका उपयोग आपको काम सुझाने के लिए किया जाएगा।'}
+                                </p>
                             </div>
                         </div>
 

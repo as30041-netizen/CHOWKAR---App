@@ -1,10 +1,12 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 import { supabase } from '../lib/supabase';
 
 export const useDeepLinkHandler = (onAuthSuccess?: () => void) => {
+    const [isHandlingLink, setIsHandlingLink] = useState(false);
+
     useEffect(() => {
         if (!Capacitor.isNativePlatform()) {
             return; // Only for native apps
@@ -12,22 +14,40 @@ export const useDeepLinkHandler = (onAuthSuccess?: () => void) => {
 
         const handleDeepLink = async (url: string) => {
             console.log('[DeepLink] Received URL:', url);
+            setIsHandlingLink(true);
 
-            // Close the browser after OAuth redirect
-            await Browser.close();
+            // Close the browser after OAuth redirect (if open)
+            try {
+                await Browser.close();
+            } catch (e) {
+                // Ignore error if browser wasn't open
+            }
 
             // Handle the OAuth callback
             if (url.includes('in.chowkar.app://callback') || url.includes('capacitor://localhost')) {
                 console.log('[DeepLink] Handling OAuth callback');
 
                 try {
-                    // Parse URL to check what we received
-                    const urlObj = new URL(url);
-                    const code = urlObj.searchParams.get('code');
-                    const access_token = urlObj.searchParams.get('access_token');
-                    const refresh_token = urlObj.searchParams.get('refresh_token');
-                    const error_description = urlObj.searchParams.get('error_description');
+                    // Normalize URL to handle custom schemes for standard URL parser
+                    // Sometimes custom schemes choke the URL constructor or searchParams if not formatted perfectly
+                    const safeUrl = url.replace('in.chowkar.app://', 'https://chowkar.app/');
+                    const urlObj = new URL(safeUrl);
+
+                    // Search in both Search Params (?) and Hash (#)
+                    let code = urlObj.searchParams.get('code');
+                    let access_token = urlObj.searchParams.get('access_token');
+                    let refresh_token = urlObj.searchParams.get('refresh_token');
+                    let error_description = urlObj.searchParams.get('error_description');
                     const ref = urlObj.searchParams.get('ref');
+
+                    // If not in search params, check hash
+                    if (!code && !access_token && urlObj.hash) {
+                        const hashParams = new URLSearchParams(urlObj.hash.substring(1)); // remove #
+                        code = hashParams.get('code');
+                        access_token = hashParams.get('access_token');
+                        refresh_token = hashParams.get('refresh_token');
+                        error_description = hashParams.get('error_description');
+                    }
 
                     // If a referral code is present in the deep link, save it
                     if (ref) {
@@ -38,6 +58,7 @@ export const useDeepLinkHandler = (onAuthSuccess?: () => void) => {
                     // Check for errors first
                     if (error_description) {
                         console.error('[DeepLink] OAuth error:', error_description);
+                        setIsHandlingLink(false);
                         return;
                     }
 
@@ -46,14 +67,19 @@ export const useDeepLinkHandler = (onAuthSuccess?: () => void) => {
                         console.log('[DeepLink] PKCE flow detected - exchanging code for session');
 
                         // Let Supabase handle the code exchange automatically
-                        // This happens when detectSessionInUrl is enabled
+                        // We must pass the EXACT redirect URL used in the signIn call
                         const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
                         if (error) {
                             console.error('[DeepLink] Error exchanging code:', error);
+                            // If code invalid, maybe we already have a session? 
+                            // Don't fail hard yet, let the check below happen.
                         } else if (data.session) {
                             console.log('[DeepLink] Session set successfully from code!');
                             onAuthSuccess?.();
+                            // Keep isHandlingLink true for a moment to allow App to reload state
+                            setTimeout(() => setIsHandlingLink(false), 1000);
+                            return;
                         }
                     }
                     // Handle implicit flow (direct tokens)
@@ -69,26 +95,30 @@ export const useDeepLinkHandler = (onAuthSuccess?: () => void) => {
                         } else {
                             console.log('[DeepLink] Session set successfully from tokens!');
                             onAuthSuccess?.();
+                            setTimeout(() => setIsHandlingLink(false), 1000);
+                            return;
                         }
                     }
-                    // Fallback: try to get existing session
-                    else {
-                        console.log('[DeepLink] No code or tokens found, checking for existing session');
-                        const { data, error } = await supabase.auth.getSession();
 
-                        if (error) {
-                            console.error('[DeepLink] Error getting session:', error);
-                        } else if (data.session) {
-                            console.log('[DeepLink] Found existing session!');
-                            onAuthSuccess?.();
-                        } else {
-                            console.warn('[DeepLink] No session found after OAuth callback');
-                        }
+                    // Fallback: try to get existing session
+                    // This handles cases where Supabase client might have auto-detected url from the browser switch
+                    console.log('[DeepLink] Checking for existing session (Fallback)');
+                    const { data, error } = await supabase.auth.getSession();
+
+                    if (error) {
+                        console.error('[DeepLink] Error getting session:', error);
+                    } else if (data.session) {
+                        console.log('[DeepLink] Found existing session!');
+                        onAuthSuccess?.();
+                    } else {
+                        console.warn('[DeepLink] No session found after OAuth callback');
                     }
                 } catch (err) {
                     console.error('[DeepLink] Error handling deep link:', err);
                 }
             }
+
+            setIsHandlingLink(false);
         };
 
         // Listen for app URL open events (deep links)
@@ -113,4 +143,6 @@ export const useDeepLinkHandler = (onAuthSuccess?: () => void) => {
             }
         };
     }, [onAuthSuccess]);
+
+    return { isHandlingLink };
 };

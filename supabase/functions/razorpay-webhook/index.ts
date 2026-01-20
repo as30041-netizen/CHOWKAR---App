@@ -1,8 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
+const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
 serve(async (req) => {
-    console.log('[Webhook] Request received:', req.method);
+    if (req.method === 'OPTIONS') {
+        return new Response('ok', { headers: corsHeaders })
+    }
 
     if (req.method !== 'POST') {
         return new Response('Method Not Allowed', { status: 405 })
@@ -14,16 +21,21 @@ serve(async (req) => {
         const secret = Deno.env.get('RAZORPAY_WEBHOOK_SECRET')
         const bodyText = await req.text()
 
-        console.log('[Webhook] Event ID:', eventId);
-        console.log('[Webhook] Signature present:', !!signature);
-        console.log('[Webhook] Secret present:', !!secret);
-
-        if (!signature || !secret || !eventId) {
-            console.error('[Webhook] Missing required headers or configuration');
-            return new Response('Configuration Error or Missing Header', { status: 500 })
+        console.error(`[Webhook] Signature Received: ${signature}`);
+        if (secret) {
+            console.error(`[Webhook] Secret: ${secret.substring(0, 4)}...${secret.substring(secret.length - 4)} (Len: ${secret.length})`);
+        } else {
+            console.error('[Webhook] Secret is MISSING');
         }
 
-        // 3. Verify Signature
+        console.log('[Webhook] Request received for event:', eventId);
+
+        if (!signature || !secret || !eventId) {
+            console.error('[Webhook] Missing required headers or secret');
+            return new Response('Configuration Error', { status: 500 })
+        }
+
+        // 1. Verify Signature
         const encoder = new TextEncoder()
         const keyData = encoder.encode(secret)
         const msgData = encoder.encode(bodyText)
@@ -36,36 +48,35 @@ serve(async (req) => {
         const expectedSignature = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
 
         if (expectedSignature !== signature) {
-            console.error('[Webhook] Invalid Signature. Expected:', expectedSignature, 'Got:', signature);
-            // In development, you might want to bypass signature check, but for production it MUST stay.
+            console.error('[Webhook] Signature Mismatch!');
             return new Response('Invalid Signature', { status: 401 })
         }
 
         const event = JSON.parse(bodyText)
-        console.log(`[Webhook] Processing Event: ${event.event}`);
+        console.log(`[Webhook] Processing event type: ${event.event}`);
 
-        // Handle ONLY order.paid to prevent double-crediting (payment.captured is redundant for this flow)
-        if (event.event === 'order.paid') {
+        if (event.event === 'order.paid' || event.event === 'payment.captured') {
             const payload = event.payload;
             const order = payload.order?.entity;
             const payment = payload.payment?.entity;
-
-            // Extract notes from either order or payment
             const notes = order?.notes || payment?.notes;
+
             const userId = notes?.userId;
-            const type = notes?.type || 'coins';
             const coins = notes?.coins ? Number(notes.coins) : 0;
+            const type = notes?.type || 'coins';
 
-            console.log('[Webhook] Extracted Metadata:', { userId, type, coins, orderId: order?.id, paymentId: payment?.id });
-
-            if (userId && coins > 0) {
+            if (userId && (coins > 0 || type === 'premium')) {
                 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
                 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
                 const supabase = createClient(supabaseUrl, supabaseKey)
 
+                // UNIFIED IDEMPOTENCY KEY: Prioritize payment.id for cross-function locking
+                const finalEventId = payment?.id || eventId;
+                console.log('[Webhook] Processing with ID:', finalEventId);
+
                 let rpcName = 'admin_process_payment_webhook'
                 let rpcArgs: any = {
-                    p_event_id: eventId,
+                    p_event_id: finalEventId,
                     p_user_id: userId,
                     p_amount: coins,
                     p_order_id: order?.id || payment?.order_id || 'unknown',
@@ -75,35 +86,33 @@ serve(async (req) => {
                 if (type === 'premium') {
                     rpcName = 'admin_activate_premium'
                     rpcArgs = {
-                        p_event_id: eventId,
+                        p_event_id: finalEventId,
                         p_user_id: userId,
                         p_order_id: order?.id || payment?.order_id || 'unknown',
                         p_raw_event: event
                     }
                 }
 
-                console.log(`[Webhook] Calling RPC: ${rpcName}`, rpcArgs);
+                console.log(`[Webhook] Calling RPC: ${rpcName}`);
                 const { data, error } = await supabase.rpc(rpcName, rpcArgs)
 
                 if (error) {
-                    console.error('[Webhook] RPC Error:', error);
-                    return new Response('Internal Server Error', { status: 500 })
+                    console.error('[Webhook] RPC Error:', error.message);
+                    return new Response(JSON.stringify({ error: error.message }), { status: 500 })
                 }
-
-                console.log('[Webhook] Success:', data)
+                console.log('[Webhook] Balance Updated Successfully');
             } else {
-                console.warn('[Webhook] Missing userId or coins in metadata', { userId, coins });
+                console.warn('[Webhook] Missing metadata in payload');
             }
         }
 
         return new Response(JSON.stringify({ received: true }), {
-            headers: { "Content-Type": "application/json" },
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
             status: 200
-        })
+        });
 
     } catch (err) {
         console.error('[Webhook] Runtime Error:', err.message)
-        return new Response(`Error: ${err.message}`, { status: 400 })
+        return new Response(JSON.stringify({ error: err.message }), { status: 400 })
     }
 })
-
