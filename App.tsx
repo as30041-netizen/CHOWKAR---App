@@ -23,6 +23,7 @@ const PostJob = lazy(() => import('./pages/PostJob').then(m => ({ default: m.Pos
 const Analytics = lazy(() => import('./pages/Analytics').then(m => ({ default: m.Analytics })));
 const WalletPage = lazy(() => import('./pages/WalletPage').then(m => ({ default: m.WalletPage })));
 const CategoryJobs = lazy(() => import('./pages/CategoryJobs').then(m => ({ default: m.CategoryJobs })));
+const JobPage = lazy(() => import('./pages/JobPage').then(m => ({ default: m.JobPage })));
 
 // --- Lazy loaded Components ---
 const Confetti = lazy(() => import('./components/Confetti').then(m => ({ default: m.Confetti })));
@@ -398,9 +399,9 @@ const AppContent: React.FC = () => {
   }, [getJobWithFullDetails]);
 
   const handleCardClick = useCallback((j: Job) => {
-    setSelectedJob(j);
-    getJobWithFullDetails(j.id, true); // Proactively fetch latest
-  }, [getJobWithFullDetails]);
+    // Navigate to job page URL for SEO and shareability
+    navigate(`/job/${j.id}`);
+  }, [navigate]);
 
   const handleLogout = async () => { await logout(); };
 
@@ -968,6 +969,7 @@ const AppContent: React.FC = () => {
               setShowFilterModal={setShowFilterModal}
               showAlert={showAlert}
             />} />
+            <Route path="/job/:jobId" element={<JobPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
