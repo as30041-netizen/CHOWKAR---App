@@ -115,18 +115,36 @@ BEGIN
             )) <= p_max_distance
         )
     ORDER BY 
-        -- RECOMMENDATION BOOSTING (Only in RECOMMENDED mode)
+        -- 1. RECOMMENDATION MODE LOGIC
         CASE 
             WHEN p_feed_mode = 'RECOMMENDED' THEN 
-                (CASE WHEN (
-                    v_user_skills IS NOT NULL AND (
-                        j.category = ANY(v_user_skills) OR 
-                        (v_skill_pattern IS NOT NULL AND v_skill_pattern <> '' AND (j.title ~* v_skill_pattern OR j.description ~* v_skill_pattern))
-                    )
-                ) THEN 0 ELSE 1 END)
+                (
+                    -- Base Score: Higher is better
+                    (CASE WHEN (
+                        v_user_skills IS NOT NULL AND (
+                            j.category = ANY(v_user_skills) OR 
+                            (v_skill_pattern IS NOT NULL AND v_skill_pattern <> '' AND (j.title ~* v_skill_pattern OR j.description ~* v_skill_pattern))
+                        )
+                    ) THEN 100 ELSE 0 END) +
+                    -- Proximity Score: 0-50 points (max bonus at 0km, 0 at 50km+)
+                    COALESCE(
+                        CASE 
+                            WHEN p_user_lat IS NOT NULL AND p_user_lng IS NOT NULL THEN
+                                GREATEST(0, 50 - (6371 * acos(
+                                    cos(radians(p_user_lat)) * cos(radians(j.latitude)) * 
+                                    cos(radians(j.longitude) - radians(p_user_lng)) + 
+                                    sin(radians(p_user_lat)) * sin(radians(j.latitude))
+                                ))) 
+                            ELSE 0 
+                        END, 0
+                    ) +
+                    -- Recency Score: 0-20 points (newer jobs get more points)
+                    EXTRACT(EPOCH FROM (j.created_at - (NOW() - INTERVAL '7 days'))) / 30240 -- Normalized over 1 week
+                )
             ELSE 0 
-        END ASC,
-        -- DYNAMIC SORTING
+        END DESC NULLS LAST,
+        
+        -- 2. DYNAMIC SORTING (Secondary for Recommended, Primary for ALL)
         CASE WHEN p_sort_by = 'BUDGET_HIGH' THEN j.budget END DESC NULLS LAST,
         CASE WHEN p_sort_by = 'BUDGET_LOW' THEN j.budget END ASC NULLS LAST,
         CASE 
@@ -137,7 +155,7 @@ BEGIN
                     sin(radians(p_user_lat)) * sin(radians(j.latitude))
                 ))
         END ASC NULLS LAST,
-        j.created_at DESC -- Default to Newest
+        j.created_at DESC -- Final Fallback
     LIMIT p_limit
     OFFSET p_offset;
 END;

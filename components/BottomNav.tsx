@@ -6,19 +6,33 @@ import { UserRole } from '../types';
 
 import { useKeyboard } from '../hooks/useKeyboard';
 
-interface BottomNavProps {
-    unreadChatCount: number;
-    unreadCount: number;
-    walletBalance: number;
-    onChatClick: () => void;
-    onTabChange: () => void;
-}
+import { useNotification } from '../contexts/NotificationContext';
+import { useWallet } from '../contexts/WalletContext';
+import { useModals } from '../contexts/ModalContext';
 
-export const BottomNav: React.FC<BottomNavProps> = ({ unreadChatCount, unreadCount, walletBalance, onChatClick, onTabChange }) => {
+export const BottomNav: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { role, t, user, showAlert, setShowEditProfile, language } = useUser();
     const { isOpen } = useKeyboard(); // Mobile Keyboard State
+    const { unreadCount, unreadChatCount } = useNotification();
+    const { balance } = useWallet();
+    const { openChatList } = useModals();
+
+    const onTabChange = () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleChatClick = () => {
+        onTabChange();
+        // If we want a separate page for chats on mobile, navigate to /chats? 
+        // Or open Global Chat List?
+        // Old BottomNav prop was onChatClick.
+        // App.tsx used to pass openChatList?
+        // Let's assume onChatClick opens the Chat List Modal/Panel or Navigates.
+        // Given we have useModals().openChatList, let's use that.
+        openChatList();
+    };
 
     const isActive = (path: string) => location.pathname === path;
 
@@ -42,7 +56,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ unreadChatCount, unreadCou
             </button>
 
             {/* 2. CHAT */}
-            <button onClick={onChatClick} className="flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-12 text-text-secondary relative">
+            <button onClick={handleChatClick} className="flex flex-col items-center gap-1 mb-3 transition-all duration-300 w-12 text-text-secondary relative">
                 <div className="relative">
                     <MessageCircle size={24} strokeWidth={2} />
                     {unreadChatCount > 0 && (

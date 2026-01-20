@@ -22,8 +22,10 @@ interface CategoryJobsProps {
     onReplyToCounter: (jobId: string, bidId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', amount?: number) => void;
     onWithdrawBid: (jobId: string, bidId: string) => void;
     setShowFilterModal: (show: boolean) => void;
-    showAlert: (msg: string, type?: 'success' | 'error' | 'info') => void;
+    setShowFilterModal: (show: boolean) => void;
 }
+
+import { useToast } from '../contexts/ToastContext';
 
 export const CategoryJobs: React.FC<CategoryJobsProps> = ({
     onBid, onViewBids, onChat, onEdit, onClick, onReplyToCounter, onWithdrawBid
@@ -32,6 +34,7 @@ export const CategoryJobs: React.FC<CategoryJobsProps> = ({
     const navigate = useNavigate();
     const { user, language, role, t } = useUser();
     const { jobs, loading, refreshJobs, loadFeed, hasMore, fetchMoreJobs, isLoadingMore } = useJobs();
+    const { showAlert } = useToast();
 
     // Local state for view & filters
     const [viewMode, setViewMode] = useState<'LIST' | 'MAP'>('LIST');

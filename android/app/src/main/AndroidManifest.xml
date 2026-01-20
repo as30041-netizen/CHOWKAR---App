@@ -29,6 +29,16 @@
                 <data android:host="callback" />
             </intent-filter>
 
+            <!-- Universal Links (App Links) for Job Pages -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="chowkar.in" />
+                <data android:scheme="https" android:host="www.chowkar.in" />
+                <data android:pathPrefix="/" />
+            </intent-filter>
+
             <!-- Alternative Capacitor Deep Link -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

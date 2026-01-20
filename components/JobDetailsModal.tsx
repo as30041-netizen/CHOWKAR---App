@@ -1,12 +1,14 @@
 import React, { useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { X, ArrowLeft, XCircle, MapPin, Star, AlertCircle, Pencil, ExternalLink, IndianRupee, UserCircle, Users, ChevronRight, Loader2, Clock, Handshake, Trash2, Navigation, CheckCircle, Heart, MessageCircle, Phone, Sparkles, Languages, RotateCw } from 'lucide-react';
+import { X, ArrowLeft, XCircle, Star, Pencil, ExternalLink, UserCircle, Users, ChevronRight, Loader2, Handshake, Trash2, CheckCircle, Heart, MessageCircle, Phone, Sparkles, Languages, RotateCw, Share2, Clock, IndianRupee } from 'lucide-react';
 import { Job, UserRole, JobStatus } from '../types';
 import { useUser } from '../contexts/UserContextDB';
 import { useJobs } from '../contexts/JobContextDB';
 import { supabase } from '../lib/supabase';
-import { LeafletMap } from './LeafletMap';
 import { translateJobDetails } from '../services/geminiService';
+import { JobNegotiationCard } from './job-details/JobNegotiationCard';
+import { JobInfoCards } from './job-details/JobInfoCards';
+import { JobMapSection } from './job-details/JobMapSection';
 
 interface JobDetailsModalProps {
     job: Job | null;
@@ -201,6 +203,36 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
     const displayTitle = (showTranslated && localTranslation?.title) || liveJob.title;
     const displayDescription = (showTranslated && localTranslation?.description) || liveJob.description;
 
+    // --- SHARE LOGIC ---
+    const handleShare = async () => {
+        const shareUrl = `https://chowkar.in/job/${liveJob.id}`;
+        const shareText = language === 'en'
+            ? `Check out this job on Chowkar: ${liveJob.title}`
+            : `चौकर पर यह काम देखें: ${liveJob.title}`;
+
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: liveJob.title,
+                    text: shareText,
+                    url: shareUrl,
+                });
+            } catch (err) {
+                // User cancelled or share failed
+                console.warn('Share cancelled or failed', err);
+            }
+        } else {
+            // Fallback to Clipboard
+            try {
+                await navigator.clipboard.writeText(shareUrl);
+                showAlert(language === 'en' ? 'Link copied to clipboard!' : 'लिंक कॉपी किया गया!', 'success');
+            } catch (err) {
+                console.error('Failed to copy', err);
+                showAlert('Failed to share', 'error');
+            }
+        }
+    };
+
     const handleSubmitCounter = async () => {
         if (!user.id || !myBid || !onReplyToCounter || !counterAmount || isProcessing) return;
 
@@ -270,6 +302,13 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                         <h2 className="text-sm font-black uppercase tracking-widest text-text-primary">{language === 'en' ? 'Job Details' : 'कार्य का विवरण'}</h2>
                     </div>
                     <div className="flex items-center gap-2">
+                        {/* Share Button (Mobile Header) */}
+                        <button
+                            onClick={handleShare}
+                            className="w-8 h-8 rounded-full bg-surface border border-border flex items-center justify-center text-text-muted hover:text-primary active:scale-95 transition-all"
+                        >
+                            <Share2 size={16} />
+                        </button>
                         {/* Status Chip in Header */}
                         <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-tighter border ${liveJob.status === 'OPEN' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : liveJob.status === 'IN_PROGRESS' ? 'bg-blue-500/10 text-blue-600 border-blue-500/20' : 'bg-surface text-text-muted border-border'
                             }`}>
@@ -302,95 +341,16 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                     <div className="p-6 md:p-10 space-y-10">
                         {/* 0. NEGOTIATION STATUS CARD (Top Priority) */}
                         {myBid && (
-                            <div className={`p-6 md:p-8 rounded-[2rem] border-2 border-dashed relative overflow-hidden group shadow-sm w-full mx-auto ${isWorkerTurn
-                                ? 'bg-amber-500/5 border-amber-500/20'
-                                : 'bg-indigo-500/5 border-indigo-500/20'
-                                }`}>
-                                <h4 className={`text-[10px] font-black uppercase tracking-[0.3em] mb-6 flex items-center gap-2 ${isWorkerTurn ? 'text-amber-600' : 'text-indigo-600'
-                                    }`}>
-                                    {isWorkerTurn ? <AlertCircle size={14} /> : <Clock size={14} />}
-                                    {language === 'en' ? 'Negotiation Status' : 'मोलभाव की स्थिति'}
-                                </h4>
-
-                                <div className="flex items-center justify-between relative z-10 max-w-3xl mx-auto">
-                                    {/* Left: Original */}
-                                    <div className="flex flex-col items-start">
-                                        <span className="text-[9px] font-bold text-text-muted uppercase tracking-wider mb-1.5 opacity-70">
-                                            {language === 'en' ? 'Original' : 'मूल प्रस्ताव'}
-                                        </span>
-                                        <span className="text-xl md:text-3xl font-black text-text-secondary/40 line-through decoration-auto">
-                                            ₹{liveJob.budget}
-                                        </span>
-                                    </div>
-
-                                    {/* Middle: Arrow (Responsive) */}
-                                    <div className="flex-1 px-4 md:px-12 flex flex-col items-center justify-center opacity-80">
-                                        <div className={`h-0.5 w-full relative rounded-full ${isWorkerTurn ? 'bg-amber-500/30' : 'bg-indigo-500/30'
-                                            }`}>
-                                            <div className={`absolute right-0 -top-1 w-2.5 h-2.5 rotate-45 border-t-2 border-r-2 ${isWorkerTurn ? 'border-amber-500/50' : 'border-indigo-500/50'
-                                                }`} />
-                                        </div>
-                                    </div>
-
-                                    {/* Right: Current */}
-                                    <div className="flex flex-col items-end">
-                                        <span className={`text-[9px] font-bold uppercase tracking-wider mb-1.5 ${isWorkerTurn ? 'text-amber-600' : 'text-indigo-600'
-                                            }`}>
-                                            {isWorkerTurn
-                                                ? (language === 'en' ? 'Poster Counter' : 'मालिक का प्रस्ताव')
-                                                : (language === 'en' ? 'Your Offer' : 'आपका प्रस्ताव')
-                                            }
-                                        </span>
-                                        <div className={`px-5 py-2.5 md:py-3 md:px-6 rounded-2xl text-xl md:text-3xl font-black shadow-lg shadow-black/5 flex items-center gap-3 transform transition-all group-hover:scale-105 ${isWorkerTurn
-                                            ? 'bg-amber-500 text-white shadow-amber-500/30'
-                                            : 'bg-indigo-600 text-white shadow-indigo-500/30'
-                                            }`}>
-                                            ₹{myBid.amount}
-                                            {isWorkerTurn && <AlertCircle size={20} className="animate-pulse" strokeWidth={3} />}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {isWorkerTurn && (
-                                    <div className="mt-6 flex justify-center">
-                                        <p className="inline-block text-[10px] md:text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-100/50 dark:bg-amber-900/20 px-4 py-2 rounded-xl border border-amber-500/10 text-center animate-pulse-subtle">
-                                            {language === 'en'
-                                                ? "Action Required: The employer updated the price."
-                                                : "मालिक ने कीमत बदल दी है। ध्यान दें!"}
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
+                            <JobNegotiationCard
+                                myBid={myBid}
+                                liveJob={liveJob}
+                                isWorkerTurn={isWorkerTurn}
+                                language={language}
+                            />
                         )}
 
                         {/* 2. PREMIUM METADATA CHIPS (High Scannability) */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="bg-surface border border-border/50 p-4 rounded-[2rem] shadow-sm flex flex-col items-center justify-center text-center group hover:border-emerald-500/30 transition-all active:scale-95 cursor-default">
-                                <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 mb-2 group-hover:rotate-12 transition-transform">
-                                    <IndianRupee size={20} strokeWidth={3} />
-                                </div>
-                                <p className="text-[10px] font-black text-text-muted uppercase tracking-widest mb-0.5">{t.budget}</p>
-                                <p className="text-lg font-black text-text-primary tracking-tighter">₹{liveJob.budget.toLocaleString()}</p>
-                            </div>
-
-                            <div className="bg-surface border border-border/50 p-4 rounded-[2rem] shadow-sm flex flex-col items-center justify-center text-center group hover:border-blue-500/30 transition-all active:scale-95 cursor-default">
-                                <div className="w-10 h-10 rounded-2xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400 mb-2 group-hover:rotate-12 transition-transform">
-                                    <Clock size={20} strokeWidth={3} />
-                                </div>
-                                <p className="text-[10px] font-black text-text-muted uppercase tracking-widest mb-0.5">{t.duration || 'Duration'}</p>
-                                <p className="text-lg font-black text-text-primary tracking-tighter">{liveJob.duration} Days</p>
-                            </div>
-
-                            <div className="bg-surface border border-border/50 p-4 rounded-[2rem] shadow-sm flex flex-col items-center justify-center text-center group hover:border-indigo-500/30 transition-all active:scale-95 cursor-default col-span-2 md:col-span-2">
-                                <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400 mb-2 group-hover:-rotate-12 transition-transform">
-                                    <MapPin size={20} strokeWidth={3} />
-                                </div>
-                                <p className="text-[10px] font-black text-text-muted uppercase tracking-widest mb-0.5">{t.location || 'Location'}</p>
-                                <p className="text-sm font-bold text-text-primary tracking-tight truncate w-full px-2">{liveJob.location}</p>
-                            </div>
-
-
-                        </div>
+                        <JobInfoCards liveJob={liveJob} t={t} />
 
                         {/* 3. PREMIUM DESCRIPTION CARD */}
                         <div className="space-y-4">
@@ -452,27 +412,8 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                         )}
 
                         {/* 5. INTERACTIVE MAP PREVIEW */}
-                        {liveJob.coordinates && (
-                            <div className="space-y-4">
-                                <h4 className="text-[11px] font-black text-text-muted uppercase tracking-[0.3em] flex items-center gap-3">
-                                    <div className="w-1.5 h-4 bg-indigo-500 rounded-full" />
-                                    {language === 'en' ? 'Job Location' : 'कार्य का स्थान'}
-                                </h4>
-                                <div className="relative rounded-[2.8rem] overflow-hidden border-4 border-white dark:border-gray-900 h-72 shadow-2xl group/map z-0">
-                                    <LeafletMap lat={liveJob.coordinates.lat} lng={liveJob.coordinates.lng} popupText={liveJob.location} />
-                                    <div className="absolute inset-x-0 bottom-0 p-5 bg-gradient-to-t from-black/70 to-transparent pointer-events-none flex justify-end">
-                                        <a
-                                            href={`https://www.google.com/maps/dir/?api=1&destination=${liveJob.coordinates.lat},${liveJob.coordinates.lng}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="bg-white text-slate-900 text-[10px] font-black uppercase tracking-[0.2em] px-6 py-3 rounded-full shadow-2xl flex items-center gap-2 hover:scale-105 active:scale-95 transition-all pointer-events-auto"
-                                        >
-                                            <Navigation size={14} fill="currentColor" /> {language === 'en' ? 'Get Directions' : 'दिशा निर्देश'}
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+                        {/* 5. INTERACTIVE MAP PREVIEW */}
+                        <JobMapSection liveJob={liveJob} language={language} />
 
                         {/* 6. BIDS PREVIEW (For Poster - Quick Insight) */}
                         {/* 1.1 VIEW BIDS (Owner Only - Role Agnostic) */}

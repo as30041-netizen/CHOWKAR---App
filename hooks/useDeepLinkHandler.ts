@@ -3,9 +3,11 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 import { supabase } from '../lib/supabase';
+import { useNavigate } from 'react-router-dom';
 
 export const useDeepLinkHandler = (onAuthSuccess?: () => void) => {
     const [isHandlingLink, setIsHandlingLink] = useState(false);
+    const navigate = useNavigate();
 
     useEffect(() => {
         if (!Capacitor.isNativePlatform()) {
@@ -15,6 +17,27 @@ export const useDeepLinkHandler = (onAuthSuccess?: () => void) => {
         const handleDeepLink = async (url: string) => {
             console.log('[DeepLink] Received URL:', url);
             setIsHandlingLink(true);
+
+            // 1. Generic Navigation Handling (Job Pages, etc.)
+            // Handle: in.chowkar.app://job/123 OR https://chowkar.in/job/123
+            // Convert custom scheme to standard for parsing if needed, but simple includes check is safer first.
+
+            if (url.includes('/job/')) {
+                console.log('[DeepLink] Job URL detected, navigating...');
+                // Extract path. try/catch for URL parsing
+                try {
+                    // Normalize scheme for parsing
+                    const safeUrl = url.replace('in.chowkar.app://', 'https://chowkar.app/');
+                    const urlObj = new URL(safeUrl);
+                    if (urlObj.pathname?.startsWith('/job/')) {
+                        navigate(urlObj.pathname);
+                        setIsHandlingLink(false);
+                        return;
+                    }
+                } catch (e) {
+                    console.warn('[DeepLink] Failed to parse job URL', e);
+                }
+            }
 
             // Close the browser after OAuth redirect (if open)
             try {
@@ -26,6 +49,7 @@ export const useDeepLinkHandler = (onAuthSuccess?: () => void) => {
             // Handle the OAuth callback
             if (url.includes('in.chowkar.app://callback') || url.includes('capacitor://localhost')) {
                 console.log('[DeepLink] Handling OAuth callback');
+
 
                 try {
                     // Normalize URL to handle custom schemes for standard URL parser

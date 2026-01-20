@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { ArrowLeft, Loader2, AlertCircle, Home } from 'lucide-react';
 import { useJobs } from '../contexts/JobContextDB';
@@ -12,7 +12,8 @@ const JobDetailsModal = React.lazy(() => import('../components/JobDetailsModal')
 export const JobPage: React.FC = () => {
     const { jobId } = useParams<{ jobId: string }>();
     const navigate = useNavigate();
-    const { getJobWithFullDetails, jobs } = useJobs();
+    const location = useLocation();
+    const { getJobWithFullDetails, jobs, hideJob } = useJobs();
     const { user, role, t, language, isAuthLoading } = useUser();
 
     const [isLoading, setIsLoading] = useState(true);
@@ -65,33 +66,37 @@ export const JobPage: React.FC = () => {
     const handleClose = () => navigate(-1); // Go back in history
 
     const handleBid = (targetJobId: string) => {
-        // Navigate to home and let App.tsx open BidModal
-        navigate('/', { state: { openBid: targetJobId } });
+        // Stay on current page, open modal
+        navigate(location.pathname, { state: { openBid: targetJobId } });
     };
 
     const handleViewBids = (targetJob: Job) => {
-        navigate('/', { state: { openViewBids: targetJob.id } });
+        navigate(location.pathname, { state: { openViewBids: targetJob.id } });
     };
 
     const handleChat = (targetJob: Job) => {
-        navigate('/', { state: { openChat: targetJob.id } });
+        navigate(location.pathname, { state: { openChat: targetJob.id } });
     };
 
     const handleEdit = (targetJob: Job) => {
-        navigate('/post', { state: { editJob: targetJob } });
+        navigate('/post', { state: { jobToEdit: targetJob, returnPath: location.pathname } });
     };
 
-    const handleDelete = (targetJobId: string) => {
+    const handleDelete = async (targetJobId: string) => {
         // For delete, show confirmation and navigate back
         if (confirm(language === 'en' ? 'Are you sure you want to delete this job?' : 'क्या आप वाकई इस काम को हटाना चाहते हैं?')) {
-            console.log('[JobPage] Delete confirmed for:', targetJobId);
-            // TODO: Call delete API then navigate
-            navigate('/');
+            try {
+                await hideJob(targetJobId);
+                navigate('/', { replace: true });
+            } catch (err) {
+                console.error('Failed to delete job', err);
+                showAlert('Failed to delete job', 'error');
+            }
         }
     };
 
     const handleViewProfile = (userId: string, name?: string, phoneNumber?: string) => {
-        navigate('/', { state: { openProfile: userId, profileName: name, profilePhone: phoneNumber } });
+        navigate(location.pathname, { state: { openProfile: userId, profileName: name, profilePhone: phoneNumber } });
     };
 
     const showAlert = (message: string, type: 'success' | 'error' | 'info') => {

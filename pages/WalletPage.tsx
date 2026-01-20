@@ -81,7 +81,8 @@ export const WalletPage: React.FC = () => {
                 // Check if we need to return to a job bid
                 const pendingJobId = sessionStorage.getItem('pendingBidJobId');
                 if (pendingJobId) {
-                    navigate('/');
+                    sessionStorage.removeItem('pendingBidJobId');
+                    navigate(`/job/${pendingJobId}`, { state: { openBid: pendingJobId } });
                 }
             } else {
                 alert(result.error || 'Payment Failed');

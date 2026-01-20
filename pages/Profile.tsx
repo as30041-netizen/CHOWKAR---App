@@ -9,14 +9,12 @@ import { useWallet } from '../contexts/WalletContext';
 import { Trash2, AlertTriangle, X, Wallet as WalletIcon, BrainCircuit } from 'lucide-react';
 import { ProfileSkeleton } from '../components/Skeleton';
 
-interface ProfileProps {
-    setShowSubscriptionModal: (show: boolean) => void;
-    onLogout: () => void;
-}
+import { useModals } from '../contexts/ModalContext';
 
-export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLogout }) => {
+export const Profile: React.FC = () => {
     const navigate = useNavigate();
-    const { user, t, language, showAlert, setShowEditProfile } = useUser();
+    const { user, t, language, showAlert, setShowEditProfile, logout } = useUser();
+    const { setShowSubscription } = useModals();
     const { walletBalance } = useWallet();
     const [postedJobsCount, setPostedJobsCount] = useState(0);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -63,7 +61,7 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
             const result = await deleteAccount();
             if (result.success) {
                 showAlert(language === 'hi' ? 'आपका खाता सफलतापूर्वक हटा दिया गया है।' : 'Your account has been deleted successfully.', 'success');
-                onLogout();
+                logout();
             } else {
                 showAlert(result.error || (language === 'hi' ? 'खाता हटाने में विफल।' : 'Failed to delete account.'), 'error');
             }
@@ -232,7 +230,7 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
                         </div>
                         {user.aiUsageCount >= 10 && !user.isPremium ? (
                             <button
-                                onClick={() => setShowSubscriptionModal(true)}
+                                onClick={() => setShowSubscription(true)}
                                 className="text-[8px] font-bold bg-indigo-600 text-white px-3 py-1.5 rounded-full uppercase tracking-widest shadow-lg shadow-indigo-500/30 hover:scale-105 active:scale-95 transition-all"
                             >
                                 Get Unlimited
@@ -335,7 +333,7 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
             <div className="grid gap-4">
                 {!user.isPremium && (
                     <button
-                        onClick={() => setShowSubscriptionModal(true)}
+                        onClick={() => setShowSubscription(true)}
                         className="w-full flex items-center justify-between px-8 py-5 bg-gradient-to-r from-amber-400 to-yellow-500 text-amber-950 rounded-2xl font-bold uppercase tracking-[0.2em] text-[10px] shadow-lg shadow-amber-500/20 active:scale-95 transition-all group"
                     >
                         <div className="flex items-center gap-3">
@@ -346,7 +344,7 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
                     </button>
                 )}
                 <button
-                    onClick={onLogout}
+                    onClick={logout}
                     className="w-full flex items-center justify-center gap-3 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 py-5 rounded-2xl font-bold uppercase tracking-[0.2em] text-[10px] border border-red-100 dark:border-red-900/20 active:scale-95 transition-all hover:bg-red-600 hover:text-white hover:border-red-600"
                 >
                     <LogOut size={18} strokeWidth={2.5} /> {t.signOut}

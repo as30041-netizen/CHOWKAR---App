@@ -30,10 +30,10 @@ interface HomeProps {
     onReplyToCounter: (jobId: string, bidId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', amount?: number) => void;
     onWithdrawBid: (jobId: string, bidId: string) => void;
     setShowFilterModal: (show: boolean) => void;
-    showAlert: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
 import { useNotification } from '../contexts/NotificationContext';
+import { useToast } from '../contexts/ToastContext';
 
 import { PosterHome } from '../components/PosterHome';
 import { WorkerHome } from '../components/WorkerHome';
@@ -43,10 +43,11 @@ import { CategoryHero } from '../components/CategoryHero';
 
 export const Home: React.FC<HomeProps> = ({
     onBid, onViewBids, onChat, onEdit, onClick, onReplyToCounter, onWithdrawBid,
-    setShowFilterModal: _setShowFilterModal, showAlert
+    setShowFilterModal: _setShowFilterModal
 }) => {
     const { user, role, setRole, t, language, isAuthLoading, hasInitialized } = useUser();
     const { notifications } = useNotification();
+    const { showAlert } = useToast();
     const { jobs, loading, isRevalidating, refreshJobs, fetchMoreJobs, hasMore, isLoadingMore, loadFeed, hideJob, error: jobsError, stats, searchQuery, setSearchQuery } = useJobs();
     const [posterTab, setPosterTab] = useState<'ACTIVE' | 'HISTORY'>('ACTIVE');
 

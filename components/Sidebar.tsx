@@ -13,11 +13,10 @@ import { LanguageSelectionModal } from './LanguageSelectionModal';
 interface SidebarProps {
     isOpen: boolean;
     onClose: () => void;
-    onLogout: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onLogout }) => {
-    const { user, role, setRole, language } = useUser();
+export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
+    const { user, role, setRole, language, logout } = useUser();
     const { toggleTheme, isDark } = useTheme();
     const navigate = useNavigate();
     const sidebarRef = useRef<HTMLDivElement>(null);
@@ -136,7 +135,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onLogout }) =
                     {/* Footer */}
                     <div className="p-4 border-t border-border">
                         <button
-                            onClick={onLogout}
+                            onClick={logout}
                             className="w-full py-3 rounded-xl bg-red-500/10 text-red-600 hover:bg-red-500/20 font-bold flex items-center justify-center gap-2 transition-colors"
                         >
                             <LogOut size={18} />
