@@ -68,7 +68,7 @@ export const initSupabase = (): Promise<void> => {
       setTimeout(() => {
         if (!isInitialized) {
           isInitialized = true;
-          console.log('[Supabase] ⚠️ Initialization timeout, proceeding anyway');
+          console.warn('[Supabase:Debug] ⚠️ Initialization timeout (3s), proceeding anyway');
           resolve();
         }
       }, 3000);

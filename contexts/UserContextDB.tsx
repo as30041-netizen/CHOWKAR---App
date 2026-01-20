@@ -81,7 +81,9 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isAuthLoading, setIsAuthLoading] = useState(() => {
     if (typeof window !== 'undefined') {
       if (isAuthCallback) return true;
-      return localStorage.getItem('chowkar_isLoggedIn') !== 'true';
+      // CRITICAL FIX: If we think we ARE logged in, we MUST stay in loading state until verified.
+      // If we are NOT logged in, we can skip loading to show Landing/Home quickly.
+      return localStorage.getItem('chowkar_isLoggedIn') === 'true';
     }
     return true;
   });
@@ -98,12 +100,21 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     userProfileRef.current = user;
   }, [user]);
 
-  const isAuthCallbackRef = useRef<boolean>(false);
+  // Check for auth callback synchronously during initialization to prevent race conditions
+  const isAuthCallbackRef = useRef<boolean>(
+    typeof window !== 'undefined' && (
+      window.location.hash.includes('access_token=') ||
+      window.location.hash.includes('id_token=') ||
+      window.location.hash.includes('error=') ||
+      window.location.hash.includes('code=') ||
+      window.location.search.includes('code=')
+    )
+  );
 
   useEffect(() => {
     if (typeof window !== 'undefined' && !hasInitialized) {
       if (window.location.href.includes('error=')) {
-        console.warn('[Auth] Auth error detected in URL, cancelling loading state...');
+        console.warn('[Auth:Debug] Auth error detected in URL, cancelling loading state...');
         const url = new URL(window.location.href);
         url.searchParams.delete('error');
         url.searchParams.delete('error_code');
@@ -114,10 +125,17 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         showAlert('Authentication cancelled or failed.', 'info');
         return;
       }
-      isAuthCallbackRef.current =
-        window.location.href.includes('access_token=') ||
-        window.location.href.includes('code=') ||
-        window.location.href.includes('refresh_token=');
+
+      const isCallback =
+        window.location.hash.includes('access_token=') ||
+        window.location.hash.includes('id_token=') ||
+        window.location.search.includes('code=') ||
+        window.location.hash.includes('code=');
+
+      if (isCallback) {
+        console.log('[Auth:Debug] Confirmed OAuth callback in useEffect');
+        isAuthCallbackRef.current = true;
+      }
     }
   }, []);
 
@@ -150,6 +168,12 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const cleanupListener = addAppStateListener(async (isActive) => {
       // Only act if coming to FOREGROUND and we think we are logged in
       if (isActive && isLoggedIn) {
+        // Guard: Don't validate session if we are literally in the middle of a callback or loading
+        if (isAuthCallbackRef.current || isAuthLoading) {
+          console.log('[Auth] App resumed but skipping validation during active auth process.');
+          return;
+        }
+
         console.log('[Auth] App resumed. Validating session...');
 
         // Silent Check: Don't show loading spinner, just verify token validity
@@ -157,8 +181,10 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         if (error || !session) {
           console.warn('[Auth] Session invalid on resume:', error);
-          // If session is dead on resume, we must log out to prevent "zombie" state
-          logout();
+          if (!isAuthCallbackRef.current) {
+            console.error('[Auth] Hard reset due to invalid session on resume.');
+            logout();
+          }
         } else {
           console.log('[Auth] Session valid on resume. Refreshing data...');
           // Refresh Profile & Wallet (Silent)
@@ -210,10 +236,16 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Don't logout on error, retrying is safer
       } finally {
         if (mounted) {
-          // Only stop loading if we aren't waiting for a potential restoration
-          if (localStorage.getItem('chowkar_isLoggedIn') !== 'true') {
+          // CRITICAL: If we are in an OAuth callback, DO NOT stop loading yet.
+          // Wait for onAuthStateChange to fire the SIGNED_IN event.
+          if (isAuthCallbackRef.current) {
+            console.log('[Auth:Debug] OAuth callback detected. Keeping loading state active...');
+          } else if (localStorage.getItem('chowkar_isLoggedIn') !== 'true') {
+            console.log('[Auth:Debug] No session and no local record. Finalizing initialization.');
             setIsAuthLoading(false);
             setHasInitialized(true);
+          } else {
+            console.log('[Auth:Debug] Local record exists. Waiting for Auth State change...');
           }
         }
       }
@@ -244,20 +276,30 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (!mounted) return;
 
       if (event === 'INITIAL_SESSION' && !session?.user) {
-        if (isAuthCallbackRef.current) return;
-        if (Capacitor.isNativePlatform()) {
-          setTimeout(() => {
-            if (mounted && !isLoggedIn && localStorage.getItem('chowkar_isLoggedIn') === 'true') {
-              localStorage.removeItem('chowkar_isLoggedIn');
-              setIsAuthLoading(false);
-              setHasInitialized(true);
-            }
-          }, 2000);
+        console.log('[Auth:Debug] INITIAL_SESSION fired with no user.');
+
+        // CRITICAL GUARD: If we are in an OAuth callback, IGNORE this "null session" event.
+        // Supabase client fires INITIAL_SESSION before processing the redirect hash.
+        if (isAuthCallbackRef.current) {
+          console.log('[Auth:Debug] Ignoring null INITIAL_SESSION during OAuth callback.');
           return;
         }
+
         if (localStorage.getItem('chowkar_isLoggedIn') === 'true') {
-          localStorage.removeItem('chowkar_isLoggedIn');
-          setIsLoggedIn(false);
+          console.warn('[Auth] Local storage says logged in, but INITIAL_SESSION has no user. Verifying...');
+
+          if (Capacitor.isNativePlatform()) {
+            setTimeout(() => {
+              if (mounted && !isLoggedIn && localStorage.getItem('chowkar_isLoggedIn') === 'true') {
+                console.log('[Auth:Debug] Native fallback logout after delay');
+                logout();
+              }
+            }, 3000);
+            return;
+          }
+
+          console.log('[Auth:Debug] Forcing logout due to null initial session.');
+          logout();
         }
         setIsAuthLoading(false);
         setHasInitialized(true);
@@ -279,6 +321,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           });
 
           if (isAuthCallbackRef.current && typeof window !== 'undefined') {
+            console.log('[Auth:Debug] Cleaning up URL hash after successful OAuth');
             window.history.replaceState({}, document.title, window.location.pathname);
             isAuthCallbackRef.current = false;
           }
