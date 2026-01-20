@@ -13,7 +13,7 @@ export interface NotificationData {
 // Route user based on notification type
 export const handleNotificationNavigation = (
     data: NotificationData,
-    navigate: (path: string) => void,
+    navigate: (path: string, options?: any) => void,
     openModal?: (type: string, id: string) => void
 ) => {
     console.log('[DeepLink] Handling notification tap:', data);
@@ -32,10 +32,9 @@ export const handleNotificationNavigation = (
         case 'bid_accepted':
         case 'bid_rejected':
             // Navigate to View Bids modal for this job
-            if (jobId && openModal) {
+            if (jobId) {
                 console.log('[DeepLink] Opening View Bids for job:', jobId);
-                navigate('/'); // Go to home first
-                setTimeout(() => openModal('viewBids', jobId), 500);
+                navigate(`/job/${jobId}`, { state: { openViewBids: jobId } });
             }
             break;
 
@@ -43,10 +42,9 @@ export const handleNotificationNavigation = (
         case 'chat_message':
         case 'chat_unlocked':
             // Open chat for this job
-            if (jobId && openModal) {
+            if (jobId) {
                 console.log('[DeepLink] Opening chat for job:', jobId);
-                navigate('/'); // Go to home first
-                setTimeout(() => openModal('chat', jobId), 500);
+                navigate(`/job/${jobId}`, { state: { openChat: jobId } });
             }
             break;
 
@@ -54,10 +52,9 @@ export const handleNotificationNavigation = (
         case 'worker_ready':
         case 'job_update':
             // Open job details
-            if (jobId && openModal) {
+            if (jobId) {
                 console.log('[DeepLink] Opening job details:', jobId);
-                navigate('/');
-                setTimeout(() => openModal('jobDetails', jobId), 500);
+                navigate(`/job/${jobId}`);
             }
             break;
 

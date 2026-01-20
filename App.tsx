@@ -444,18 +444,13 @@ const AppContent: React.FC = () => {
         : 'बोली लगाने से पहले कृपया अपनी प्रोफ़ाइल (फ़ोन और स्थान) पूरी करें।', 'info');
       return;
     }
-    setBidModalOpen({ isOpen: true, jobId: id });
-  }, [user.id, user.phone, user.location, language, showAlert, setShowEditProfile]);
+    navigate(`/job/${id}`, { state: { openBid: id } });
+  }, [user.id, user.phone, user.location, language, showAlert, setShowEditProfile, navigate]);
 
   const handleOnViewBids = useCallback((j: Job) => {
-    console.log('[App] onViewBids handler called', j.id);
-    try {
-      setViewBidsModal({ isOpen: true, job: j });
-      getJobWithFullDetails(j.id, true);
-    } catch (err) {
-      console.error('[App] Error in onViewBids handler', err);
-    }
-  }, [getJobWithFullDetails]);
+    console.log('[App] onViewBids handler called - Navigating to JobPage', j.id);
+    navigate(`/job/${j.id}`, { state: { openViewBids: j.id } });
+  }, [navigate]);
 
   const handleCardClick = useCallback((j: Job) => {
     // Navigate to job page URL for SEO and shareability
