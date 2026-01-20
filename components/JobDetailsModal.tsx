@@ -26,8 +26,14 @@ interface JobDetailsModalProps {
 export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
     job, onClose, onBid, onViewBids, onChat, onEdit, onDelete, onCancel, onReplyToCounter, onViewProfile, showAlert, onCompleteJob
 }) => {
-    const { user, role, t, language, isAuthLoading } = useUser();
+    const { user, role: currentRole, t, language, isAuthLoading } = useUser();
     const { getJobWithFullDetails, jobs, saveJobTranslation } = useJobs();
+
+    // Derived State
+    const isOwner = job?.posterId === user.id;
+    // Allow bidding if user is NOT owner (regardless of current dashboard mode)
+    // This fixes shared link UX where a worker might be in "Poster Mode"
+    const canBid = !isOwner && job?.status === 'OPEN';
     const [showCounterInput, setShowCounterInput] = React.useState(false);
     const [counterAmount, setCounterAmount] = React.useState('');
     const [isProcessing, setIsProcessing] = React.useState(false);
@@ -469,7 +475,8 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                         )}
 
                         {/* 6. BIDS PREVIEW (For Poster - Quick Insight) */}
-                        {role === UserRole.POSTER && liveJob.posterId === user.id && liveJob.status === JobStatus.OPEN && liveJob.bids && liveJob.bids.length > 0 && (
+                        {/* 1.1 VIEW BIDS (Owner Only - Role Agnostic) */}
+                        {isOwner && liveJob.status === JobStatus.OPEN && liveJob.bids && liveJob.bids.length > 0 && (
                             <div className="space-y-4">
                                 <h4 className="text-[10px] font-black text-text-muted uppercase tracking-[0.3em] flex items-center gap-3">
                                     <div className="w-1.5 h-3 bg-emerald-500/50 rounded-full" />
@@ -557,7 +564,8 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
 
                                     {myBid.negotiationHistory.map((entry: any, index: number) => {
                                         const isLast = index === myBid.negotiationHistory.length - 1;
-                                        const isMe = (role === UserRole.WORKER && entry.by === 'WORKER') || (role === UserRole.POSTER && entry.by === 'POSTER');
+                                        // Chat bubble alignment logic
+                                        const isMe = (currentRole === UserRole.WORKER && entry.by === 'WORKER') || (currentRole === UserRole.POSTER && entry.by === 'POSTER');
                                         return (
                                             <div key={index} className="relative flex items-start gap-4">
                                                 {/* Dot */}
@@ -595,7 +603,8 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                 {/* 6. MOBILE ACTION ISLAND (Sticky Footer) */}
                 <div className="md:hidden fixed bottom-6 inset-x-4 z-50">
                     <div className="bg-slate-950/90 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-3 shadow-2xl shadow-indigo-500/20 flex items-center gap-3">
-                        {!myBid && liveJob.status === JobStatus.OPEN && role === UserRole.WORKER && (
+                        {/* 2. BIDDING SECTION (Non-Owners) */}
+                        {!myBid && liveJob.status === JobStatus.OPEN && !isOwner && (
                             <div className="pl-4 pr-2 border-r border-white/10 shrink-0">
                                 <p className="text-[8px] font-black text-white/40 uppercase tracking-widest mb-0.5">{t.budget}</p>
                                 <p className="text-lg font-black text-white tracking-tighter leading-none">₹{liveJob.budget}</p>
@@ -604,7 +613,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
 
                         <div className="flex-1 flex gap-2">
                             {/* Worker: Bid Action */}
-                            {!isAuthLoading && role === UserRole.WORKER && liveJob.status === JobStatus.OPEN && liveJob.posterId !== user.id && !myBid && (
+                            {!isAuthLoading && !isOwner && liveJob.status === JobStatus.OPEN && !myBid && (
                                 <button
                                     onClick={() => onBid(liveJob.id)}
                                     className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white h-14 rounded-[1.8rem] font-black text-[11px] uppercase tracking-[0.2em] shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
@@ -644,7 +653,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                             )}
 
                             {/* Poster: View Bids */}
-                            {!isAuthLoading && role === UserRole.POSTER && liveJob.posterId === user.id && liveJob.status === JobStatus.OPEN && (
+                            {!isAuthLoading && isOwner && liveJob.status === JobStatus.OPEN && (
                                 <button
                                     onClick={() => onViewBids(liveJob)}
                                     className="w-full bg-indigo-600 text-white h-14 rounded-[1.8rem] font-black text-[11px] uppercase tracking-[0.2em] shadow-lg shadow-indigo-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
@@ -654,7 +663,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                             )}
 
                             {/* Poster: Mark Complete (Mobile) */}
-                            {!isAuthLoading && role === UserRole.POSTER && liveJob.posterId === user.id && liveJob.status === JobStatus.IN_PROGRESS && (
+                            {!isAuthLoading && isOwner && liveJob.status === JobStatus.IN_PROGRESS && (
                                 <button
                                     onClick={() => { if (confirm(language === 'en' ? 'Mark job as completed?' : 'काम पूरा हो गया?')) onCompleteJob?.(liveJob); }}
                                     className="w-full bg-emerald-500 text-white h-14 rounded-[1.8rem] font-black text-[11px] uppercase tracking-[0.2em] shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
@@ -746,7 +755,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                         </div>
 
                         <div className="space-y-3">
-                            {role === UserRole.WORKER && liveJob.status === JobStatus.OPEN && !myBid && liveJob.posterId !== user.id && (
+                            {!isOwner && liveJob.status === JobStatus.OPEN && !myBid && (
                                 <button
                                     onClick={() => onBid(liveJob.id)}
                                     className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-6 rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-emerald-500/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3"
