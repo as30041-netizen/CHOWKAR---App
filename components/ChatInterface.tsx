@@ -585,7 +585,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         animate-in slide-in-from-bottom md:slide-in-from-right duration-300 transition-colors">
 
         {/* Header - Premium Redesign */}
-        <div className="bg-surface/95 backdrop-blur-xl px-4 py-3 shadow-sm border-b border-border flex items-center justify-between z-10 pt-safe transition-all duration-300">
+        <div className="bg-surface/95 backdrop-blur-xl px-4 py-3 shadow-sm border-b border-border flex items-center justify-between z-10 pt-[calc(env(safe-area-inset-top)+1.5rem)] transition-all duration-300">
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
