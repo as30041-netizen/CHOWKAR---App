@@ -39,7 +39,13 @@ export interface User {
   rating: number;
   profilePhoto?: string;
   isPremium?: boolean;
+  subscription_plan?: 'FREE' | 'PRO_POSTER' | 'WORKER_PLUS' | 'SUPER';
+  subscription_expiry?: number;
+  role?: UserRole;
+  is_verified?: boolean;
+  is_suspended?: boolean;
   aiUsageCount?: number;
+  weeklyBidsCount?: number; // Track bids used this week
   bio?: string;
   skills?: string[];
   experience?: string;

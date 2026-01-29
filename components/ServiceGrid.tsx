@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    Search, History, Wallet, UserCircle,
+    Search, History, UserCircle,
     Plus, LayoutDashboard, Users, Zap
 } from 'lucide-react';
 import { useUser } from '../contexts/UserContextDB';
@@ -31,13 +31,7 @@ export const ServiceGrid: React.FC<ServiceGridProps> = ({ onTabChange, currentTa
             color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400',
             action: () => onTabChange('HISTORY')
         },
-        {
-            id: 'WALLET',
-            label: language === 'en' ? 'Wallet' : 'वॉलेट',
-            icon: Wallet,
-            color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
-            action: () => navigate('/wallet')
-        },
+
         {
             id: 'ACTIVE',
             label: language === 'en' ? 'My Work' : 'मेरा काम',
@@ -67,13 +61,7 @@ export const ServiceGrid: React.FC<ServiceGridProps> = ({ onTabChange, currentTa
             color: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400',
             action: () => onTabChange('HISTORY')
         },
-        {
-            id: 'WALLET',
-            label: language === 'en' ? 'Wallet' : 'वॉलेट',
-            icon: Wallet,
-            color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
-            action: () => navigate('/wallet')
-        }
+
     ];
 
     return (

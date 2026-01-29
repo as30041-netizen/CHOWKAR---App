@@ -70,6 +70,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [loading, setLoading] = useState(false);
+    const lastRefreshTimeRef = useRef<number>(0);
 
     // Track active views to suppress notifications
     const [activeChatId, setActiveChatIdState] = useState<string | null>(null);
@@ -131,9 +132,13 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     }, [isLoggedIn, user.id]);
 
     const RefreshData = async () => {
-        if (!user.id) return;
+        if (!user.id || loading) return;
+        const now = Date.now();
+        if (now - lastRefreshTimeRef.current < 3000) return; // 3s throttle
+
         setLoading(true);
         try {
+            lastRefreshTimeRef.current = now;
             const { notifications: data, error } = await fetchUserNotifications(user.id);
             if (error) {
                 console.error('[Notification] Error fetching:', error);

@@ -1,0 +1,51 @@
+{
+  "name": "chowkar---local-work",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "type-check": "tsc --noEmit",
+    "cap:sync": "npm run build && npx cap sync",
+    "cap:android": "npm run build && npx cap sync android && npx cap open android",
+    "cap:build": "npm run build && npx cap copy android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.0.1",
+    "@capacitor/app": "^8.0.0",
+    "@capacitor/browser": "^8.0.0",
+    "@capacitor/cli": "^8.0.1",
+    "@capacitor/core": "^8.0.1",
+    "@capacitor/keyboard": "^8.0.0",
+    "@capacitor/local-notifications": "^8.0.0",
+    "@capacitor/push-notifications": "^8.0.0",
+    "@google/generative-ai": "^0.21.0",
+    "@supabase/supabase-js": "^2.43.0",
+    "leaflet": "1.9.4",
+    "lucide-react": "^0.460.0",
+    "pg": "^8.16.3",
+    "playwright": "^1.58.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-helmet-async": "^2.0.5",
+    "react-router-dom": "^6.23.0",
+    "recharts": "^3.7.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@types/leaflet": "^1.9.8",
+    "@types/node": "^20.19.28",
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "autoprefixer": "^10.4.23",
+    "netlify-cli": "^23.13.0",
+    "postcss": "^8.5.6",
+    "supabase": "^2.72.6",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.9.3",
+    "vite": "^5.2.0"
+  }
+}

@@ -63,6 +63,67 @@ export const signInWithGoogle = async (): Promise<{ success: boolean; error?: st
   }
 };
 
+export const checkPhoneConflict = async (phone: string): Promise<{ exists: boolean; error?: string }> => {
+  try {
+    // Check if any profile already has this phone number
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('phone', phone)
+      .maybeSingle();
+
+    if (error) throw error;
+    return { exists: !!data };
+  } catch (error: any) {
+    console.error('[Auth] Error checking phone conflict:', error);
+    return { exists: false, error: error.message };
+  }
+};
+
+export const signInWithPhone = async (phone: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    // 1. Pre-check for conflict (Google account already has this number)
+    const { exists, error: conflictError } = await checkPhoneConflict(phone);
+    if (conflictError) throw new Error(conflictError);
+
+    if (exists) {
+      return {
+        success: false,
+        error: 'This phone number is already linked to a Google account. Please sign in with Google.'
+      };
+    }
+
+    // 2. Trigger Supabase OTP
+    const { error } = await supabase.auth.signInWithOtp({
+      phone,
+    });
+
+    if (error) throw error;
+    return { success: true };
+  } catch (error: any) {
+    console.error('[Auth] Error signing in with phone:', error);
+    return { success: false, error: error.message || 'Failed to send OTP' };
+  }
+};
+
+export const verifyOTP = async (phone: string, token: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { data, error } = await supabase.auth.verifyOtp({
+      phone,
+      token,
+      type: 'sms',
+    });
+
+    if (error) throw error;
+    if (!data.session) throw new Error('No session created');
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('[Auth] Error verifying OTP:', error);
+    return { success: false, error: error.message || 'Invalid OTP' };
+  }
+};
+
 export const signOut = async (): Promise<{ success: boolean; error?: string }> => {
   try {
     const { error } = await supabase.auth.signOut();
@@ -87,6 +148,8 @@ const mapDbProfileToUser = (profile: any, authEmail?: string, reviews: any[] = [
     rating: Number(profile.rating || 0),
     profilePhoto: profile.profile_photo || undefined,
     isPremium: profile.is_premium,
+    subscription_plan: profile.subscription_plan, // FIX: Map the plan
+    subscription_expiry: profile.subscription_expiry ? new Date(profile.subscription_expiry).getTime() : undefined,
     aiUsageCount: profile.ai_usage_count || 0,
     bio: profile.bio || '',
     skills: profile.skills || [],
@@ -152,39 +215,52 @@ export const getCurrentUser = async (
       const profiles = await response.json();
       let profile = profiles && profiles.length > 0 ? profiles[0] : null;
 
-      // 2. Auto-create if missing
+      // 2. Resilient Auto-creation if missing (Self-Healing Client)
       if (!profile) {
-        console.log('[AuthService] No profile found. Creating source of truth...');
+        console.log('[AuthService] No profile found. Initializing Super App profile...');
+
         const rawName = authUser.user_metadata?.full_name || authUser.user_metadata?.name || '';
         const userName = (rawName && rawName.length > 1) ? rawName : (authUser.email?.split('@')[0] || 'User');
 
-        const { data: newProfile, error: createError } = await supabase
-          .from('profiles')
-          .insert({
-            id: authUser.id,
-            auth_user_id: authUser.id,
-            name: userName,
-            email: authUser.email || '',
-            rating: 5.0,
-            join_date: new Date().toISOString()
-          })
-          .select()
-          .single();
+        const profilePayload = {
+          id: authUser.id,
+          name: userName,
+          email: authUser.email || '',
+          phone: authUser.phone || `pending_${authUser.id}`,
+          location: 'Not set',
+          join_date: Date.now(),
+          auth_user_id: authUser.id
+        };
 
-        if (createError) {
-          // Fallback for race conditions
-          const { data: existing } = await supabase.from('profiles').select('*').eq('id', authUser.id).single();
+        try {
+          const createResponse = await safeFetch(
+            `${supabaseUrl}/rest/v1/profiles`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+              },
+              body: JSON.stringify(profilePayload)
+            }
+          );
+
+          if (createResponse.ok) {
+            const createdData = await createResponse.json();
+            profile = createdData && createdData.length > 0 ? createdData[0] : null;
+          } else {
+            const { data: existing } = await supabase.from('profiles').select('*').eq('id', authUser.id).maybeSingle();
+            profile = existing;
+          }
+        } catch (createErr) {
+          const { data: existing } = await supabase.from('profiles').select('*').eq('id', authUser.id).maybeSingle();
           profile = existing;
-        } else {
-          profile = newProfile;
         }
       }
 
       finalProfile = profile;
     } catch (err: any) {
-      if (err.name === 'AbortError') {
-        throw new Error('Profile request timed out. Please check your connection or restart the app.');
-      }
+      if (err.name === 'AbortError') throw new Error('Profile request timed out.');
       throw err;
     }
 
@@ -363,6 +439,8 @@ export const getUserProfile = async (userId: string): Promise<{ user: User | nul
       rating: Number(profile.rating),
       profilePhoto: profile.profile_photo || undefined,
       isPremium: profile.is_premium,
+      subscription_plan: profile.subscription_plan, // FIX: Map the plan
+      subscription_expiry: profile.subscription_expiry ? new Date(profile.subscription_expiry).getTime() : undefined,
       aiUsageCount: profile.ai_usage_count,
       bio: profile.bio || undefined,
       skills: profile.skills || [],

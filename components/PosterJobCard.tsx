@@ -54,9 +54,11 @@ export const PosterJobCard: React.FC<PosterJobCardProps> = ({
 
             <div className="pl-4 flex flex-col gap-4">
 
-                {/* 1. Top Row: Title & Status Badge */}
                 <div className="flex justify-between items-start">
                     <div>
+                        <p className="text-[9px] font-black uppercase tracking-[0.15em] text-primary/70 mb-1">
+                            {job.category}
+                        </p>
                         <h3 className="text-lg font-black text-text-primary leading-tight mb-1 line-clamp-1">{job.title}</h3>
                         <div className="flex items-center gap-3 text-[10px] font-bold text-text-muted uppercase tracking-wider">
                             <span className="flex items-center gap-1">

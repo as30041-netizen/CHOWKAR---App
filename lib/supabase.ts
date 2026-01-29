@@ -191,66 +191,16 @@ export const getAccessToken = async (): Promise<string | undefined> => {
  * 
  * DEFENSIVE: If cache is empty (fresh login, race condition), waits briefly for auth init
  */
+/**
+ * SAFE RPC CALLER - Unified implementation moved to services/fetchUtils
+ */
 export const safeRPC = async <T = any>(
   functionName: string,
-  params: Record<string, any> = {}
-): Promise<{ data: T | null; error: Error | null }> => {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-  // Get token from cache (fast) or fetch with timeout
-  let accessToken = getCachedAccessToken();
-
-  // DEFENSIVE: If cache empty, wait briefly for auth initialization
-  if (!accessToken) {
-    console.log(`[safeRPC] Cache empty, waiting for auth init...`);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    accessToken = getCachedAccessToken();
-  }
-
-  // Still empty? Try fetching with timeout
-  if (!accessToken) {
-    accessToken = await getAccessToken() || undefined;
-  }
-
-  const authHeader = accessToken ? `Bearer ${accessToken}` : `Bearer ${supabaseKey}`;
-  const tokenStatus = accessToken ? 'authenticated' : 'anon';
-
-  console.log(`[safeRPC] Calling ${functionName} (${tokenStatus})...`);
-
-  try {
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/rpc/${functionName}`,
-      {
-        method: 'POST',
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': authHeader,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(params)
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[safeRPC] ${functionName} failed:`, response.status, errorText);
-      return { data: null, error: new Error(errorText || `RPC failed: ${response.status}`) };
-    }
-
-    // Handle 204 No Content for void functions
-    if (response.status === 204) {
-      console.log(`[safeRPC] ${functionName} success (204 No Content)`);
-      return { data: null, error: null };
-    }
-
-    const data = await response.json().catch(() => null);
-    console.log(`[safeRPC] ${functionName} success`);
-    return { data, error: null };
-  } catch (e: any) {
-    console.error(`[safeRPC] ${functionName} error:`, e);
-    return { data: null, error: e };
-  }
+  params: Record<string, any> = {},
+  options: any = {}
+): Promise<{ data: T | null; error: any }> => {
+  const { safeRPC: unifiedRPC } = await import('../services/fetchUtils');
+  return unifiedRPC<T>(functionName, params, options);
 };
 
 // Debug logging for Capacitor (only in development)

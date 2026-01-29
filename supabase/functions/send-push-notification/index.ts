@@ -111,7 +111,7 @@ async function sendWithV1API(token: string, title: string, body: string, data?: 
                         priority: 'high',
                         notification: {
                             sound: 'default',
-                            channelId: 'default',
+                            channelId: 'chowkar_notifications',
                         }
                     }
                 }

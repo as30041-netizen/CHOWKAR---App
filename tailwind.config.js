@@ -9,8 +9,10 @@ export default {
     theme: {
         extend: {
             fontFamily: {
-                sans: ['Inter', 'system-ui', 'sans-serif'],
+                sans: ['Inter', 'Noto Sans Devanagari', 'Noto Sans Gurmukhi', 'system-ui', 'sans-serif'],
                 heading: ['Plus Jakarta Sans', 'Inter', 'sans-serif'],
+                hindi: ['Noto Sans Devanagari', 'sans-serif'],
+                punjabi: ['Noto Sans Gurmukhi', 'sans-serif'],
             },
             colors: {
                 // Semantic Colors (Mapped to CSS Variables)

@@ -14,7 +14,7 @@ interface ChatState {
 
 export const useChatHandlers = (setShowEditProfile: (show: boolean) => void, setShowChatList?: (show: boolean) => void) => {
     const {
-        user, language, showAlert,
+        user, language, showAlert, isProfileComplete
     } = useUser();
 
     const {
@@ -29,11 +29,8 @@ export const useChatHandlers = (setShowEditProfile: (show: boolean) => void, set
 
     const openChat = async (job: Job, receiverId?: string) => {
         // 0. CHECK PROFILE COMPLETION
-        if (!user.phone || !user.location || user.location === 'Not set') {
-            setShowEditProfile(true);
-            showAlert(language === 'en'
-                ? 'Please complete your profile (Phone & Location) to start chatting.'
-                : 'चैटिंग शुरू करने के लिए कृपया अपनी प्रोफ़ाइल (फ़ोन और स्थान) पूरी करें।', 'info');
+        if (!isProfileComplete) {
+            // App.tsx handles triggering OnboardingModal via useEffect
             return;
         }
 

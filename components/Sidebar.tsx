@@ -1,13 +1,12 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useUser } from '../contexts/UserContextDB';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
-    X, Languages, LogOut, ChevronRight, Zap, Briefcase, Moon, Sun, MapPin
+    X, Languages, LogOut, ChevronRight, Zap, Briefcase, Moon, Sun, MapPin, Settings, Home, User as UserIcon, HelpCircle, Shield, Plus, LayoutGrid
 } from 'lucide-react';
 import { UserRole } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
 
-import { CATEGORY_CONFIG } from '../constants';
 import { LanguageSelectionModal } from './LanguageSelectionModal';
 
 interface SidebarProps {
@@ -20,6 +19,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onLogout }) =
     const { user, role, setRole, language } = useUser();
     const { toggleTheme, isDark } = useTheme();
     const navigate = useNavigate();
+    const location = useLocation();
     const sidebarRef = useRef<HTMLDivElement>(null);
     const [showLangModal, setShowLangModal] = useState(false);
 
@@ -34,115 +34,188 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onLogout }) =
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [isOpen, onClose]);
 
+    const handleNav = (path: string) => {
+        navigate(path);
+        onClose();
+    };
+
     return (
         <>
             {/* Backdrop */}
             <div
-                className={`fixed inset-0 bg-black/50 z-[100] transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] transition-opacity duration-500 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
                 aria-hidden="true"
             />
 
             {/* Drawer */}
             <div
                 ref={sidebarRef}
-                className={`fixed top-0 left-0 h-full w-[80%] max-w-[300px] bg-surface shadow-elevation z-[101] transform transition-transform duration-300 ease-out border-r border-border ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
+                className={`fixed top-0 left-0 h-full w-[85%] max-w-[320px] bg-surface shadow-2xl z-[101] transform transition-transform duration-500 cubic-bezier(0.4, 0, 0.2, 1) border-r border-border/50 flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
             >
-                <div className="flex flex-col h-full">
-                    {/* BRAND HEADER */}
-                    <div className="px-6 pt-8 pb-4 flex items-center gap-3">
-                        <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-sm border border-emerald-200 dark:border-emerald-800/50">
-                            <MapPin size={22} fill="currentColor" />
+                {/* 1. BRAND HEADER & LANGUAGE (Integrated) */}
+                <div className="px-6 pt-10 pb-6 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-600 border border-emerald-500/20 shadow-sm">
+                            <MapPin size={22} fill="currentColor" strokeWidth={1.5} />
                         </div>
-                        <span className="text-2xl font-bold font-serif-logo text-emerald-950 dark:text-emerald-50 tracking-tight">
+                        <span className="text-2xl font-black font-serif-logo text-emerald-950 dark:text-emerald-50 tracking-tight leading-none">
                             CHOWKAR
                         </span>
                     </div>
 
-                    {/* Header: Profile */}
-                    <div className="p-6 bg-surface border-b border-border">
-                        <div className="flex justify-between items-start mb-4">
-                            <div className="w-16 h-16 rounded-full p-0.5 ring-2 ring-border">
-                                <img
-                                    src={user.profilePhoto || `https://ui-avatars.com/api/?name=${user.name}&background=random`}
-                                    alt="Profile"
-                                    className="w-full h-full rounded-full object-cover"
-                                />
+                    <button
+                        onClick={() => setShowLangModal(true)}
+                        className="relative group flex items-center gap-2 p-2 bg-background border border-border rounded-xl hover:border-primary/30 transition-all active:scale-95 shadow-sm"
+                    >
+                        <Languages size={18} className="text-primary group-hover:rotate-12 transition-transform" />
+                        <span className="text-[9px] font-black uppercase text-text-secondary pr-1">
+                            {language === 'en' ? 'हिन्दी' : 'ENG'}
+                        </span>
+                    </button>
+                </div>
+
+                {/* 2. USER IDENTITY CARD (Premium) */}
+                <div className="mx-4 mb-4 p-5 bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-900/10 dark:to-gray-900 rounded-[2rem] border border-emerald-200/30 dark:border-emerald-800/20 shadow-sm relative overflow-hidden group">
+                    <div className="flex items-center gap-4 relative z-10">
+                        <div className="relative">
+                            <img
+                                src={user.profilePhoto || `https://ui-avatars.com/api/?name=${user.name}&background=random`}
+                                alt="Profile"
+                                className="w-14 h-14 rounded-2xl object-cover ring-2 ring-white dark:ring-gray-800 shadow-lg"
+                            />
+                            <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-500 rounded-lg flex items-center justify-center border-2 border-white dark:border-gray-800 shadow-sm">
+                                <Zap size={10} className="text-white fill-white" />
                             </div>
-                            <button onClick={onClose} className="p-2 hover:bg-background rounded-full transition-colors text-text-secondary">
-                                <X size={20} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <h2 className="text-lg font-black text-text-primary leading-tight truncate">{user.name}</h2>
+                            <p className="text-xs font-bold text-text-secondary/70">{user.phone}</p>
+                            <button
+                                onClick={() => handleNav('/profile')}
+                                className="mt-1 text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-1 hover:gap-2 transition-all"
+                            >
+                                {language === 'en' ? 'View Profile' : 'प्रोफ़ाइल देखें'} <ChevronRight size={10} strokeWidth={3} />
                             </button>
                         </div>
-                        <h2 className="text-xl font-bold text-text-primary truncate">{user.name}</h2>
-                        <p className="text-text-secondary text-sm font-medium">{user.phone}</p>
                     </div>
+                    {/* Background Shine */}
+                    <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-emerald-100/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 pointer-events-none" />
+                </div>
 
-                    {/* Role Switcher - Prominent */}
-                    <div className="p-4 border-b border-border">
-                        <label className="text-xs font-bold text-text-muted uppercase tracking-widest mb-3 block">
-                            {language === 'en' ? 'Current Mode' : 'वर्तमान मोड'}
+                {/* 3. MODE SWITCHER (High Contrast) */}
+                <div className="px-6 mb-6">
+                    <div className="bg-background border border-border/50 p-1 rounded-2xl flex gap-1 shadow-inner">
+                        <button
+                            onClick={() => { setRole(UserRole.WORKER); onClose(); }}
+                            className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${role === UserRole.WORKER ? 'bg-primary text-white shadow-lg' : 'text-text-muted hover:text-text-primary'}`}
+                        >
+                            <Zap size={14} className={role === UserRole.WORKER ? 'fill-white' : ''} />
+                            {language === 'en' ? 'Worker' : 'कामगार'}
+                        </button>
+                        <button
+                            onClick={() => { setRole(UserRole.POSTER); onClose(); }}
+                            className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${role === UserRole.POSTER ? 'bg-blue-600 text-white shadow-lg' : 'text-text-muted hover:text-text-primary'}`}
+                        >
+                            <Briefcase size={14} />
+                            {language === 'en' ? 'Poster' : 'पोस्टर'}
+                        </button>
+                    </div>
+                </div>
+
+                {/* 4. NAVIGATION SECTION */}
+                <div className="flex-1 overflow-y-auto px-4 pb-8 no-scrollbar">
+                    {/* Main Section */}
+                    <div className="mb-6">
+                        <label className="px-4 text-[10px] font-black text-text-muted uppercase tracking-[0.2em] mb-3 block">
+                            {language === 'en' ? 'Main Menu' : 'मुख्य मेनू'}
                         </label>
-                        <div className="bg-background p-1 rounded-xl flex border border-border">
-                            <button
-                                onClick={() => { setRole(UserRole.WORKER); onClose(); }}
-                                className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${role === UserRole.WORKER ? 'bg-surface shadow-sm text-emerald-600' : 'text-text-secondary hover:text-text-primary'}`}
-                            >
-                                <Zap size={14} /> Worker
-                            </button>
-                            <button
-                                onClick={() => { setRole(UserRole.POSTER); onClose(); }}
-                                className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${role === UserRole.POSTER ? 'bg-surface shadow-sm text-blue-600' : 'text-text-secondary hover:text-text-primary'}`}
-                            >
-                                <Briefcase size={14} /> Poster
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Menu Items */}
-                    <nav className="flex-1 overflow-y-auto py-4">
-                        <ul className="space-y-1">
-                            {/* Worker Categories */}
-                            {role === UserRole.WORKER && (
+                        <nav className="space-y-1">
+                            {role === UserRole.WORKER ? (
                                 <>
-                                    <div className="px-6 py-2 text-xs font-bold text-text-muted uppercase tracking-widest mt-2 mb-1">
-                                        {language === 'en' ? 'Browse Categories' : 'श्रेणियाँ ब्राउज़ करें'}
-                                    </div>
-                                    {CATEGORY_CONFIG.map(cat => (
-                                        <MenuItem
-                                            key={cat.id}
-                                            icon={cat.icon}
-                                            label={cat.label[language]}
-                                            onClick={() => { navigate(`/category/${cat.id}`); onClose(); }}
-                                        />
-                                    ))}
-                                    <div className="my-4 border-t border-border mx-6" />
+                                    <NavItem
+                                        icon={Briefcase}
+                                        label={language === 'en' ? "Find Work" : "काम खोजें"}
+                                        active={location.pathname === '/' || location.pathname === '/find'}
+                                        onClick={() => handleNav('/')}
+                                    />
+                                    <NavItem
+                                        icon={LayoutGrid}
+                                        label={language === 'en' ? "Categories" : "श्रेणियाँ"}
+                                        active={location.pathname === '/categories'}
+                                        onClick={() => handleNav('/categories')}
+                                    />
+                                    <NavItem
+                                        icon={Home}
+                                        label={language === 'en' ? "Active Jobs" : "सक्रिय कार्य"}
+                                        active={location.pathname === '/my-jobs'}
+                                        onClick={() => handleNav('/my-jobs')}
+                                    />
+                                </>
+                            ) : (
+                                <>
+                                    <NavItem
+                                        icon={Home}
+                                        label={language === 'en' ? "My Dashboard" : "मेरा डैशबोर्ड"}
+                                        active={location.pathname === '/'}
+                                        onClick={() => handleNav('/')}
+                                    />
+                                    <NavItem
+                                        icon={Plus}
+                                        label={language === 'en' ? "Post a Job" : "काम पोस्ट करें"}
+                                        active={location.pathname === '/post'}
+                                        onClick={() => handleNav('/post')}
+                                    />
                                 </>
                             )}
+                        </nav>
+                    </div>
 
-                            {/* System Settings only, as navigation is now in the main UI */}
-                            <MenuItem
+                    {/* System Section */}
+                    <div className="mb-6 pt-6 border-t border-border/50">
+                        <label className="px-4 text-[10px] font-black text-text-muted uppercase tracking-[0.2em] mb-3 block">
+                            {language === 'en' ? 'System Settings' : 'सिस्टम सेटिंग्स'}
+                        </label>
+                        <nav className="space-y-1">
+                            <NavItem
                                 icon={isDark ? Sun : Moon}
-                                label={language === 'en' ? (isDark ? "Light Mode" : "Dark Mode") : (isDark ? "लाइट मोड" : "डार्क मोड")}
-                                onClick={() => { toggleTheme(); onClose(); }}
+                                label={language === 'en' ? (isDark ? "Light Aesthetics" : "Dark Aesthetics") : (isDark ? "लाइट थीम" : "डार्क थीम")}
+                                onClick={() => { toggleTheme(); }}
                             />
-                            <MenuItem
+                            <NavItem
                                 icon={Languages}
-                                label={language === 'en' ? "Change Language" : "भाषा बदलें"}
+                                label={language === 'en' ? "Language Settings" : "भाषा सेटिंग्स"}
                                 onClick={() => setShowLangModal(true)}
                             />
-                            {/* Future: Add Settings, Help & Support here */}
-                        </ul>
-                    </nav>
+                            {user?.email === 'as30041@gmail.com' && (
+                                <NavItem
+                                    icon={Shield}
+                                    label={language === 'en' ? "Admin Console" : "एडमिट कंसोल"}
+                                    active={location.pathname === '/admin'}
+                                    onClick={() => handleNav('/admin')}
+                                    highlight
+                                />
+                            )}
+                            <NavItem
+                                icon={HelpCircle}
+                                label={language === 'en' ? "Help & Support" : "सहायता और समर्थन"}
+                                onClick={() => { /* Support Logic */ }}
+                            />
+                        </nav>
+                    </div>
+                </div>
 
-                    {/* Footer */}
-                    <div className="p-4 border-t border-border">
-                        <button
-                            onClick={onLogout}
-                            className="w-full py-3 rounded-xl bg-red-500/10 text-red-600 hover:bg-red-500/20 font-bold flex items-center justify-center gap-2 transition-colors"
-                        >
-                            <LogOut size={18} />
-                            {language === 'en' ? "Sign Out" : "साइन आउट"}
-                        </button>
-                        <p className="text-center text-[10px] text-text-muted mt-4">v1.2.0 • Antigravity</p>
+                {/* 5. FOOTER (Sign Out) */}
+                <div className="p-6 border-t border-border/50 bg-surface">
+                    <button
+                        onClick={onLogout}
+                        className="w-full py-4 rounded-2xl bg-red-500/10 text-red-600 hover:bg-red-500/15 font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-3 transition-all active:scale-[0.98]"
+                    >
+                        <LogOut size={18} strokeWidth={3} />
+                        {language === 'en' ? "Sign Out" : "साइन आउट"}
+                    </button>
+                    <div className="mt-4 flex flex-col items-center gap-1 opacity-40">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-text-secondary">CHOWKAR GLOBAL</span>
+                        <span className="text-[8px] font-medium text-text-muted">v2.1.0 • Antigravity Engine</span>
                     </div>
                 </div>
             </div>
@@ -153,17 +226,42 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onLogout }) =
     );
 };
 
-const MenuItem: React.FC<{ icon: any, label: string, onClick: () => void }> = ({ icon: Icon, label, onClick }) => (
-    <li>
-        <button
-            onClick={onClick}
-            className="w-full px-6 py-3 flex items-center justify-between hover:bg-background transition-colors group"
-        >
-            <div className="flex items-center gap-4 text-text-secondary font-medium group-hover:text-text-primary">
-                <Icon size={20} className="text-text-muted group-hover:text-primary transition-colors" />
-                {label}
+const NavItem: React.FC<{ icon: any, label: string, onClick: () => void, active?: boolean, highlight?: boolean }> = ({ icon: Icon, label, onClick, active, highlight }) => (
+    <button
+        onClick={onClick}
+        className={`
+            w-full px-4 py-3.5 flex items-center justify-between rounded-2xl transition-all group
+            ${active
+                ? 'bg-primary/10 text-primary'
+                : 'text-text-secondary hover:bg-background/80 hover:text-text-primary'}
+            ${highlight && !active ? 'border border-primary/20 bg-primary/5' : ''}
+        `}
+    >
+        <div className="flex items-center gap-4">
+            <div className={`
+                w-10 h-10 rounded-xl flex items-center justify-center transition-all
+                ${active ? 'bg-primary text-white shadow-lg' : 'bg-background text-text-muted group-hover:text-primary group-hover:bg-primary/10'}
+            `}>
+                <Icon size={20} className={active ? 'fill-white/20' : ''} />
             </div>
-            <ChevronRight size={16} className="text-border group-hover:text-text-muted" />
-        </button>
-    </li>
+            <span className="text-sm font-bold tracking-tight">{label}</span>
+        </div>
+        {!active && <ChevronRight size={14} className="text-text-muted/30 group-hover:translate-x-1 transition-transform" />}
+    </button>
+);
+
+const Clock: React.FC<any> = (props) => (
+    <svg
+        {...props}
+        xmlns="http://www.w3.org/2000/svg"
+        width="24" height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+    >
+        <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+    </svg>
 );

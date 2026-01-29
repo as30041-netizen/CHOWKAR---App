@@ -1,0 +1,210 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    /* 
+     * THEME SYSTEM: Functional Premium
+     * Supports: Light/Dark Modes + Role-Based Contexts (Poster vs Worker)
+     */
+
+    :root {
+        /* DEFAULT THEME (Poster - Light) */
+        --bg-base: #FFFFFF;
+        --bg-card: #F8FAFC;
+        --text-primary: #0f172a;
+        --text-secondary: #64748b;
+        --text-muted: #94a3b8;
+        --primary: #3b82f6;
+        /* Blue-500 */
+        --border-subtle: #e2e8f0;
+    }
+
+    :root[data-theme="worker"] {
+        /* WORKER THEME (Light) - Fresh/Minty */
+        --bg-base: #F0FDF4;
+        /* Mint-50 */
+        --bg-card: #FFFFFF;
+        --text-primary: #022c22;
+        --text-secondary: #166534;
+        --primary: #10b981;
+        /* Emerald-500 */
+        --border-subtle: #dcfce7;
+    }
+
+    .dark:root {
+        /* DEFAULT THEME (Poster - Dark) - Deep Navy */
+        --bg-base: #020617;
+        /* Slate-950+ */
+        --bg-card: #11131F;
+        /* Custom Deep Navy Card */
+        --text-primary: #ffffff;
+        --text-secondary: #94a3b8;
+        /* Slate-400 */
+        --text-muted: #475569;
+        --primary: #6366f1;
+        /* Indigo-500 */
+        --border-subtle: rgba(255, 255, 255, 0.08);
+        /* White/8% */
+    }
+
+    .dark:root[data-theme="worker"] {
+        /* WORKER THEME (Dark) - Deep Forest */
+        --bg-base: #020905;
+        /* Almost Black Green */
+        --bg-card: #06190e;
+        /* Dark Emerald Card */
+        --text-primary: #ecfdf5;
+        --text-secondary: #6ee7b7;
+        --primary: #10b981;
+        /* Emerald-500 */
+        --border-subtle: rgba(255, 255, 255, 0.08);
+    }
+
+    /* SAFE AREA UTILITIES 
+     * We use a multi-layered fallback strategy:
+     * 1. env() - browser provided safe area
+     * 2. var(--sat/--sab) - injected by JS for platform-specific handling
+     * 3. Default fallback (0 or small value)
+     */
+    :root {
+        --sat: env(safe-area-inset-top, 0px);
+        --sab: env(safe-area-inset-bottom, 0px);
+    }
+
+    .pt-safe {
+        padding-top: var(--sat);
+    }
+
+    .pb-safe {
+        padding-bottom: var(--sab);
+    }
+
+    .mt-safe {
+        margin-top: var(--sat);
+    }
+
+    .mb-safe {
+        margin-bottom: var(--sab);
+    }
+}
+
+body {
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    -webkit-font-smoothing: antialiased;
+}
+
+@layer components {
+
+    /* 
+     * COMPONENT: Card
+     * Style: Solid, Crisp Border, Squircle
+     */
+    .card {
+        @apply rounded-squircle shadow-none overflow-hidden relative;
+        background-color: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+
+    /* 
+     * COMPONENT: Button
+     * Style: High Contrast, No Blur
+     */
+    .btn {
+        @apply inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:pointer-events-none;
+    }
+
+    .btn-primary {
+        @apply bg-primary text-white shadow-md hover:brightness-110;
+        /* No colored glow, just clean elevation */
+    }
+
+    .btn-secondary {
+        @apply bg-transparent text-text-primary;
+        border: 1px solid var(--border-subtle);
+    }
+
+    .btn-secondary:hover {
+        background-color: var(--bg-card);
+    }
+
+    .btn-ghost {
+        @apply text-text-secondary hover:text-text-primary;
+    }
+
+    .btn-ghost:hover {
+        background-color: var(--border-subtle);
+    }
+
+    /* 
+     * COMPONENT: Badge
+     * Style: Pill, Tabular Nums
+     */
+    .badge {
+        @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium tabular-nums border;
+    }
+
+    .badge-price {
+        @apply border bg-emerald-500/10 text-emerald-500;
+        border-color: rgba(16, 185, 129, 0.2);
+    }
+
+    /* 
+     * COMPONENT: Input / Form Elements
+     * Style: Solid, Crisp, Semantic
+     */
+    .input {
+        @apply w-full rounded-xl px-4 py-3 text-sm font-medium outline-none focus:ring-1 transition-all;
+        background-color: var(--bg-base);
+        border: 1px solid var(--border-subtle);
+        color: var(--text-primary);
+    }
+
+    .input:focus {
+        border-color: var(--primary);
+        --tw-ring-color: var(--primary);
+    }
+
+    .input::placeholder {
+        color: var(--text-muted);
+    }
+
+    .textarea {
+        @apply w-full rounded-xl px-4 py-3 text-sm font-medium outline-none focus:ring-1 transition-all resize-none;
+        background-color: var(--bg-base);
+        border: 1px solid var(--border-subtle);
+        color: var(--text-primary);
+    }
+
+    .textarea:focus {
+        border-color: var(--primary);
+        --tw-ring-color: var(--primary);
+    }
+
+    .textarea::placeholder {
+        color: var(--text-muted);
+    }
+
+    .label {
+        @apply block text-xs font-bold uppercase tracking-widest mb-2 ml-1;
+        color: var(--text-secondary);
+    }
+
+    /* UTILITIES */
+    .no-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+
+    .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+
+    .glass-card {
+        @apply bg-surface/80 backdrop-blur-md border border-white/20 dark:border-white/10 shadow-xl;
+    }
+}

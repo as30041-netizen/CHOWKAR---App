@@ -2,11 +2,10 @@ import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContextDB';
 import { Pencil, Crown, CheckCircle2, MapPin, Star, Award, Briefcase, LogOut, ChevronRight, Share2, ShieldCheck, Zap, ArrowLeft, TrendingUp } from 'lucide-react';
-import { REVIEW_TAGS_TRANSLATIONS } from '../constants';
+import { REVIEW_TAGS_TRANSLATIONS, FREE_AI_USAGE_LIMIT } from '../constants';
 import { useNavigate } from 'react-router-dom';
 import { deleteAccount } from '../services/authService';
-import { useWallet } from '../contexts/WalletContext';
-import { Trash2, AlertTriangle, X, Wallet as WalletIcon, BrainCircuit } from 'lucide-react';
+import { Trash2, AlertTriangle, X, BrainCircuit } from 'lucide-react';
 import { ProfileSkeleton } from '../components/Skeleton';
 
 interface ProfileProps {
@@ -17,7 +16,6 @@ interface ProfileProps {
 export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLogout }) => {
     const navigate = useNavigate();
     const { user, t, language, showAlert, setShowEditProfile } = useUser();
-    const { walletBalance } = useWallet();
     const [postedJobsCount, setPostedJobsCount] = useState(0);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -36,9 +34,7 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
             if (!error && count !== null) {
                 setPostedJobsCount(count);
             }
-            if (!error && count !== null) {
-                setPostedJobsCount(count);
-            }
+
             setIsLoading(false);
         };
         if (user.id) fetchJobCount();
@@ -100,9 +96,17 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
 
             {/* Header Profile Card */}
             <div className="bg-surface rounded-3xl shadow-sm border border-border overflow-hidden transition-all group relative">
-                <div className="h-56 bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 relative overflow-hidden group-hover:scale-[1.02] transition-transform duration-1000">
-                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10" />
+                <div className={`h-56 relative overflow-hidden group-hover:scale-[1.02] transition-transform duration-1000 ${user.subscription_plan === 'PRO_POSTER' ? 'bg-gradient-to-br from-amber-400 via-amber-500 to-yellow-600' :
+                    user.subscription_plan === 'WORKER_PLUS' ? 'bg-gradient-to-br from-indigo-500 via-purple-600 to-indigo-800' :
+                        user.subscription_plan === 'SUPER' ? 'bg-gradient-to-br from-emerald-400 via-teal-500 to-cyan-600' :
+                            'bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700'
+                    }`}>
+                    <div className="absolute inset-0 opacity-20 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-white via-transparent to-transparent" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+
+                    {/* Animated Mesh Blob for Extra Premium Feel */}
+                    <div className="absolute -top-24 -right-24 w-64 h-64 bg-white/10 rounded-full blur-3xl animate-pulse-slow" />
+                    <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-black/10 rounded-full blur-3xl" />
 
                     <div className="absolute top-8 right-8 flex gap-3">
                         <button onClick={handleShareProfile} className="bg-white/20 hover:bg-white/30 backdrop-blur-md p-3.5 rounded-2xl text-white transition-all active:scale-95 group/share border border-white/10 shadow-lg">
@@ -113,11 +117,18 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
                         </button>
                     </div>
 
-                    {user.isPremium && (
-                        <div className="absolute top-6 left-6 bg-amber-400 text-amber-950 px-4 py-1.5 rounded-full text-[9px] font-bold uppercase tracking-widest flex items-center gap-2 shadow-xl border border-amber-300 animate-pulse-slow">
-                            <Crown size={12} fill="currentColor" /> Premium Member
-                        </div>
-                    )}
+                    <button
+                        onClick={() => setShowSubscriptionModal(true)}
+                        className={`absolute top-6 left-6 px-4 py-1.5 rounded-full text-[9px] font-bold uppercase tracking-widest flex items-center gap-2 shadow-xl border animate-pulse-slow transition-all hover:scale-105 ${user.subscription_plan && user.subscription_plan !== 'FREE'
+                            ? 'bg-white text-black border-white/50'
+                            : 'bg-black/20 text-white border-white/20 hover:bg-black/30'
+                            }`}>
+                        <Crown size={12} fill={user.subscription_plan && user.subscription_plan !== 'FREE' ? "currentColor" : "none"} />
+                        {user.subscription_plan === 'PRO_POSTER' ? 'Pro Poster' :
+                            user.subscription_plan === 'WORKER_PLUS' ? 'Worker Plus' :
+                                user.subscription_plan === 'SUPER' ? 'Super Plan' :
+                                    'Free Plan (Upgrade)'}
+                    </button>
                 </div>
 
                 <div className="px-8 pb-10 -mt-20 flex flex-col items-center relative z-10">
@@ -182,27 +193,77 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
                 ))}
             </div>
 
-            {/* Wallet & AI Quick Access */}
+            {/* Membership & AI Usage Trackers */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Wallet Balance Card */}
+                {/* Membership Usage Tracker */}
                 <div
-                    onClick={() => navigate('/wallet')}
-                    className="bg-surface rounded-3xl p-6 border border-amber-500/20 dark:border-amber-500/10 shadow-sm cursor-pointer hover:scale-[1.01] active:scale-95 transition-all group overflow-hidden relative"
+                    onClick={() => setShowSubscriptionModal(true)}
+                    className={`bg-surface rounded-3xl p-6 border shadow-sm cursor-pointer hover:scale-[1.01] active:scale-95 transition-all group overflow-hidden relative ${user.subscription_plan === 'PRO_POSTER' ? 'border-amber-500/30' : 'border-border'
+                        }`}
                 >
-                    <div className="absolute -right-4 -top-4 w-32 h-32 bg-amber-50 dark:bg-amber-900/10 rounded-full blur-3xl group-hover:bg-amber-100 transition-colors" />
-                    <div className="relative z-10 flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-amber-50 dark:bg-amber-900/30 rounded-2xl text-amber-600 transition-transform group-hover:rotate-12">
-                                <WalletIcon size={24} strokeWidth={2.5} />
+                    <div className="absolute -right-4 -top-4 w-32 h-32 bg-primary/5 rounded-full blur-3xl group-hover:bg-primary/10 transition-colors" />
+                    <div className="relative z-10 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <div className={`p-3 rounded-2xl transition-transform group-hover:rotate-12 ${user.subscription_plan === 'PRO_POSTER' ? 'bg-amber-100 text-amber-600' : 'bg-primary/10 text-primary'
+                                    }`}>
+                                    <Crown size={24} strokeWidth={2.5} fill={user.subscription_plan === 'PRO_POSTER' ? "currentColor" : "none"} />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-bold text-text-primary leading-none mb-1">
+                                        {user.subscription_plan === 'FREE' ? 'Free Plan' : 'Membership'}
+                                    </h3>
+                                    <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                                        {user.subscription_plan === 'FREE' ? 'Upgrade to Unlock Limits' : 'Active & Valid'}
+                                    </p>
+                                    {user.subscription_expiry && user.subscription_plan !== 'FREE' && (
+                                        <p className="text-[9px] font-bold text-primary mt-1 uppercase tracking-tight">
+                                            Valid Until: {new Date(user.subscription_expiry).toLocaleDateString()}
+                                        </p>
+                                    )}
+                                </div>
                             </div>
-                            <div>
-                                <h3 className="text-base font-bold text-text-primary leading-none mb-1">My Wallet</h3>
-                                <p className="text-xl font-bold text-amber-600 tracking-tight">{walletBalance} <span className="text-[10px] uppercase tracking-widest text-amber-400">Coins</span></p>
-                            </div>
+                            <ChevronRight size={20} className="text-gray-300 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
                         </div>
-                        <div className="flex flex-col items-end gap-1">
-                            <ChevronRight size={20} className="text-gray-300 group-hover:text-amber-500 group-hover:translate-x-0.5 transition-all" />
-                            <span className="text-[8px] font-bold text-amber-500/50 uppercase tracking-widest">Add Money</span>
+
+                        {/* Usage Bars */}
+                        <div className="space-y-3 pt-2">
+                            {/* Job Posts Limit */}
+                            <div>
+                                <div className="flex justify-between text-[9px] font-bold uppercase tracking-widest mb-1.5">
+                                    <span className="text-text-secondary">{!user.subscription_plan || user.subscription_plan === 'FREE' ? 'Free Posts' : 'Total Posts'}</span>
+                                    <span className="text-text-primary">
+                                        {['PRO_POSTER', 'SUPER'].includes(user.subscription_plan || '')
+                                            ? <span className="text-emerald-600">Unlimited</span>
+                                            : `${postedJobsCount}/3`}
+                                    </span>
+                                </div>
+                                <div className="h-1.5 w-full bg-background rounded-full overflow-hidden border border-border/50">
+                                    <div
+                                        className={`h-full rounded-full transition-all duration-1000 ${postedJobsCount >= 3 && (!user.subscription_plan || user.subscription_plan === 'FREE') ? 'bg-red-500' : 'bg-primary'
+                                            }`}
+                                        style={{ width: (!user.subscription_plan || user.subscription_plan === 'FREE') ? `${Math.min(100, (postedJobsCount / 3) * 100)}%` : '100%' }}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Bids Limit */}
+                            <div>
+                                <div className="flex justify-between text-[9px] font-bold uppercase tracking-widest mb-1.5">
+                                    <span className="text-text-secondary">Weekly Bids</span>
+                                    <span className="text-text-primary">
+                                        {['WORKER_PLUS', 'SUPER'].includes(user.subscription_plan || '')
+                                            ? <span className="text-emerald-600">Unlimited</span>
+                                            : `${user.weeklyBidsCount || 0}/5`}
+                                    </span>
+                                </div>
+                                <div className="h-1.5 w-full bg-background rounded-full overflow-hidden border border-border/50">
+                                    <div
+                                        className={`h-full rounded-full transition-all duration-1000 ${['WORKER_PLUS', 'SUPER'].includes(user.subscription_plan || '') ? 'bg-gradient-to-r from-emerald-400 to-emerald-600' : 'bg-blue-500'}`}
+                                        style={{ width: ['WORKER_PLUS', 'SUPER'].includes(user.subscription_plan || '') ? '100%' : `${Math.min(100, ((user.weeklyBidsCount || 0) / 5) * 100)}%` }}
+                                    />
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -226,11 +287,16 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
                                             style={{ width: `${Math.min(100, (user.aiUsageCount || 0) * 10)}%` }}
                                         />
                                     </div>
-                                    <span className="text-[10px] font-bold text-indigo-600">{user.aiUsageCount || 0}/10</span>
+                                    <span className="text-[10px] font-bold text-indigo-600">
+                                        {['PRO_POSTER', 'SUPER'].includes(user.subscription_plan || '')
+                                            ? 'Unlimited'
+                                            : `${user.aiUsageCount || 0}/${FREE_AI_USAGE_LIMIT}`
+                                        }
+                                    </span>
                                 </div>
                             </div>
                         </div>
-                        {user.aiUsageCount >= 10 && !user.isPremium ? (
+                        {user.aiUsageCount >= FREE_AI_USAGE_LIMIT && (!user.subscription_plan || user.subscription_plan === 'FREE') ? (
                             <button
                                 onClick={() => setShowSubscriptionModal(true)}
                                 className="text-[8px] font-bold bg-indigo-600 text-white px-3 py-1.5 rounded-full uppercase tracking-widest shadow-lg shadow-indigo-500/30 hover:scale-105 active:scale-95 transition-all"
@@ -238,7 +304,7 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
                                 Get Unlimited
                             </button>
                         ) : (
-                            <span className="text-[8px] font-bold text-indigo-500/50 uppercase tracking-widest">Credits Used</span>
+                            <span className="text-[8px] font-bold text-indigo-500/50 uppercase tracking-widest">AI Requests</span>
                         )}
                     </div>
                 </div>

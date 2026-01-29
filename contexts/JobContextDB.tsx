@@ -105,8 +105,8 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [stats, setStats] = useState({ poster_active: 0, poster_history: 0, worker_active: 0, worker_history: 0, discover_active: 0 });
   const [searchQuery, setSearchQuery] = useState('');
-  const currentRequestIdRef = useRef<number>(0);
   const { showLoading, hideLoading } = useLoading();
+  const lastFocusTimeRef = useRef<number>(0);
 
   // --- Stats Loading ---
   const loadStats = useCallback(async (userId: string) => {
@@ -116,6 +116,8 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const lastLoadAttemptRef = useRef<Record<string, number>>({});
   const lastLoadTypeRef = useRef<string>('');
+  const currentRequestIdsRef = useRef<Record<string, number>>({});
+  const loadingAuthoritiesRef = useRef<Record<string, boolean>>({});
   const subscribedUserIdRef = useRef<string | null>(null);
   const inFlightFetches = useRef(new Set<string>());
   const fetchCache = useRef(new Map<string, number>());
@@ -372,16 +374,20 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const loadFeed = useCallback(async (type: 'HOME' | 'POSTER' | 'WORKER_APPS', offset: number = 0, userIdOverride?: string, filters?: { category?: string; searchQuery?: string; feedMode?: string; sortBy?: string; minBudget?: number; maxDistance?: number; userLat?: number; userLng?: number }) => {
     const isInitial = offset === 0;
-    const requestId = ++currentRequestIdRef.current;
+    const feedMode = filters?.feedMode || currentFiltersRef.current.feedMode || 'RECOMMENDED';
+    const cacheKey = type === 'HOME' ? `${type}:${feedMode}` : type;
+
+    // Increment specific request ID for this category
+    const requestId = (currentRequestIdsRef.current[cacheKey] || 0) + 1;
+    currentRequestIdsRef.current[cacheKey] = requestId;
     const now = Date.now();
+    let showedLoading = false;
 
     if (filters) {
       currentFiltersRef.current = filters;
     }
 
     try {
-      const feedMode = filters?.feedMode || currentFiltersRef.current.feedMode || 'RECOMMENDED';
-      const cacheKey = type === 'HOME' ? `${type}:${feedMode}` : type;
       const hasActiveFilters = currentFiltersRef.current.searchQuery || (currentFiltersRef.current.category && currentFiltersRef.current.category !== 'All');
 
       if (isInitial && !hasActiveFilters) {
@@ -396,6 +402,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           setLoading(true);
           if (type === 'HOME') {
             showLoading(feedMode === 'RECOMMENDED' ? 'Personalizing for you...' : 'Fetching recent jobs...');
+            loadingAuthoritiesRef.current[cacheKey] = true;
           }
         }
       } else if (isInitial && hasActiveFilters) {
@@ -408,6 +415,13 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const lastTypeTime = lastLoadAttemptRef.current[cacheKey] || 0;
       if (isInitial && (now - lastTypeTime) < 500) {
         console.log(`[JobContext] ⏹️ Debouncing ${cacheKey} (Too frequent)`);
+        // If we represent a loading state, we must ensure it's cleared if we return early and No one else handles it.
+        // But debouncing usually happens when another request is about to start or just finished.
+        // To be safe, if we are the LATEST and we have authority, hide it.
+        if (requestId === currentRequestIdsRef.current[cacheKey] && loadingAuthoritiesRef.current[cacheKey]) {
+          hideLoading();
+          loadingAuthoritiesRef.current[cacheKey] = false;
+        }
         return;
       }
 
@@ -416,19 +430,21 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setCurrentFeedType(type);
       setError(null);
 
-      let userId = userIdOverride;
+      let userId = userIdOverride || currentUserId;
       if (!userId) {
         const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user?.id) userId = session.user.id;
-        else {
+        if (session?.user?.id) {
+          userId = session.user.id;
+          setCurrentUserId(userId);
+        } else {
           setLoading(false);
           setIsLoadingMore(false);
+          if (requestId === currentRequestIdsRef.current[cacheKey] && loadingAuthoritiesRef.current[cacheKey]) {
+            hideLoading();
+            loadingAuthoritiesRef.current[cacheKey] = false;
+          }
           return;
         }
-      }
-
-      if (userId && userId !== currentUserId) {
-        setCurrentUserId(userId);
       }
 
       console.log(`[JobContext] Loading ${type} feed for user: ${userId} with filters:`, currentFiltersRef.current);
@@ -442,7 +458,8 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       console.log(`[JobContext] ✅ ${type} feed loaded: ${result.jobs.length} jobs, hasMore: ${result.hasMore}`);
 
-      // Review Sync Fallback
+      // ... (Review Sync Fallback code remains unchanged internally, but we need to match the indentation/structure)
+      // I'll keep the block below as is but wrap it correctly
       try {
         const jobIds = result.jobs.map(j => j.id);
         if (jobIds.length > 0) {
@@ -464,8 +481,12 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         console.debug('[JobContext] Review sync skipped (safe fallback)', e);
       }
 
-      if (requestId !== currentRequestIdRef.current) {
-        console.warn(`[JobContext] ⚠️ Abandonding stale result for ${type} (Request ${requestId} vs Current ${currentRequestIdRef.current})`);
+      if (requestId !== currentRequestIdsRef.current[cacheKey]) {
+        console.warn(`[JobContext] ⚠️ Abandonding stale result for ${cacheKey} (Request ${requestId} vs Current ${currentRequestIdsRef.current[cacheKey]})`);
+        // If this request showed loading, but a newer one of the SAME type started, the newer one will handle hideLoading.
+        // But if this request was the LAST one of its type, it should still cleanup.
+        // Actually, if we showed loading, and we are not the latest, we should probably hide it UNLESS the latest is also showsLoading.
+        // To keep it simple: only the LATEST request of a type can hide the loader for that type.
         return;
       }
 
@@ -509,13 +530,16 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       console.error(`[JobContext] Error loading ${type} feed:`, err);
       if (lastLoadTypeRef.current === type) setError(`Failed: ${err.message || 'Unknown error'}`);
     } finally {
-      if (requestId === currentRequestIdRef.current) {
+      if (requestId === currentRequestIdsRef.current[cacheKey]) {
         setLoading(false);
         setIsRevalidating(false);
         setIsLoadingMore(false);
-        hideLoading();
+        if (loadingAuthoritiesRef.current[cacheKey]) {
+          hideLoading();
+          loadingAuthoritiesRef.current[cacheKey] = false;
+        }
       } else {
-        console.log(`[JobContext] ⏹️ Cleanup skipped for Request ${requestId} (Aborted)`);
+        console.log(`[JobContext] ⏹️ Cleanup for Request ${requestId} handled by newer request of type ${cacheKey}`);
       }
     }
   }, [currentUserId, showLoading, hideLoading, loadStats]);
@@ -534,16 +558,15 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     if (!currentUserId) {
       const timer = setTimeout(() => {
-        feedCache.current = getEmptyCache();
-        setJobs([]);
-        setHasMore(true);
-        setLoading(true);
-      }, 500);
+        if (!currentUserId && loading) setLoading(false);
+      }, 2000);
       return () => clearTimeout(timer);
     }
 
     const handleFocus = () => {
-      if (!document.hidden && currentUserId) {
+      const now = Date.now();
+      if (!document.hidden && currentUserId && (now - lastFocusTimeRef.current > 3000)) {
+        lastFocusTimeRef.current = now;
         loadFeed(currentFeedType, 0);
       }
     };
@@ -557,7 +580,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       document.removeEventListener('visibilitychange', handleFocus);
       window.removeEventListener('online', handleFocus);
     };
-  }, [currentUserId, currentFeedType, loadFeed]);
+  }, [currentUserId, currentFeedType, loadFeed, loading]);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {

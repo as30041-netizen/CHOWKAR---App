@@ -23,10 +23,10 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
         if (typeof window === 'undefined') return 'en';
         try {
             const saved = localStorage.getItem('chowkar_language');
-            return saved ? JSON.parse(saved) : 'en';
+            return saved ? JSON.parse(saved) : 'hi';
         } catch (e) {
             console.error('Error parsing language from localStorage', e);
-            return 'en';
+            return 'hi';
         }
     };
 

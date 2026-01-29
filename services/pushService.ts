@@ -90,7 +90,7 @@ export const setupPushListeners = (
 
     // When notification is received while app is open
     PushNotifications.addListener('pushNotificationReceived', (notification: PushNotificationSchema) => {
-        console.log('[Push] Notification received:', notification);
+
         onNotificationReceived(notification);
     });
 

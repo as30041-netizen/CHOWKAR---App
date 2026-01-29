@@ -105,7 +105,7 @@ export const MobileWelcome: React.FC<MobileWelcomeProps> = ({ onGetStarted, isSi
                     ) : (
                         <>
                             <Smartphone size={24} />
-                            {language === 'en' ? 'Continue with Google' : language === 'hi' ? 'Google के साथ जारी रखें' : 'Google ਨਾਲ ਜਾਰੀ ਰੱਖੋ'}
+                            {language === 'en' ? 'Get Started' : language === 'hi' ? 'शुरू करें' : 'ਸ਼ੁਰੂ ਕਰੋ'}
                         </>
                     )}
                 </button>

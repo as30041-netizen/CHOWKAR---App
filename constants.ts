@@ -1,7 +1,8 @@
 
 import { Job, JobStatus, User, UserRole, Bid, Notification } from './types';
 
-import { Share2, Truck, Wrench, Zap, Car, Sparkles, HardHat, Shovel } from 'lucide-react';
+import { Share2, Truck, Wrench, Zap, Car, Sparkles, HardHat, Shovel, LayoutGrid, Bug, Droplets, Hammer, Ruler, Flame, Trash2, Shield, PaintBucket, Bike, Package, Bus, Tractor, Leaf, Wheat, Heart, Camera, PartyPopper, Monitor, GraduationCap, Scissors, Baby, Dog, Shirt, MoreHorizontal, User as UserIcon, Box } from 'lucide-react';
+
 
 export interface CategoryConfig {
   id: string;
@@ -9,18 +10,99 @@ export interface CategoryConfig {
   icon: any; // Lucide icon
   color: string; // Tailwind gradient classes
   bg: string; // Solid bg for badges
+  textColor?: string; // Label color
   image?: string; // Path to realistic image
 }
 
 export const CATEGORY_CONFIG: CategoryConfig[] = [
+  // === HOME SERVICES ===
   {
-    id: 'Farm Labor',
-    label: { en: 'Farm Labor', hi: 'खेती-बाड़ी', pa: 'ਖੇਤੀਬਾੜੀ' },
-    icon: Shovel,
-    color: 'from-green-400 to-emerald-600',
-    bg: 'bg-emerald-100 text-emerald-800',
-    image: '/assets/categories/farm.png'
+    id: 'Cleaning',
+    label: { en: 'Cleaning', hi: 'सफाई', pa: 'ਸਫ਼ਾਈ' },
+    icon: Sparkles,
+    color: 'from-teal-300 to-cyan-500',
+    bg: 'bg-cyan-100',
+    textColor: 'text-cyan-800',
+    image: '/assets/categories/cleaning.png'
   },
+  {
+    id: 'Maid',
+    label: { en: 'Maid/House Help', hi: 'बाई / कामवाली', pa: 'ਘਰੇਲੂ ਮਦਦ' },
+    icon: UserIcon,
+    color: 'from-pink-500 to-pink-600',
+    bg: 'bg-pink-100',
+    textColor: 'text-pink-700',
+    image: '/assets/categories/maid.png'
+  },
+  {
+    id: 'Plumbing',
+    label: { en: 'Plumbing', hi: 'नल फिटिंग', pa: 'ਪਲੰਬਿੰਗ' },
+    icon: Wrench,
+    color: 'from-cyan-500 to-cyan-600',
+    bg: 'bg-cyan-100',
+    textColor: 'text-cyan-700',
+    image: '/assets/categories/plumbing.png'
+  },
+  {
+    id: 'Electrical',
+    label: { en: 'Electrical', hi: 'बिजली काम', pa: 'ਬਿਜਲੀ ਦਾ ਕੰਮ' },
+    icon: Zap,
+    color: 'from-yellow-500 to-yellow-600',
+    bg: 'bg-yellow-100',
+    textColor: 'text-yellow-700',
+    image: '/assets/categories/electrical.png'
+  },
+  {
+    id: 'Carpenter',
+    label: { en: 'Carpenter', hi: 'बढ़ई', pa: 'ਤਰਖਾਣ' },
+    icon: HardHat, // Placeholder
+    color: 'from-amber-600 to-orange-700',
+    bg: 'bg-orange-100 text-orange-800',
+    image: '/assets/categories/carpenter.png'
+  },
+  {
+    id: 'Painting',
+    label: { en: 'Painting', hi: 'पेंटिंग', pa: 'ਰੰਗ-रोगन' },
+    icon: Sparkles, // Placeholder
+    color: 'from-purple-500 to-purple-600',
+    bg: 'bg-purple-100',
+    textColor: 'text-purple-700',
+    image: '/assets/categories/painting.png'
+  },
+  {
+    id: 'AC/Appliance Repair',
+    label: { en: 'AC/Appliance Repair', hi: 'AC/उपकरण मरम्मत', pa: 'AC/ਮੁਰੰਮਤ' },
+    icon: Wrench,
+    color: 'from-blue-300 to-indigo-500',
+    bg: 'bg-indigo-100 text-indigo-800',
+    image: '/assets/categories/appliance.png'
+  },
+  {
+    id: 'Gardening',
+    label: { en: 'Gardening', hi: 'माली', pa: 'ਮਾਲੀ' },
+    icon: Leaf,
+    color: 'from-green-400 to-emerald-600',
+    bg: 'bg-green-100 text-green-800',
+    image: '/assets/categories/gardening.png'
+  },
+  {
+    id: 'Pest Control',
+    label: { en: 'Pest Control', hi: 'कीट नियंत्रण', pa: 'ਕੀੜੇ ਮਾਰ' },
+    icon: Bug,
+    color: 'from-red-400 to-rose-600',
+    bg: 'bg-rose-100 text-rose-800',
+    image: '/assets/categories/pest_control.png'
+  },
+  {
+    id: 'Water Tank',
+    label: { en: 'Water Tank Clean', hi: 'पानी टंकी सफाई', pa: 'ਟੈਂਕੀ ਸਫ਼ਾਈ' },
+    icon: Droplets,
+    color: 'from-cyan-400 to-blue-500',
+    bg: 'bg-cyan-50 text-cyan-900',
+    image: '/assets/categories/water_tank.png'
+  },
+
+  // === CONSTRUCTION ===
   {
     id: 'Construction',
     label: { en: 'Construction', hi: 'निर्माण / मिस्त्री', pa: 'ਉਸਾਰੀ / ਮਿਸਤਰੀ' },
@@ -30,36 +112,72 @@ export const CATEGORY_CONFIG: CategoryConfig[] = [
     image: '/assets/categories/construction.png'
   },
   {
+    id: 'Labor',
+    label: { en: 'Labor / Helper', hi: 'मजदूर', pa: 'ਮਜ਼ਦੂਰ' },
+    icon: Shovel,
+    color: 'from-orange-500 to-orange-600',
+    bg: 'bg-orange-100',
+    textColor: 'text-orange-700',
+    image: '/assets/categories/labor.png'
+  },
+  {
+    id: 'Tile & Marble',
+    label: { en: 'Tile & Marble', hi: 'टाइल / मार्बल', pa: 'ਟਾਇਲ / ਮਾਰਬਲ' },
+    icon: LayoutGrid,
+    color: 'from-gray-300 to-gray-500',
+    bg: 'bg-gray-100 text-gray-800',
+    image: '/assets/categories/tile.png'
+  },
+  {
+    id: 'Welding',
+    label: { en: 'Welding', hi: 'वेल्डिंग', pa: 'ਵੈਲਡਿੰਗ' },
+    icon: Flame,
+    color: 'from-red-500 to-red-700',
+    bg: 'bg-red-100 text-red-800',
+    image: '/assets/categories/welding.png'
+  },
+  {
+    id: 'Mason',
+    label: { en: 'Mason/Mistri', hi: 'राजमिस्त्री', pa: 'ਰਾਜਮਿਸਤਰੀ' },
+    icon: Hammer,
+    color: 'from-stone-500 to-stone-700',
+    bg: 'bg-stone-200 text-stone-900',
+    image: '/assets/categories/mason.png'
+  },
+  {
+    id: 'Contractor',
+    label: { en: 'Civil Contractor', hi: 'ठेकेदार', pa: 'ਠੇਕੇਦਾਰ' },
+    icon: Ruler,
+    color: 'from-slate-600 to-slate-800',
+    bg: 'bg-slate-200 text-slate-900',
+    image: '/assets/categories/contractor.png'
+  },
+  {
+    id: 'Waterproofing',
+    label: { en: 'Waterproofing', hi: 'वाटरप्रूफिंग', pa: 'ਵਾਟਰਪ੍ਰੂਫਿੰਗ' },
+    icon: Droplets,
+    color: 'from-cyan-600 to-blue-700',
+    bg: 'bg-blue-100 text-blue-900',
+    image: '/assets/categories/waterproofing.png'
+  },
+  {
+    id: 'Interior',
+    label: { en: 'Interior/Ceiling', hi: 'इंटीरियर / सीलिंग', pa: 'ਇਨਟੀਰੀਅਰ' },
+    icon: LayoutGrid,
+    color: 'from-purple-300 to-indigo-400',
+    bg: 'bg-purple-50 text-purple-900',
+    image: '/assets/categories/interior.png'
+  },
+
+  // === TRANSPORTATION ===
+  {
     id: 'Driver',
     label: { en: 'Driver', hi: 'ड्राइवर', pa: 'ਡਰਾਈਵਰ' },
     icon: Car,
-    color: 'from-blue-400 to-indigo-600',
-    bg: 'bg-blue-100 text-blue-800',
+    color: 'from-blue-500 to-blue-600',
+    bg: 'bg-blue-100',
+    textColor: 'text-blue-700',
     image: '/assets/categories/driver.png'
-  },
-  {
-    id: 'Cleaning',
-    label: { en: 'Cleaning', hi: 'सफाई', pa: 'ਸਫ਼ਾਈ' },
-    icon: Sparkles,
-    color: 'from-teal-300 to-cyan-500',
-    bg: 'bg-cyan-100 text-cyan-800',
-    image: '/assets/categories/cleaning.png'
-  },
-  {
-    id: 'Plumbing',
-    label: { en: 'Plumbing', hi: 'नल फिटिंग', pa: 'ਪਲੰਬਿੰਗ' },
-    icon: Wrench,
-    color: 'from-sky-400 to-blue-600',
-    bg: 'bg-sky-100 text-sky-800',
-    image: '/assets/categories/plumbing.png'
-  },
-  {
-    id: 'Electrical',
-    label: { en: 'Electrical', hi: 'बिजली काम', pa: 'ਬਿਜਲੀ ਦਾ ਕੰਮ' },
-    icon: Zap,
-    color: 'from-yellow-400 to-amber-500',
-    bg: 'bg-yellow-100 text-yellow-800',
-    image: '/assets/categories/electrical.png'
   },
   {
     id: 'Delivery',
@@ -68,6 +186,139 @@ export const CATEGORY_CONFIG: CategoryConfig[] = [
     color: 'from-fuchsia-400 to-purple-600',
     bg: 'bg-purple-100 text-purple-800',
     image: '/assets/categories/delivery.png'
+  },
+  {
+    id: 'Moving/Packers',
+    label: { en: 'Moving/Packers', hi: 'पैकर और मूवर', pa: 'ਪੈਕਰ / ਮੂਵਰ' },
+    icon: Box,
+    color: 'from-amber-400 to-orange-500',
+    bg: 'bg-amber-100 text-amber-800',
+    image: '/assets/categories/moving.png'
+  },
+  {
+    id: 'Bike Rental',
+    label: { en: 'Bike/Auto Rental', hi: 'किराये पर गाड़ी', pa: 'ਗੱਡੀ ਕਿਰਾਏ ਤੇ' },
+    icon: Bike,
+    color: 'from-green-300 to-teal-500',
+    bg: 'bg-teal-50 text-teal-900',
+    image: '/assets/categories/rental.png'
+  },
+  {
+    id: 'Vehicle Clean',
+    label: { en: 'Vehicle Cleaning', hi: 'गाड़ी धुलाई', pa: 'ਗੱਡੀ ਧੁलाई' },
+    icon: Sparkles,
+    color: 'from-blue-200 to-sky-400',
+    bg: 'bg-sky-50 text-sky-900',
+    image: '/assets/categories/carwash.png'
+  },
+
+  // === AGRICULTURE ===
+  {
+    id: 'Farm Labor',
+    label: { en: 'Farm Labor', hi: 'खेती-बाड़ी', pa: 'ਖੇਤੀਬਾੜੀ' },
+    icon: Shovel,
+    color: 'from-green-500 to-green-600',
+    bg: 'bg-green-100',
+    textColor: 'text-green-700',
+    image: '/assets/categories/farm.png'
+  },
+  {
+    id: 'Tractor Driver',
+    label: { en: 'Tractor Driver', hi: 'ट्रैक्टर ड्राइवर', pa: 'ਟਰੈਕਟਰ ਡਰਾਈਵਰ' },
+    icon: Tractor,
+    color: 'from-lime-500 to-green-600',
+    bg: 'bg-lime-100 text-lime-800',
+    image: '/assets/categories/tractor.png'
+  },
+  {
+    id: 'Harvesting',
+    label: { en: 'Harvesting', hi: 'फसल कटाई', pa: 'ਵਾਢੀ' },
+    icon: Wheat,
+    color: 'from-yellow-500 to-amber-600',
+    bg: 'bg-yellow-100 text-amber-900',
+    image: '/assets/categories/harvest.png'
+  },
+  {
+    id: 'Animal Care',
+    label: { en: 'Animal Care', hi: 'पशु पालन', pa: 'ਪਸ਼ੂ ਪਾਲਣ' },
+    icon: Heart,
+    color: 'from-rose-300 to-pink-500',
+    bg: 'bg-pink-50 text-pink-900',
+    image: '/assets/categories/animal.png'
+  },
+
+  // === EVENTS & SPECIALIZED ===
+  {
+    id: 'Cook/Catering',
+    label: { en: 'Cook / Catering', hi: 'रसोइया / कैटरिंग', pa: 'ਰਸੋਈਆ' },
+    icon: Sparkles,
+    color: 'from-orange-300 to-red-400',
+    bg: 'bg-orange-50 text-orange-900',
+    image: '/assets/categories/cook.png'
+  },
+  {
+    id: 'Beauty Service',
+    label: { en: 'Beauty Service', hi: 'ब्यूटी पार्लर', pa: 'ਬਿਊਟੀ ਪਾਰਲਰ' },
+    icon: Scissors,
+    color: 'from-pink-300 to-rose-400',
+    bg: 'bg-pink-50 text-pink-900',
+    image: '/assets/categories/beauty.png'
+  },
+  {
+    id: 'Decoration',
+    label: { en: 'Decoration/Event', hi: 'सजावट / इवेंट', pa: 'ਸਜਾਵਟ' },
+    icon: PartyPopper,
+    color: 'from-fuchsia-300 to-purple-500',
+    bg: 'bg-fuchsia-50 text-fuchsia-900',
+    image: '/assets/categories/decoration.png'
+  },
+  {
+    id: 'Photography',
+    label: { en: 'Photo/Video', hi: 'फोटोग्राफी', pa: 'ਫੋਟੋਗ੍ਰਾਫੀ' },
+    icon: Camera,
+    color: 'from-zinc-400 to-zinc-600',
+    bg: 'bg-zinc-100 text-zinc-900',
+    image: '/assets/categories/camera.png'
+  },
+  {
+    id: 'Computer Repair',
+    label: { en: 'Mobile/Comp Repair', hi: 'मोबाइल/कंप्यूटर', pa: 'ਮੋਬਾਈਲ ਰਿਪੇਅਰ' },
+    icon: Monitor,
+    color: 'from-indigo-400 to-blue-500',
+    bg: 'bg-indigo-50 text-indigo-900',
+    image: '/assets/categories/computer.png'
+  },
+  {
+    id: 'Elderly Care',
+    label: { en: 'Elderly/Patient Care', hi: 'बुजुर्ग/रोगी सेवा', pa: 'ਸੇਵਾ ਸੰਭਾਲ' },
+    icon: UserIcon,
+    color: 'from-teal-300 to-emerald-400',
+    bg: 'bg-teal-50 text-teal-900',
+    image: '/assets/categories/elderly.png'
+  },
+  {
+    id: 'Child Care',
+    label: { en: 'Nanny/Child Care', hi: 'बच्चा संभाल', pa: 'ਬੱਚਾ ਸੰਭਾਲ' },
+    icon: Baby,
+    color: 'from-orange-200 to-amber-300',
+    bg: 'bg-orange-50 text-orange-900',
+    image: '/assets/categories/child.png'
+  },
+  {
+    id: 'Laundry',
+    label: { en: 'Laundry/Ironing', hi: 'धोबी / इस्त्री', pa: 'ਧੋਬੀ / ਪ੍ਰੈਸ' },
+    icon: Shirt,
+    color: 'from-sky-200 to-cyan-300',
+    bg: 'bg-sky-50 text-sky-900',
+    image: '/assets/categories/laundry.png'
+  },
+  {
+    id: 'Tutor',
+    label: { en: 'Tutor / Coaching', hi: 'ट्यूटर / कोचिंग', pa: 'ਟਿਊਸ਼ਨ' },
+    icon: Share2, // Placeholder
+    color: 'from-indigo-300 to-purple-400',
+    bg: 'bg-indigo-50 text-indigo-900',
+    image: '/assets/categories/tutor.png'
   },
   {
     id: 'Other',
@@ -279,7 +530,7 @@ const EN_TRANSLATIONS = {
   securityDesc: "Never share OTPs or passwords. CHOWKAR will NEVER ask for them under any circumstances.",
   essentialGuidelines: "Essential Guidelines",
   ruleInAppPayments: "In-App Payments",
-  ruleInAppPaymentsDesc: "Always use our secure wallet for all job payments to stay protected by our system.",
+  ruleInAppPaymentsDesc: "All payments are secure and protected by our system.",
   ruleVerifyProfiles: "Verify Profiles",
   ruleVerifyProfilesDesc: "Ensure the face matches the profile photo. Don't hesitate to ask for ID verification.",
   ruleStayInChat: "Stay in Chat",
@@ -316,7 +567,7 @@ const EN_TRANSLATIONS = {
   termRole: "Platform Role",
   termRoleDesc: "We are an intermediary connecting users. We don't employ workers.",
   termPayments: "Payments",
-  termPaymentsDesc: "Use our wallet for safety. We are not liable for cash-only disputes.",
+  termPaymentsDesc: "We provide secure payment gateways. We are not liable for cash-only disputes.",
   termPrivacy: "Data Privacy",
   termPrivacyDesc: "We use location only to find nearby work. We NEVER sell your data.",
   termTermination: "Termination",
@@ -353,13 +604,13 @@ const EN_TRANSLATIONS = {
   bestValue: "Best Value",
 
   // New Wallet/Bid Translatons
-  commissionCredits: "Commission Credits",
+  commissionCredits: "Free Credits",
   addCredits: "Add Credits",
   withdraw: "Withdraw",
   yourOfferLabel: "Your Offer",
   noBidsFound: "No bids found.",
   noBidsDesc: "Your job applications will appear here once you start bidding.",
-  acceptingBidFeeWarn: "Accepting this bid will deduct a ₹{fee} platform fee from your wallet. Continue?",
+  acceptingBidFeeWarn: "Accepting this bid may require a subscription upgrade. Continue?",
 
   // Payment Modal
   secureCheckout: "Secure Checkout",
@@ -377,7 +628,7 @@ const EN_TRANSLATIONS = {
   payNow: "Pay ₹{amount} Now",
 
   // Landing Page
-  heroTitle: "Find Work. Hire Locally. Zero Commission.",
+  heroTitle: "Hire Locally. Zero Commission. 100% Free.",
   heroSubtitle: "Connect directly with trusted workers and employers in your village or town. No middlemen, no hidden fees.",
   heroBtnWorker: "Find Work",
   heroBtnPoster: "Get Started Free",
@@ -440,10 +691,10 @@ const EN_TRANSLATIONS = {
 
   // Job Posting Form
   updateJob: "Update Job",
-  postJobWithFee: "Post Job (₹{fee})",
-  walletUsageDisclaimer: "Will use ₹{fee} from wallet (Balance: ₹{balance})",
+  postJobWithFee: "Post Job",
+  walletUsageDisclaimer: "Subscription limits apply.",
   uploadingImage: "Uploading image...",
-  jobPostedDeduction: "Job posted! ₹{fee} deducted from wallet.",
+  jobPostedDeduction: "Job posted successfully!",
   photoAnalyzed: "Details updated based on your photo.",
   analyzeAi: "Analyze with AI",
   addPhoto: "Add Photo",
@@ -466,7 +717,7 @@ const EN_TRANSLATIONS = {
   declineCounterPrompt: "Decline this counter offer? Your bid will be removed.",
   counterDeclined: "Counter declined. Your bid has been withdrawn.",
   counterAcceptedPay: "Counter accepted! Pay to unlock chat.",
-  chatUnlocked: "Chat unlocked! ₹{fee} deducted.",
+  chatUnlocked: "Chat unlocked!",
   chatUnlockFail: "Payment recorded but chat unlock failed.",
   chatOnlyAfterAccept: "Chat is only available after job is accepted.",
   notParticipant: "You are not a participant in this job.",
@@ -722,13 +973,13 @@ const HI_TRANSLATIONS = {
   bestValue: "सबसे अच्छा",
 
   // New Wallet/Bid Translatons
-  commissionCredits: "कमीशन क्रेडिट",
+  commissionCredits: "फ्री क्रेडिट्स",
   addCredits: "क्रेडिट जोड़ें",
   withdraw: "निकालें",
   yourOfferLabel: "आपका प्रस्ताव",
   noBidsFound: "कोई बोली नहीं मिली।",
   noBidsDesc: "जब आप बोली लगाना शुरू करेंगे तो आपके आवेदन यहाँ दिखाई देंगे।",
-  acceptingBidFeeWarn: "इस बोली को स्वीकार करने पर आपके वॉलेट से ₹{fee} प्लेटफॉर्म शुल्क काट लिया जाएगा। जारी रखें?",
+  acceptingBidFeeWarn: "इस बोली को स्वीकार करने पर आपके वॉलेट से {fee} Coins प्लेटफॉर्म शुल्क काट लिया जाएगा। जारी रखें?",
 
   // Payment Modal
   secureCheckout: "सुरक्षित चेकआउट",
@@ -746,7 +997,7 @@ const HI_TRANSLATIONS = {
   payNow: "अभी ₹{amount} का भुगतान करें",
 
   // Landing Page
-  heroTitle: "काम खोजें। स्थानीय लोगों को रखें। शून्य कमीशन।",
+  heroTitle: "स्थानीय लोगों को रखें। शून्य कमीशन। 100% मुफ़्त।",
   heroSubtitle: "अपने गांव या शहर में भरोसेमंद कामगारों और नियोक्ताओं से सीधे जुड़ें। कोई बिचौलिया नहीं, कोई छिपी हुई फीस नहीं।",
   heroBtnWorker: "काम खोजें",
   heroBtnPoster: "मुफ़्त में शुरू करें",
@@ -810,7 +1061,7 @@ const HI_TRANSLATIONS = {
   // Job Posting Form
   updateJob: "जॉब अपडेट करें",
   postJobWithFee: "जॉब पोस्ट करें (₹{fee})",
-  walletUsageDisclaimer: "वॉलेट से ₹{fee} का उपयोग होगा (शेष: ₹{balance})",
+  walletUsageDisclaimer: "Subscription limits apply.",
   uploadingImage: "फोटो अपलोड हो रही है...",
   jobPostedDeduction: "जॉब पोस्ट हुई! वॉलेट से ₹{fee} काटे गए।",
   photoAnalyzed: "फोटो के आधार पर विवरण अपडेट किया गया।",

@@ -93,7 +93,12 @@ export const CategoryJobs: React.FC<CategoryJobsProps> = ({
         let result = jobs
             // Ensure we strictly filter by category again client-side to be safe 
             // (though server returns only matching ones usually)
-            .filter(j => j.category === categoryId && j.status === 'OPEN')
+            .filter(j => {
+                if (j.category !== categoryId || j.status !== 'OPEN') return false;
+                if (j.posterId === user.id) return false;
+                const hasMyBid = j.myBidId || (j.bids && j.bids.some(b => b.workerId === user.id));
+                return !hasMyBid;
+            })
             .map(j => ({
                 ...j,
                 distance: (user.coordinates && j.coordinates)

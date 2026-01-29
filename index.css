@@ -193,4 +193,18 @@ body {
         @apply block text-xs font-bold uppercase tracking-widest mb-2 ml-1;
         color: var(--text-secondary);
     }
+
+    /* UTILITIES */
+    .no-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+
+    .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+
+    .glass-card {
+        @apply bg-surface/80 backdrop-blur-md border border-white/20 dark:border-white/10 shadow-xl;
+    }
 }

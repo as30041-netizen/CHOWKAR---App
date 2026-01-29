@@ -53,18 +53,17 @@ export const Home: React.FC<HomeProps> = ({
     const navigate = useNavigate();
     const location = useLocation();
 
-    // Worker Tabs - Sync with URL
+    // Worker Tabs - Default to FIND for root and /find
     const [workerTab, setWorkerTab] = useState<'FIND' | 'ACTIVE' | 'HISTORY'>(
-        location.pathname === '/find' ? 'FIND' : 'ACTIVE'
+        (location.pathname === '/' || location.pathname === '/find') ? 'FIND' : 'ACTIVE'
     );
 
     // Effect to handle URL based tab switching
     useEffect(() => {
         if (role === UserRole.WORKER) {
-            if (location.pathname === '/find') {
+            if (location.pathname === '/' || location.pathname === '/find') {
                 setWorkerTab('FIND');
-            } else if (workerTab === 'FIND') {
-                // If we are on home but tab is FIND, reset to ACTIVE
+            } else if (location.pathname === '/my-jobs') {
                 setWorkerTab('ACTIVE');
             }
         }
@@ -110,7 +109,7 @@ export const Home: React.FC<HomeProps> = ({
 
     // Handle explicit refresh
     const handleRefresh = async () => {
-        const type = role === UserRole.WORKER ? 'HOME' : 'POSTER';
+        const type = role === UserRole.POSTER ? 'POSTER' : (workerTab === 'FIND' ? 'HOME' : 'WORKER_APPS');
         await refreshJobs(type, {
             category: selectedCategory,
             searchQuery: searchQuery,
@@ -148,20 +147,24 @@ export const Home: React.FC<HomeProps> = ({
     // Trigger refresh when feed mode or filters change
     useEffect(() => {
         if (role === UserRole.WORKER && workerTab === 'FIND' && hasInitialized && user.id) {
-            // Map Quick Filters to API params
-            const effectiveMinBudget = quickFilters.highPay ? 800 : (filterMinBudget ? Number(filterMinBudget) : undefined);
-            const effectiveMaxDistance = quickFilters.nearby ? 5 : (filterMaxDistance ? Number(filterMaxDistance) : undefined);
+            const timer = setTimeout(() => {
+                // Map Quick Filters to API params
+                const effectiveMinBudget = quickFilters.highPay ? 800 : (filterMinBudget ? Number(filterMinBudget) : undefined);
+                const effectiveMaxDistance = quickFilters.nearby ? 5 : (filterMaxDistance ? Number(filterMaxDistance) : undefined);
 
-            refreshJobs('HOME', {
-                category: selectedCategory,
-                searchQuery: searchQuery,
-                feedMode: feedMode,
-                sortBy: sortBy,
-                minBudget: effectiveMinBudget,
-                maxDistance: effectiveMaxDistance,
-                userLat: user.coordinates?.lat,
-                userLng: user.coordinates?.lng
-            }, user.id);
+                refreshJobs('HOME', {
+                    category: selectedCategory,
+                    searchQuery: searchQuery,
+                    feedMode: feedMode,
+                    sortBy: sortBy,
+                    minBudget: effectiveMinBudget,
+                    maxDistance: effectiveMaxDistance,
+                    userLat: user.coordinates?.lat,
+                    userLng: user.coordinates?.lng
+                }, user.id);
+            }, 300); // 300ms debounce to prevent rapid-fire during init
+
+            return () => clearTimeout(timer);
         }
     }, [feedMode, selectedCategory, searchQuery, sortBy, filterMinBudget, filterMaxDistance, quickFilters.nearby, quickFilters.highPay, quickFilters.urgent, quickFilters.today, user.coordinates?.lat, user.coordinates?.lng, role, workerTab, hasInitialized, user.id]);
 
@@ -218,12 +221,15 @@ export const Home: React.FC<HomeProps> = ({
                 }
 
                 // WORKER LOGIC
-                // 1. Discovery/Find Mode: Trust Server Filtering
-                // The server already excludes: my own jobs, jobs I've bid on, and non-OPEN jobs.
+                // 1. Discovery/Find Mode: Strict filtering
                 if (workerTab === 'FIND') {
-                    // Final safety only: exclude my own if I'm the poster
+                    // Exclude my own jobs
                     if (j.posterId === user.id) return false;
-                    return true;
+                    // Exclude jobs I've already bid on
+                    const myBidId = j.myBidId || j.bids.find(b => b.workerId === user.id)?.id;
+                    if (myBidId) return false;
+                    // Strictly only show OPEN jobs
+                    return j.status === JobStatus.OPEN;
                 }
 
                 // 2. Active/History Mode: Pull from same Applications Feed
@@ -357,7 +363,7 @@ export const Home: React.FC<HomeProps> = ({
                             urgent: false,
                             today: false
                         });
-                        setFeedMode('RECOMMENDED');
+                        setFeedMode('ALL');
                     }}
                 />
             </main>

@@ -34,6 +34,8 @@ interface UserContextType {
   showEditProfile: boolean;
   setShowEditProfile: React.Dispatch<React.SetStateAction<boolean>>;
   hasInitialized: boolean;
+  isProfileComplete: boolean;
+  authStatus: 'loading' | 'unauthenticated' | 'onboarding' | 'ready';
 }
 
 export const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -58,8 +60,26 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     jobsCompleted: 0
   };
 
-  const [user, setUser] = useState<User>(() => getInitialState('chowkar_user', INITIAL_USER));
+  const [user, setUser] = useState<User>(() => {
+    // PLAYWRIGHT HELPER: Check for mock auth flag
+    if (typeof window !== 'undefined' && localStorage.getItem('chowkar_mock_auth') === 'true') {
+      console.log('[MockAuth] Initializing with Mock User');
+      return {
+        id: 'mock-user-1',
+        name: 'Demo User',
+        phone: '9876543210',
+        location: 'Mumbai, India',
+        rating: 4.8,
+        jobsCompleted: 12,
+        isPremium: true
+      };
+    }
+    return getInitialState('chowkar_user', INITIAL_USER);
+  });
+
   const [role, setRole] = useState<UserRole>(() => getInitialState('chowkar_role', UserRole.WORKER));
+
+
 
   // Consume new contexts (Facade Pattern)
   const { language, setLanguage, t } = useLanguage();
@@ -73,13 +93,17 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   );
 
   // CRITICAL FIX: isLoggedIn should strictly reflect session presence, NOT optimistic guesses
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && localStorage.getItem('chowkar_mock_auth') === 'true') return true;
+    return false;
+  });
 
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
 
   const [isAuthLoading, setIsAuthLoading] = useState(() => {
     if (typeof window !== 'undefined') {
+      if (localStorage.getItem('chowkar_mock_auth') === 'true') return false;
       if (isAuthCallback) return true;
       // CRITICAL FIX: If we think we ARE logged in, we MUST stay in loading state until verified.
       // If we are NOT logged in, we can skip loading to show Landing/Home quickly.
@@ -95,6 +119,8 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const mountedRef = useRef(true);
   const currentUserIdRef = useRef<string | null>(null);
   const userProfileRef = useRef<User>(user);
+  const fetchInProgressRef = useRef<boolean>(false);
+  const lastFetchTimeRef = useRef<number>(0);
 
   useEffect(() => {
     userProfileRef.current = user;
@@ -139,7 +165,19 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
 
-  useEffect(() => localStorage.setItem('chowkar_role', JSON.stringify(role)), [role]);
+  useEffect(() => {
+    // SUSPENSION CHECK
+    if ((user as any).is_suspended && isLoggedIn) {
+      console.warn('User is suspended. Forcing logout.');
+      logout();
+      // Small timeout to allow logout cleanly before alert
+      setTimeout(() => {
+        alert('Your account has been suspended by the administrator. Please contact support.');
+      }, 500);
+    }
+
+    localStorage.setItem('chowkar_role', JSON.stringify(role));
+  }, [role, user, isLoggedIn]);
 
   useEffect(() => {
     if (user.id && !user.id.startsWith('u') && !user.name.includes('Mock')) {
@@ -261,7 +299,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.warn('[Auth] Initialization took too long using fallback.');
 
         // ZOMBIE PROTECTION: If we think we're logged in but have no user, force a reset
-        if (localStorage.getItem('chowkar_isLoggedIn') === 'true' && !currentUserIdRef.current) {
+        if (localStorage.getItem('chowkar_isLoggedIn') === 'true' && !currentUserIdRef.current && localStorage.getItem('chowkar_mock_auth') !== 'true') {
           console.error('[Auth] Stuck in Zombie State (isLoggedIn=true, userId=null). Forcing Hard Reset...');
           logout();
         }
@@ -285,7 +323,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           return;
         }
 
-        if (localStorage.getItem('chowkar_isLoggedIn') === 'true') {
+        if (localStorage.getItem('chowkar_isLoggedIn') === 'true' && localStorage.getItem('chowkar_mock_auth') !== 'true') {
           console.warn('[Auth] Local storage says logged in, but INITIAL_SESSION has no user. Verifying...');
 
           if (Capacitor.isNativePlatform()) {
@@ -307,9 +345,12 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
         if (session?.user) {
+          const isSameUser = currentUserIdRef.current === session.user.id;
+
           localStorage.setItem('chowkar_isLoggedIn', 'true');
           setIsLoggedIn(true);
           currentUserIdRef.current = session.user.id;
+
           setUser(prev => {
             if (prev.id === session.user.id) return prev;
             return {
@@ -332,21 +373,32 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setHasInitialized(true); // Allow components to load
           }
 
-          try {
-            const { user: fullUser, error: fetchError } = await getCurrentUser(session.user);
-            if (fullUser && mountedRef.current) {
-              setUser(fullUser);
+          // Only fetch if it's a new login or we don't have full data yet
+          const needsProfileSync = !isSameUser || !isProfileComplete;
+          if (needsProfileSync && !fetchInProgressRef.current) {
+            try {
+              console.log(`[Auth] Triggering profile sync for ${event}...`);
+              fetchUserData();
+            } catch (err) {
+              console.error('[Auth] Profile sync failed during event:', event, err);
             }
-          } catch (err) {
           }
-          // finally block removed as it's handled above
         } else if (event === 'INITIAL_SESSION') {
           if (localStorage.getItem('chowkar_isLoggedIn') !== 'true') {
             setIsAuthLoading(false);
             setHasInitialized(true);
           }
         }
-      } else if (event === 'SIGNED_OUT') {
+      }
+
+      // CRITICAL FIX: Clear safety timeout if auth reaches a terminal state
+      const isTerminalState = session?.user || event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && !session);
+      if (isTerminalState) {
+        console.log(`[Auth] State resolved via ${event}, clearing safety timeout.`);
+        clearTimeout(safetyTimeout);
+      }
+
+      if (event === 'SIGNED_OUT') {
         if (isAuthCallbackRef.current) return;
         if (isLoggedIn || currentUserIdRef.current) {
           localStorage.removeItem('chowkar_isLoggedIn');
@@ -358,6 +410,9 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           });
           currentUserIdRef.current = null;
         }
+
+        // Also clear timeout on logout
+        clearTimeout(safetyTimeout);
       } else if (event === 'USER_UPDATED' && session?.user) {
         currentUserIdRef.current = session.user.id;
       }
@@ -372,20 +427,34 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   useEffect(() => {
-    if (isLoggedIn && user.id && !isAuthLoading) {
-      fetchUserData();
+    // Only refresh if logged in and we aren't already fetching
+    if (isLoggedIn && user.id && !isAuthLoading && !fetchInProgressRef.current) {
+      const now = Date.now();
+      // Throttling: Don't refresh more than every 5 seconds via this effect
+      if (now - lastFetchTimeRef.current > 5000) {
+        console.log('[UserContext] Auto-refreshing user data...');
+        fetchUserData();
+      }
     }
   }, [isLoggedIn, user.id, isAuthLoading]);
 
   const fetchUserData = async () => {
+    if (!user.id || fetchInProgressRef.current) return;
     const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id);
     if (!isValidUUID) return;
+
     try {
+      fetchInProgressRef.current = true;
+      lastFetchTimeRef.current = Date.now();
+
+      console.log('[UserContext] Fetching user profile for:', user.id);
       const { user: refreshedUser, error: profileError } = await getUserProfile(user.id);
-      if (!profileError && refreshedUser) {
+
+      if (!profileError && refreshedUser && mountedRef.current) {
         setUser(refreshedUser);
       }
-      if (Capacitor.isNativePlatform()) {
+
+      if (Capacitor.isNativePlatform() && mountedRef.current) {
         LocalNotifications.checkPermissions().then(permStatus => {
           if (permStatus.display === 'prompt' || permStatus.display === 'prompt-with-rationale') {
             LocalNotifications.requestPermissions();
@@ -393,7 +462,13 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }).catch(err => console.error(err));
       }
     } catch (error) {
-      showAlert('Failed to refresh data. Please check your connection.', 'error');
+      console.error('[UserContext] fetchUserData error:', error);
+      // Only show alert if it's not a background refresh
+      if (!hasInitialized) {
+        showAlert('Failed to refresh data. Please check your connection.', 'error');
+      }
+    } finally {
+      fetchInProgressRef.current = false;
     }
   };
 
@@ -431,11 +506,15 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         },
         async (payload) => {
           if (payload.eventType === 'UPDATE') {
+            console.log('[Realtime] Profile updated:', payload.new);
             setUser(prev => ({
               ...prev,
               ...payload.new,
               email: prev.email,
-              name: payload.new.full_name || prev.name
+              name: payload.new.name || prev.name,
+              subscription_plan: payload.new.subscription_plan,
+              subscription_expiry: payload.new.subscription_expiry,
+              is_suspended: payload.new.is_suspended
             }));
           }
         }
@@ -459,6 +538,26 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUser(prev => ({ ...prev, aiUsageCount: newCount }));
     incrementAIUsageDB(user.id, newCount);
   };
+
+  // SUPER APP FIX: Profile is complete if user has a real name, real phone, and location
+  const isProfileComplete = !!(
+    user.name &&
+    user.name !== 'User' &&
+    user.name.trim() !== '' &&
+    user.phone &&
+    !user.phone.startsWith('pending_') && // Block unique placeholders
+    user.location &&
+    user.location !== 'Not set'
+  );
+
+  // Derived Auth Status for Super App Gatekeeper
+  const authStatus = !hasInitialized || isAuthLoading
+    ? 'loading'
+    : !isLoggedIn || !user.id
+      ? 'unauthenticated'
+      : !isProfileComplete
+        ? 'onboarding'
+        : 'ready';
 
   const updateUserInDB = async (updates: Partial<User>) => {
     try {
@@ -555,7 +654,9 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       refreshUser: fetchUserData,
       showEditProfile,
       setShowEditProfile,
-      hasInitialized
+      hasInitialized,
+      isProfileComplete,
+      authStatus
     }}>
       {children}
     </UserContext.Provider>

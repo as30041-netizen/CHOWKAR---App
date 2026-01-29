@@ -1,5 +1,5 @@
 import { supabase, waitForSupabase } from '../lib/supabase';
-import { safeFetch } from './fetchUtils';
+import { safeFetch, safeRPC } from './fetchUtils';
 import { Job, Bid, JobStatus, Review, DashboardStats } from '../types';
 import { logger } from '../lib/logger';
 
@@ -163,36 +163,29 @@ export const fetchHomeFeed = async (
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
     // Use RPC for efficient Server-Side Filtering
-    const response = await safeFetch(
-      `${supabaseUrl}/rest/v1/rpc/get_home_feed`,
+    const { data: rpcData, error: rpcError } = await safeRPC<any[]>(
+      'get_home_feed',
       {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          p_user_id: userId,
-          p_limit: limit,
-          p_offset: offset,
-          p_category: filters?.category !== 'All' ? filters?.category : null,
-          p_search_query: filters?.searchQuery || null,
-          p_feed_mode: filters?.feedMode || 'RECOMMENDED',
-          p_sort_by: filters?.sortBy || 'NEWEST',
-          p_min_budget: filters?.minBudget || null,
-          p_max_distance: filters?.maxDistance || null,
-          p_user_lat: filters?.userLat || null,
-          p_user_lng: filters?.userLng || null
-        })
+        p_user_id: userId,
+        p_limit: limit,
+        p_offset: offset,
+        p_category: filters?.category !== 'All' ? filters?.category : null,
+        p_search_query: filters?.searchQuery || null,
+        p_feed_mode: filters?.feedMode || 'RECOMMENDED',
+        p_sort_by: filters?.sortBy || 'NEWEST',
+        p_min_budget: filters?.minBudget || null,
+        p_max_distance: filters?.maxDistance || null,
+        p_user_lat: filters?.userLat || null,
+        p_user_lng: filters?.userLng || null
       }
     );
 
-    if (!response.ok) {
-      logger.error(`[JobService] RPC get_home_feed failed: ${response.status}`);
-      logger.error(`[JobService] Full error response:`, await response.text());
-      throw new Error(`Feed fetch failed: ${response.status}`);
+    if (rpcError) {
+      logger.error(`[JobService] RPC get_home_feed failed:`, rpcError);
+      throw new Error(`Feed fetch failed: ${rpcError.message || 'Unknown error'}`);
     }
 
-    const data = await response.json();
+    const data = rpcData || [];
     logger.log(`[JobService] RPC Data received: ${data?.length || 0} rows`);
 
     const jobs = (data || []).map((row: any) => ({
@@ -243,28 +236,21 @@ export const fetchMyJobsFeed = async (
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
     // Use RPC to get computed fields like last_bid_negotiation_by
-    const response = await safeFetch(
-      `${supabaseUrl}/rest/v1/rpc/get_my_jobs_feed`,
+    const { data: rpcData, error: rpcError } = await safeRPC<any[]>(
+      'get_my_jobs_feed',
       {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          p_user_id: userId,
-          p_limit: limit,
-          p_offset: offset
-        })
+        p_user_id: userId,
+        p_limit: limit,
+        p_offset: offset
       }
     );
 
-    if (!response.ok) {
-      logger.error(`[JobService] RPC get_my_jobs_feed failed: ${response.status}, falling back to REST...`);
-      // Fallback to direct query
+    if (rpcError) {
+      logger.error(`[JobService] RPC get_my_jobs_feed failed:`, rpcError);
       return fetchMyJobsFeedFallback(userId, limit, offset);
     }
 
-    const data = await response.json();
+    const data = rpcData || [];
 
     // Map RPC result to Job objects
     const jobs: Job[] = (data || []).map((row: any) => ({
@@ -345,27 +331,21 @@ export const fetchMyApplicationsFeed = async (
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
     // Use Optimized RPC
-    const response = await safeFetch(
-      `${supabaseUrl}/rest/v1/rpc/get_my_applications_feed`,
+    const { data: rpcData, error: rpcError } = await safeRPC<any[]>(
+      'get_my_applications_feed',
       {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          p_user_id: userId,
-          p_limit: limit,
-          p_offset: offset
-        })
+        p_user_id: userId,
+        p_limit: limit,
+        p_offset: offset
       }
     );
 
-    if (!response.ok) {
-      logger.error(`[JobService] RPC get_my_applications_feed failed: ${response.status}`);
-      throw new Error(`Applications fetch failed: ${response.status}`);
+    if (rpcError) {
+      logger.error(`[JobService] RPC get_my_applications_feed failed:`, rpcError);
+      return fetchMyApplicationsFeedFallback(userId, limit, offset);
     }
 
-    const data = await response.json();
+    const data = rpcData || [];
     logger.log(`[JobService] RPC Data received: ${data?.length || 0} applications`);
 
     const jobs: Job[] = (data || []).map((row: any) => ({
@@ -406,6 +386,44 @@ export const fetchMyApplicationsFeed = async (
     logger.error('[JobService] fetchMyApplicationsFeed exception:', error?.message || error);
     return { jobs: [], hasMore: false };
   }
+};
+
+/**
+ * Fallback for my applications feed using direct REST
+ */
+const fetchMyApplicationsFeedFallback = async (
+  userId: string,
+  limit: number,
+  offset: number
+): Promise<{ jobs: Job[]; hasMore: boolean }> => {
+  const { data, error } = await supabase
+    .from('bids')
+    .select(`
+      job_id,
+      status, 
+      amount,
+      negotiation_history,
+      jobs (*)
+    `)
+    .eq('worker_id', userId)
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (error || !data) return { jobs: [], hasMore: false };
+
+  // Map to Job objects
+  const jobs: Job[] = data.map((row: any) => {
+    const job = dbJobToApp(row.jobs as DbJob);
+    return {
+      ...job,
+      myBidId: row.id,
+      myBidStatus: (row.status || 'PENDING').toUpperCase(),
+      myBidAmount: row.amount,
+      myBidLastNegotiationBy: row.negotiation_history && row.negotiation_history.length > 0 ? row.negotiation_history[row.negotiation_history.length - 1]?.by : null
+    };
+  });
+
+  return { jobs, hasMore: jobs.length === limit };
 };
 
 /**
@@ -1010,7 +1028,7 @@ export const rejectBid = async (bidId: string): Promise<{ success: boolean; erro
 // Cancel a job (Poster only) - With validation
 export const cancelJob = async (jobId: string): Promise<{ success: boolean; error?: string }> => {
   try {
-    console.log('[JobService] Cancelling job:', jobId);
+
 
     // 1. First check job status - cannot cancel completed jobs
     const { data: job, error: fetchError } = await supabase
@@ -1067,7 +1085,6 @@ export const fetchJobContact = async (jobId: string): Promise<{ phone: string | 
     return { phone: null, error: error.message };
   }
 };
-import { safeRPC } from './fetchUtils';
 
 /**
  * Save a generated translation to the job cache

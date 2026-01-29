@@ -71,9 +71,14 @@ export const WorkerActiveJobCard: React.FC<WorkerActiveJobCardProps> = ({
 
                 {/* Top: Title & Status */}
                 <div className="flex justify-between items-start gap-4">
-                    <h3 className="text-base font-black text-text-primary leading-tight line-clamp-1 flex-1 tracking-tight">
-                        {job.title}
-                    </h3>
+                    <div className="flex-1">
+                        <p className="text-[10px] font-black uppercase tracking-[0.15em] text-primary/70 mb-1">
+                            {job.category}
+                        </p>
+                        <h3 className="text-base font-black text-text-primary leading-tight line-clamp-1 flex-1 tracking-tight">
+                            {job.title}
+                        </h3>
+                    </div>
 
                     {/* Compact Status Badge */}
                     <div className={badgeClass}>

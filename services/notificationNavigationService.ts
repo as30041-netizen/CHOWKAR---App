@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { logger } from '../lib/logger';
 
 // Deep link navigation mapping
 export interface NotificationData {
@@ -16,7 +17,7 @@ export const handleNotificationNavigation = (
     navigate: (path: string) => void,
     openModal?: (type: string, id: string) => void
 ) => {
-    console.log('[DeepLink] Handling notification tap:', data);
+    logger.log('[DeepLink] Handling notification tap:', data);
 
     if (!data) {
         console.warn('[DeepLink] No data in notification');
@@ -33,7 +34,7 @@ export const handleNotificationNavigation = (
         case 'bid_rejected':
             // Navigate to View Bids modal for this job
             if (jobId && openModal) {
-                console.log('[DeepLink] Opening View Bids for job:', jobId);
+                logger.log('[DeepLink] Opening View Bids for job:', jobId);
                 navigate('/'); // Go to home first
                 setTimeout(() => openModal('viewBids', jobId), 500);
             }
@@ -44,7 +45,7 @@ export const handleNotificationNavigation = (
         case 'chat_unlocked':
             // Open chat for this job
             if (jobId && openModal) {
-                console.log('[DeepLink] Opening chat for job:', jobId);
+                logger.log('[DeepLink] Opening chat for job:', jobId);
                 navigate('/'); // Go to home first
                 setTimeout(() => openModal('chat', jobId), 500);
             }
@@ -55,7 +56,7 @@ export const handleNotificationNavigation = (
         case 'job_update':
             // Open job details
             if (jobId && openModal) {
-                console.log('[DeepLink] Opening job details:', jobId);
+                logger.log('[DeepLink] Opening job details:', jobId);
                 navigate('/');
                 setTimeout(() => openModal('jobDetails', jobId), 500);
             }
@@ -63,20 +64,16 @@ export const handleNotificationNavigation = (
 
         case 'review_received':
             // Navigate to profile
-            console.log('[DeepLink] Opening profile (review received)');
+            logger.log('[DeepLink] Opening profile (review received)');
             navigate('/profile');
             break;
 
         case 'payment_received':
-        case 'wallet_updated':
-            // Navigate to wallet
-            console.log('[DeepLink] Opening wallet');
-            navigate('/wallet');
-            break;
+
 
         default:
             // Generic notification - just go to home with notifications panel open
-            console.log('[DeepLink] Generic notification, opening notifications panel');
+            logger.log('[DeepLink] Generic notification, opening notifications panel');
             navigate('/');
             if (openModal) {
                 setTimeout(() => {

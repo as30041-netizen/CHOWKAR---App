@@ -1,5 +1,6 @@
 import React from 'react';
 import { MapPin, Facebook, Twitter, Instagram, Mail } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Language } from '../types';
 
 interface FooterProps {
@@ -7,7 +8,66 @@ interface FooterProps {
     onOpenModal: (type: 'safety' | 'guidelines' | 'terms') => void;
 }
 
+const FOOTER_CONTENT = {
+    en: {
+        tagline: "Connecting rural India with local opportunities. Simple, fast and secure.",
+        headings: {
+            resources: "Resources",
+            legal: "Legal",
+            contact: "Contact"
+        },
+        links: {
+            safety: "Safety Tips",
+            guidelines: "Community Guidelines",
+            stories: "Success Stories",
+            help: "Help Center",
+            terms: "Terms of Service",
+            privacy: "Privacy Policy",
+            cookies: "Cookie Policy"
+        },
+        copyright: "© 2026 CHOWKAR. All rights reserved."
+    },
+    hi: {
+        tagline: "ग्रामीण भारत को स्थानीय अवसरों से जोड़ना। सरल, तेज और सुरक्षित।",
+        headings: {
+            resources: "संसाधन",
+            legal: "कानूनी",
+            contact: "संपर्क"
+        },
+        links: {
+            safety: "सुरक्षा युक्तियाँ",
+            guidelines: "समुदाय दिशानिर्देश",
+            stories: "सफलता की कहानियां",
+            help: "सहायता केंद्र",
+            terms: "सेवा की शर्तें",
+            privacy: "गोपनीयता नीति",
+            cookies: "कुकी नीति"
+        },
+        copyright: "© 2026 CHOWKAR. सर्वाधिकार सुरक्षित।"
+    },
+    pa: {
+        tagline: "ਪੇਂਡੂ ਭਾਰਤ ਨੂੰ ਸਥਾਨਕ ਮੌਕਿਆਂ ਨਾਲ ਜੋੜਨਾ। ਸਰਲ, ਤੇਜ਼ ਅਤੇ ਸੁਰੱਖਿਅਤ।",
+        headings: {
+            resources: "ਸਰੋਤ",
+            legal: "ਕਾਨੂੰਨੀ",
+            contact: "ਸੰਪਰਕ"
+        },
+        links: {
+            safety: "ਸੁਰੱਖਿਆ ਸੁਝਾਅ",
+            guidelines: "ਭਾਈਚਾਰਾ ਦਿਸ਼ਾ-ਨਿਰਦੇਸ਼",
+            stories: "ਸਫਲਤਾ ਦੀਆਂ ਕਹਾਣੀਆਂ",
+            help: "ਮਦਦ ਕੇਂਦਰ",
+            terms: "ਸੇਵਾ ਦੀਆਂ ਸ਼ਰਤਾਂ",
+            privacy: "ਪਰਦੇਦਾਰੀ ਨੀਤੀ",
+            cookies: "ਕੁਕੀ ਨੀਤੀ"
+        },
+        copyright: "© 2026 CHOWKAR. ਸਾਰੇ ਅਧਿਕਾਰ ਸੁਰੱਖਿਅਤ।"
+    }
+};
+
 export const Footer: React.FC<FooterProps> = ({ language, onOpenModal }) => {
+    const content = FOOTER_CONTENT[language] || FOOTER_CONTENT['hi'];
+
     return (
         <footer className="bg-gray-900 text-white pt-16 pb-8 border-t border-white/10">
             <div className="max-w-6xl mx-auto px-6">
@@ -19,9 +79,7 @@ export const Footer: React.FC<FooterProps> = ({ language, onOpenModal }) => {
                             <span className="text-2xl font-bold font-serif-logo bg-gradient-to-r from-emerald-400 to-green-400 bg-clip-text text-transparent">CHOWKAR</span>
                         </div>
                         <p className="text-gray-400 mb-6 leading-relaxed">
-                            {language === 'en'
-                                ? 'Connecting rural India with local opportunities. Simple, fast, and secure.'
-                                : 'ग्रामीण भारत को स्थानीय अवसरों से जोड़ना। सरल, तेज और सुरक्षित।'}
+                            {content.tagline}
                         </p>
                         <div className="flex gap-4">
                             {[Facebook, Twitter, Instagram].map((Icon, i) => (
@@ -34,28 +92,25 @@ export const Footer: React.FC<FooterProps> = ({ language, onOpenModal }) => {
 
                     {/* Resources */}
                     <div>
-                        <h4 className="font-bold text-lg mb-6">{language === 'en' ? 'Resources' : 'संसाधन'}</h4>
+                        <h4 className="font-bold text-lg mb-6">{content.headings.resources}</h4>
                         <ul className="space-y-4 text-gray-400">
-                            <li><button onClick={() => onOpenModal('safety')} className="hover:text-emerald-400 transition-colors">Safety Tips</button></li>
-                            <li><button onClick={() => onOpenModal('guidelines')} className="hover:text-emerald-400 transition-colors">Community Guidelines</button></li>
-                            <li><a href="#" className="hover:text-emerald-400 transition-colors">Success Stories</a></li>
-                            <li><a href="#" className="hover:text-emerald-400 transition-colors">Help Center</a></li>
+                            <li><button onClick={() => onOpenModal('safety')} className="hover:text-emerald-400 transition-colors">{content.links.safety}</button></li>
+                            <li><button onClick={() => onOpenModal('guidelines')} className="hover:text-emerald-400 transition-colors">{content.links.guidelines}</button></li>
                         </ul>
                     </div>
 
                     {/* Legal */}
                     <div>
-                        <h4 className="font-bold text-lg mb-6">{language === 'en' ? 'Legal' : 'कानूनी'}</h4>
+                        <h4 className="font-bold text-lg mb-6">{content.headings.legal}</h4>
                         <ul className="space-y-4 text-gray-400">
-                            <li><button onClick={() => onOpenModal('terms')} className="hover:text-emerald-400 transition-colors">Terms of Service</button></li>
-                            <li><button onClick={() => onOpenModal('terms')} className="hover:text-emerald-400 transition-colors">Privacy Policy</button></li>
-                            <li><a href="#" className="hover:text-emerald-400 transition-colors">Cookie Policy</a></li>
+                            <li><button onClick={() => onOpenModal('terms')} className="hover:text-emerald-400 transition-colors">{content.links.terms}</button></li>
+                            <li><Link to="/privacy" className="hover:text-emerald-400 transition-colors">{content.links.privacy}</Link></li>
                         </ul>
                     </div>
 
                     {/* Contact */}
                     <div>
-                        <h4 className="font-bold text-lg mb-6">{language === 'en' ? 'Contact' : 'संपर्क'}</h4>
+                        <h4 className="font-bold text-lg mb-6">{content.headings.contact}</h4>
                         <ul className="space-y-4 text-gray-400">
                             <li className="flex items-start gap-3">
                                 <Mail size={18} className="text-emerald-400 mt-1" />
@@ -71,9 +126,7 @@ export const Footer: React.FC<FooterProps> = ({ language, onOpenModal }) => {
 
                 <div className="border-t border-white/10 pt-8 text-center text-gray-500 text-sm">
                     <p>
-                        {language === 'en'
-                            ? `© ${new Date().getFullYear()} CHOWKAR. All rights reserved.`
-                            : `© ${new Date().getFullYear()} CHOWKAR. सर्वाधिकार सुरक्षित।`}
+                        {content.copyright}
                     </p>
                 </div>
             </div>

@@ -1,0 +1,77 @@
+import React from 'react';
+import { MapPin, IndianRupee, Zap, Clock } from 'lucide-react';
+import { Language } from '../types';
+
+interface FilterPillsProps {
+    activeFilters: {
+        nearby: boolean;
+        highPay: boolean;
+        urgent: boolean;
+        today: boolean;
+    };
+    onToggle: (type: 'nearby' | 'highPay' | 'urgent' | 'today') => void;
+    language: Language;
+}
+
+export const FilterPills: React.FC<FilterPillsProps> = ({ activeFilters, onToggle, language }) => {
+
+    // Pill Component
+    const Pill = ({
+        type,
+        icon: Icon,
+        label,
+        isActive,
+        colorClass
+    }: {
+        type: 'nearby' | 'highPay' | 'urgent' | 'today',
+        icon: any,
+        label: string,
+        isActive: boolean,
+        colorClass: string
+    }) => (
+        <button
+            onClick={() => onToggle(type)}
+            className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full border transition-all active:scale-95 ${isActive
+                ? `${colorClass} text-white border-transparent shadow-lg transform scale-105`
+                : 'bg-surface text-text-secondary border-border hover:bg-background'
+                }`}
+        >
+            <Icon size={14} strokeWidth={isActive ? 3 : 2} />
+            <span className="text-[10px] font-black uppercase tracking-wider">{label}</span>
+            {isActive && <div className="ml-1 w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
+        </button>
+    );
+
+    return (
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar px-0 py-2 w-full">
+            <Pill
+                type="nearby"
+                icon={MapPin}
+                label={language === 'en' ? 'Near Me (<5km)' : language === 'hi' ? 'नज़दीकी (<5km)' : 'ਨੇੜੇ (<5km)'}
+                isActive={activeFilters.nearby}
+                colorClass="bg-blue-600"
+            />
+            <Pill
+                type="highPay"
+                icon={IndianRupee}
+                label={language === 'en' ? 'High Pay (>₹800)' : language === 'hi' ? 'उच्च वेतन (>₹800)' : 'ਵੱਧ ਪੈਸੇ (>₹800)'}
+                isActive={activeFilters.highPay}
+                colorClass="bg-emerald-600"
+            />
+            <Pill
+                type="urgent"
+                icon={Zap}
+                label={language === 'en' ? 'Urgent' : language === 'hi' ? 'ज़रूरी' : 'ਜ਼ਰੂਰੀ'}
+                isActive={activeFilters.urgent}
+                colorClass="bg-red-500"
+            />
+            <Pill
+                type="today"
+                icon={Clock}
+                label={language === 'en' ? 'Starts Today' : language === 'hi' ? 'आज शुरू' : 'ਅੱਜ ਸ਼ੁਰੂ'}
+                isActive={activeFilters.today}
+                colorClass="bg-purple-600"
+            />
+        </div>
+    );
+};

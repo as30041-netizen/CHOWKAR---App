@@ -1,4 +1,5 @@
 import { safeFetch, safeRPC } from './fetchUtils';
+import { logger } from '../lib/logger';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
@@ -59,10 +60,11 @@ export const submitReview = async (
     revieweeId: string,
     jobId: string,
     rating: number,
-    comment: string
+    comment: string,
+    tags: string[] = []
 ): Promise<{ success: boolean; error?: string }> => {
     try {
-        console.log('[ReviewService] Submitting review...');
+        logger.log('[ReviewService] Submitting review...');
         const response = await safeFetch(
             `${supabaseUrl}/rest/v1/reviews`,
             {
@@ -76,7 +78,8 @@ export const submitReview = async (
                     reviewee_id: revieweeId,
                     job_id: jobId,
                     rating,
-                    comment
+                    comment,
+                    tags
                 })
             }
         );

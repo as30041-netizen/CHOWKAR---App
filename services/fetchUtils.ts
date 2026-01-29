@@ -1,8 +1,10 @@
-
 import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
 
-const DEFAULT_TIMEOUT_MS = 10000;
+const DEFAULT_TIMEOUT_MS = 15000;
+
+// Singleton promise for session refresh to prevent "thundering herd" (multiple parallel refreshes)
+let refreshPromise: Promise<any> | null = null;
 
 export interface SafeFetchOptions extends RequestInit {
     timeout?: number;
@@ -17,96 +19,125 @@ export const safeFetch = async (
     options: SafeFetchOptions = {}
 ): Promise<Response> => {
     const { timeout = DEFAULT_TIMEOUT_MS, ...fetchOptions } = options;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    const maxRetries = 2;
+    let lastError: any = null;
 
-    try {
-        // Inject Auth Header if not present
-        if (!fetchOptions.headers) {
-            fetchOptions.headers = {};
-        }
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-        // Check if we need to add auth
-        const hasAuthHeader = Object.keys(fetchOptions.headers).some(k => k.toLowerCase() === 'authorization');
-        if (!hasAuthHeader) {
-            // PERFORMANCE FIX: Use cached token first, but fall back to async fetch if missing
-            // This ensures we don't use ANON key when we actually have a session (e.g. on first load)
-            const { getCachedAccessToken, getAccessToken } = await import('../lib/supabase');
-            let token = getCachedAccessToken();
-
-            if (!token) {
-                // If memory cache is empty, try async fetch (localStorage -> getSession)
-                token = (await getAccessToken()) || null;
+        try {
+            if (attempt > 0) {
+                const backoff = Math.min(1000 * Math.pow(2, attempt), 5000);
+                logger.log(`[safeFetch] Retry attempt ${attempt} for ${url} after ${backoff}ms...`);
+                await new Promise(resolve => setTimeout(resolve, backoff));
             }
 
-            // Fallback to ANON key ONLY if token is explicitly null (i.e., truly unauthenticated)
-            // But if we are calling an authenticated endpoint, this might still fail.
-            // For now, consistent behavior: use token if exists, else Anon Key.
-            const finalToken = token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+            // Inject Auth Header if not present
+            if (!fetchOptions.headers) {
+                fetchOptions.headers = {};
+            }
 
-            // Cast to any to allow indexed access since HeadersInit is strict
-            (fetchOptions.headers as any)['Authorization'] = `Bearer ${finalToken}`;
-            (fetchOptions.headers as any)['apikey'] = import.meta.env.VITE_SUPABASE_ANON_KEY;
-        }
+            // Check if we need to add auth
+            const hasAuthHeader = Object.keys(fetchOptions.headers).some(k => k.toLowerCase() === 'authorization');
+            if (!hasAuthHeader) {
+                const { getCachedAccessToken, getAccessToken } = await import('../lib/supabase');
+                let token = getCachedAccessToken();
 
-        let response = await fetch(url, {
-            ...fetchOptions,
-            signal: controller.signal,
-        });
+                if (!token) {
+                    token = (await getAccessToken()) || null;
+                }
 
-        // RETRY LOGIC FOR 401 (Expired Token)
-        if (response.status === 401) {
-            logger.warn('[safeFetch] 401 Unauthorized detected. Attempting to refresh session and retry...');
+                const finalToken = token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+                (fetchOptions.headers as any)['Authorization'] = `Bearer ${finalToken}`;
+                (fetchOptions.headers as any)['apikey'] = import.meta.env.VITE_SUPABASE_ANON_KEY;
+            }
 
-            // 1. Invalidate cache
-            const { supabase } = await import('../lib/supabase');
+            let response = await fetch(url, {
+                ...fetchOptions,
+                signal: controller.signal,
+            });
 
-            // 2. Force refresh session (with timeout to prevent hang)
-            const refreshPromise = supabase.auth.refreshSession();
-            const timeoutPromise = new Promise<{ data: { session: null }; error: { message: string } }>((resolve) =>
-                setTimeout(() => resolve({ data: { session: null }, error: { message: 'Refresh timed out' } }), 5000)
-            );
+            // RETRY LOGIC FOR 401 (Expired Token) - This should only happen once per attempt
+            if (response.status === 401) {
+                logger.warn(`[safeFetch] 401 Unauthorized for ${url}. Attempting unified session refresh...`);
 
-            const { data: { session }, error } = await Promise.race([refreshPromise, timeoutPromise]) as any;
+                // 1. Singleton refresh logic: Only one request refreshes the session
+                if (!refreshPromise) {
+                    refreshPromise = (async () => {
+                        try {
+                            const refreshCall = supabase.auth.refreshSession();
+                            const refreshTimeout = new Promise<{ data: { session: null }; error: { message: string } }>((resolve) =>
+                                setTimeout(() => resolve({ data: { session: null }, error: { message: 'Refresh timed out' } }), 8000)
+                            );
 
-            if (!error && session?.access_token) {
-                logger.log('[safeFetch] Session refreshed successfully. Retrying request...');
-
-                // 3. Update header with new token
-                (fetchOptions.headers as any)['Authorization'] = `Bearer ${session.access_token}`;
-
-                // 4. Retry request (resetting abort signal for retry)
-                const retryController = new AbortController();
-                const retryTimeoutId = setTimeout(() => retryController.abort(), timeout);
+                            const result = await Promise.race([refreshCall, refreshTimeout]) as any;
+                            if (result.error) throw result.error;
+                            return result.data.session;
+                        } finally {
+                            refreshPromise = null;
+                        }
+                    })();
+                }
 
                 try {
-                    response = await fetch(url, {
-                        ...fetchOptions,
-                        signal: retryController.signal,
-                    });
-                } finally {
-                    clearTimeout(retryTimeoutId);
+                    const session = await refreshPromise;
+
+                    if (session?.access_token) {
+                        logger.log('[safeFetch] Session refreshed successfully. Retrying request...');
+                        (fetchOptions.headers as any)['Authorization'] = `Bearer ${session.access_token}`;
+
+                        const retryController = new AbortController();
+                        const retryTimeoutId = setTimeout(() => retryController.abort(), timeout);
+
+                        try {
+                            response = await fetch(url, {
+                                ...fetchOptions,
+                                signal: retryController.signal,
+                            });
+                        } finally {
+                            clearTimeout(retryTimeoutId);
+                        }
+                    }
+                } catch (error) {
+                    logger.error('[safeFetch] Unified refresh failed:', error);
                 }
-            } else {
-                logger.error('[safeFetch] Failed to refresh session:', error?.message || 'No session returned');
-
-                // CRITICAL FIX: Do NOT clear storage or reload page automatically.
-                // This causes "0 Balance" and random logouts on network glitches.
-                // Just throw the error so the UI can decide whether to show a "Session Expired" modal
-                // or let the user manually retry.
-                throw new Error('Session expired: ' + (error?.message || 'Refresh failed'));
             }
-        }
 
-        return response;
-    } catch (error: any) {
-        if (error.name === 'AbortError') {
-            throw new Error(`Request timed out after ${timeout}ms. Please check your connection.`);
+            // If we have a successful response or a non-retriable error (like 400), return it
+            if (response.ok || (response.status >= 400 && response.status < 500 && response.status !== 401)) {
+                return response;
+            }
+
+            // If it's a 5xx error, we might want to retry
+            if (response.status >= 500 && attempt < maxRetries) {
+                logger.warn(`[safeFetch] Server error ${response.status} for ${url}. Retrying...`);
+                lastError = new Error(`Server error: ${response.status}`);
+                continue;
+            }
+
+            return response;
+
+        } catch (error: any) {
+            lastError = error;
+            const isNetworkError = error.name === 'TypeError' || error.message.includes('fetch');
+            const isTimeout = error.name === 'AbortError';
+
+            if ((isNetworkError || isTimeout) && attempt < maxRetries) {
+                logger.warn(`[safeFetch] Network error or timeout on attempt ${attempt} for ${url}: ${error.message}. Retrying...`);
+                continue;
+            }
+
+            if (error.name === 'AbortError') {
+                throw new Error(`Request timed out after ${timeout}ms. Please check your connection.`);
+            }
+            throw error;
+        } finally {
+            clearTimeout(timeoutId);
         }
-        throw error;
-    } finally {
-        clearTimeout(timeoutId);
     }
+
+    throw lastError || new Error(`Request failed after ${maxRetries} attempts`);
 };
 
 /**
@@ -129,15 +160,13 @@ export const safeRPC = async <T = any>(
     try {
         const { timeout = DEFAULT_TIMEOUT_MS } = options;
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-
-        // Construct RPC URL
         const rpcUrl = `${supabaseUrl}/rest/v1/rpc/${functionName}`;
 
         const response = await safeFetch(rpcUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Prefer': 'return=representation' // Standard Supabase RPC header
+                'Prefer': 'return=representation'
             },
             body: JSON.stringify(params),
             timeout
@@ -150,7 +179,6 @@ export const safeRPC = async <T = any>(
             return { data: null, error: errorJson };
         }
 
-        // Handle void returns (204 No Content)
         if (response.status === 204) {
             return { data: null, error: null };
         }

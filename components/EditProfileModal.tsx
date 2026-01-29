@@ -6,6 +6,7 @@ import { uploadProfileImage, isBase64Image } from '../services/storageService';
 import { getDeviceLocation, reverseGeocode, forwardGeocode } from '../utils/geo';
 import { LeafletMap } from './LeafletMap';
 import { CATEGORY_CONFIG } from '../constants';
+import { useKeyboard } from '../hooks/useKeyboard';
 
 interface EditProfileModalProps {
     isOpen: boolean;
@@ -17,6 +18,7 @@ interface EditProfileModalProps {
 export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose, showAlert, isMandatory = false }) => {
     const { user, updateUserInDB, t, language } = useUser();
     const { addNotification } = useNotification();
+    const { isOpen: isKeyboardOpen } = useKeyboard();
 
 
     const [editProfileName, setEditProfileName] = useState('');
@@ -197,29 +199,38 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
     return (
         <div className="fixed inset-0 z-[120] flex items-center justify-center pointer-events-none p-4">
             <div className={`absolute inset-0 bg-black/60 backdrop-blur-xl pointer-events-auto transition-opacity animate-fade-in ${!isMandatory ? 'cursor-pointer' : ''}`} onClick={!isMandatory ? onClose : undefined} />
-            <div className="bg-white dark:bg-gray-950 w-full max-w-xl rounded-[3rem] p-0 relative z-10 max-h-[95vh] overflow-hidden flex flex-col pointer-events-auto animate-slide-up shadow-[0_32px_128px_-16px_rgba(0,0,0,0.5)] transition-all pt-safe pb-safe border-4 border-white/20 dark:border-gray-800/50">
+            <div className={`
+                bg-white dark:bg-gray-950 w-full max-w-xl 
+                ${isKeyboardOpen ? 'h-full' : 'h-full sm:h-auto sm:max-h-[92vh]'} 
+                sm:rounded-[2.5rem] p-0 relative z-10 overflow-hidden flex flex-col pointer-events-auto animate-slide-up shadow-2xl 
+                transition-all pt-safe pb-safe
+            `}>
 
                 {/* Header */}
-                <div className="px-8 pt-4 pb-6 border-b border-gray-100 dark:border-gray-800 flex items-center gap-4 bg-white/90 dark:bg-gray-950/90 backdrop-blur-xl sticky top-0 z-20">
-                    <button onClick={onClose} className="p-3 bg-gray-50 dark:bg-gray-900 rounded-2xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-all active:scale-90 shadow-sm border border-gray-100 dark:border-gray-800 group">
-                        <ArrowLeft size={24} strokeWidth={2.5} className="group-hover:-translate-x-0.5 transition-transform" />
-                    </button>
-                    <div className="flex items-center gap-3">
-                        <div className="w-1.5 h-8 bg-emerald-500 rounded-full shadow-[0_0_12px_rgba(16,185,129,0.5)]" />
+                <div className="px-5 sm:px-8 py-4 sm:py-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-white/90 dark:bg-gray-950/90 backdrop-blur-xl sticky top-0 z-20">
+                    <div className="flex items-center gap-3 sm:gap-4">
+                        <button onClick={onClose} className="p-2.5 sm:p-3 bg-gray-50 dark:bg-gray-900 rounded-2xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-all active:scale-90 shadow-sm border border-gray-100 dark:border-gray-800">
+                            <ArrowLeft size={22} strokeWidth={2.5} />
+                        </button>
                         <div>
-                            <h4 className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-[0.4em] leading-none mb-1">Account settings</h4>
-                            <h3 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight leading-none">
+                            <h4 className="text-[9px] sm:text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-[0.3em] sm:tracking-[0.4em] leading-none mb-1">Account settings</h4>
+                            <h3 className="text-xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight leading-none">
                                 {language === 'en' ? 'Edit Profile' : 'प्रोफाइल संपादित करें'}
                             </h3>
                         </div>
                     </div>
                 </div>
 
-                <div className="overflow-y-auto p-8 space-y-10 custom-scrollbar" style={{ maxHeight: 'calc(95vh - 250px)' }}>
+                <div
+                    className="overflow-y-auto px-5 sm:px-8 pt-6 sm:pt-8 space-y-8 sm:space-y-10 custom-scrollbar flex-1"
+                    style={{
+                        paddingBottom: isKeyboardOpen ? 'var(--keyboard-height, 120px)' : '100px'
+                    }}
+                >
                     {/* Photo Uploader */}
-                    <div className="flex justify-center flex-col items-center gap-6">
+                    <div className="flex justify-center flex-col items-center gap-4 sm:gap-6">
                         <div className="relative group/avatar">
-                            <div className="w-40 h-40 rounded-[3rem] bg-gradient-to-br from-emerald-50 to-teal-100 dark:from-gray-900 dark:to-gray-800 overflow-hidden border-8 border-white dark:border-gray-800 shadow-2xl relative transition-transform group-hover/avatar:scale-105 duration-700">
+                            <div className="w-28 h-28 sm:w-40 h-40 rounded-[2rem] sm:rounded-[3rem] bg-gradient-to-br from-emerald-50 to-teal-100 dark:from-gray-900 dark:to-gray-800 overflow-hidden border-4 sm:border-8 border-white dark:border-gray-800 shadow-xl relative transition-transform active:scale-95 duration-500">
                                 {editProfilePhoto ? (
                                     <img src={editProfilePhoto} className="w-full h-full object-cover" alt="Profile" />
                                 ) : (
@@ -281,9 +292,9 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                                 <label className="label group-focus-within:text-primary transition-colors">
                                     {language === 'en' ? 'Detailed Location' : 'विस्तृत स्थान'}
                                 </label>
-                                <div className="space-y-4">
+                                <div className="space-y-3 sm:space-y-4">
                                     {/* Search Bar */}
-                                    <div className="flex gap-2">
+                                    <div className="flex flex-col sm:flex-row gap-2">
                                         <div className="relative flex-1">
                                             <input
                                                 value={searchQuery}
@@ -294,7 +305,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                                             />
                                             <button
                                                 onClick={handleAddressSearch}
-                                                className="absolute right-2 top-2 p-1.5 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors"
+                                                className="absolute right-2 top-2 p-1.5 bg-primary/10 text-primary rounded-lg"
                                             >
                                                 <Sparkles size={16} />
                                             </button>
@@ -302,7 +313,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                                         <button
                                             onClick={handleGetLocation}
                                             disabled={isLocating}
-                                            className="px-4 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                            className="w-full sm:w-auto px-4 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
                                             {isLocating ? <Loader2 size={16} className="animate-spin" /> : <MapPin size={16} />}
                                             {language === 'en' ? 'Locate Me' : 'मुझे ढूंढें'}
@@ -310,7 +321,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                                     </div>
 
                                     {/* Interactive Map */}
-                                    <div className="rounded-3xl overflow-hidden border border-border shadow-elevation h-64 relative z-0">
+                                    <div className="rounded-2xl sm:rounded-3xl overflow-hidden border border-border shadow-sm h-48 sm:h-64 relative z-0">
                                         <LeafletMap
                                             lat={newCoordinates?.lat || 20.5937} // Default to India center if null
                                             lng={newCoordinates?.lng || 78.9629}
@@ -362,7 +373,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                                 <label className="label group-focus-within:text-primary transition-colors mb-3 block">
                                     {language === 'en' ? 'Your Skills (Select all that apply)' : 'आपके कौशल (लागू होने वाले चुनें)'}
                                 </label>
-                                <div className="flex flex-wrap gap-3">
+                                <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-3">
                                     {CATEGORY_CONFIG.filter(c => c.id !== 'Other').map((category) => {
                                         const isSelected = editProfileSkills.includes(category.id);
                                         const Icon = category.icon;
@@ -376,16 +387,16 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                                                             : [...prev, category.id]
                                                     );
                                                 }}
-                                                className={`flex items-center gap-2 px-4 py-3 rounded-xl border-2 transition-all active:scale-95 ${isSelected
-                                                    ? `border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 shadow-md`
+                                                className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl border-2 transition-all active:scale-95 ${isSelected
+                                                    ? `border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 shadow-sm`
                                                     : 'border-transparent bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
                                                     }`}
                                             >
-                                                <Icon size={18} className={isSelected ? 'text-emerald-500' : ''} />
-                                                <span className="font-bold text-sm tracking-wide">
+                                                <Icon size={16} className={isSelected ? 'text-emerald-500' : ''} />
+                                                <span className="font-bold text-[11px] sm:text-sm tracking-wide truncate">
                                                     {language === 'en' ? category.label.en : category.label.hi}
                                                 </span>
-                                                {isSelected && <CheckCircle size={16} className="text-emerald-600 animate-in zoom-in" />}
+                                                {isSelected && <CheckCircle size={14} className="text-emerald-600 shrink-0" />}
                                             </button>
                                         );
                                     })}
@@ -479,11 +490,11 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                 </div>
 
                 {/* Footer Save Button - Outside scroll container */}
-                <div className="p-8 bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl border-t border-gray-100 dark:border-gray-800 shrink-0">
+                <div className="p-5 sm:p-8 bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl border-t border-gray-100 dark:border-gray-800 shrink-0 shadow-[0_-4px_24px_rgba(0,0,0,0.05)]">
                     <button
                         onClick={handleSaveProfile}
                         disabled={isSaving}
-                        className={`w-full py-6 rounded-[2rem] bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-xs uppercase tracking-[0.3em] shadow-2xl shadow-emerald-500/30 transform transition-all active:scale-95 flex items-center justify-center gap-3 ${isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-1'}`}
+                        className={`w-full py-4 sm:py-6 rounded-[1.5rem] sm:rounded-[2rem] bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-[11px] sm:text-xs uppercase tracking-[0.3em] shadow-xl shadow-emerald-500/20 transform transition-all active:scale-95 flex items-center justify-center gap-3 ${isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-1'}`}
                     >
                         {isSaving ? (
                             <>
@@ -492,12 +503,12 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                             </>
                         ) : (
                             <>
-                                {language === 'en' ? 'Update Profile' : 'प्रोफाइल सहेजें'} <ChevronRight size={22} strokeWidth={3} />
+                                {language === 'en' ? 'Update Profile' : 'प्रोफाइल सहेजें'} <ChevronRight size={20} strokeWidth={3} />
                             </>
                         )}
                     </button>
                     {isMandatory && (
-                        <p className="text-center mt-4 text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] animate-pulse">Required to continue</p>
+                        <p className="text-center mt-3 text-[8px] sm:text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] animate-pulse">Required to continue</p>
                     )}
                 </div>
             </div>

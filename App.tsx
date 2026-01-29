@@ -1,16 +1,16 @@
-import React, { useState, useEffect, Suspense, lazy, useCallback } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { UserProvider, useUser } from './contexts/UserContextDB';
 import { NotificationProvider, useNotification } from './contexts/NotificationContext';
 import { JobProvider, useJobs } from './contexts/JobContextDB';
-import { WalletProvider, useWallet } from './contexts/WalletContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider, getNextLanguage } from './contexts/LanguageContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { LoadingProvider } from './contexts/LoadingContext';
+import { AdminConfigProvider } from './contexts/AdminConfigContext';
 import { ChatMessage, Coordinates, Job, JobStatus, UserRole } from './types';
 import {
-  MapPin, UserCircle, ArrowLeftRight, Bell, MessageCircle, Languages, Loader2, Briefcase, Menu, Search, X, Home as HomeIcon, Wallet, LayoutGrid, Plus, Clock
+  MapPin, UserCircle, ArrowLeftRight, Bell, MessageCircle, Languages, Loader2, Briefcase, Menu, Search, X, Home as HomeIcon, LayoutGrid, Plus, Clock
 } from 'lucide-react';
 import { supabase, waitForSupabase } from './lib/supabase';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -21,8 +21,8 @@ const Profile = lazy(() => import('./pages/Profile').then(m => ({ default: m.Pro
 const PostJob = lazy(() => import('./pages/PostJob').then(m => ({ default: m.PostJob })));
 
 const Analytics = lazy(() => import('./pages/Analytics').then(m => ({ default: m.Analytics })));
-const WalletPage = lazy(() => import('./pages/WalletPage').then(m => ({ default: m.WalletPage })));
 const CategoryJobs = lazy(() => import('./pages/CategoryJobs').then(m => ({ default: m.CategoryJobs })));
+const Categories = lazy(() => import('./pages/Categories').then(m => ({ default: m.Categories })));
 
 // --- Lazy loaded Components ---
 const Confetti = lazy(() => import('./components/Confetti').then(m => ({ default: m.Confetti })));
@@ -37,15 +37,19 @@ const BidHistoryModal = lazy(() => import('./components/BidHistoryModal').then(m
 const NotificationsPanel = lazy(() => import('./components/NotificationsPanel').then(m => ({ default: m.NotificationsPanel })));
 const ChatListPanel = lazy(() => import('./components/ChatListPanel').then(m => ({ default: m.ChatListPanel })));
 const SubscriptionModal = lazy(() => import('./components/SubscriptionModal').then(m => ({ default: m.SubscriptionModal })));
-const LandingPage = lazy(() => import('./components/LandingPage').then(m => ({ default: m.LandingPage })));
 const UserProfileModal = lazy(() => import('./components/UserProfileModal').then(m => ({ default: m.UserProfileModal })));
+const OnboardingModal = lazy(() => import('./components/OnboardingModal').then(m => ({ default: m.OnboardingModal })));
+const AdminSettings = lazy(() => import('./components/admin/AdminSettings').then(m => ({ default: m.AdminSettings })));
+const LandingPage = lazy(() => import('./components/LandingPage').then(m => ({ default: m.LandingPage })));
+const MobileWelcome = lazy(() => import('./components/MobileWelcome').then(m => ({ default: m.MobileWelcome })));
+const AuthModal = lazy(() => import('./components/AuthModal').then(m => ({ default: m.AuthModal })));
+const PrivacyPolicy = lazy(() => import('./components/PrivacyPolicy').then(m => ({ default: m.PrivacyPolicy })));
 
 // Import Synchronous Components
 import { BottomNav } from './components/BottomNav';
 import { Sidebar } from './components/Sidebar';
 
 // Services
-import { signInWithGoogle } from './services/authService';
 import { useDeepLinkHandler } from './hooks/useDeepLinkHandler';
 import { useKeyboard } from './hooks/useKeyboard';
 import { useJobActions } from './hooks/useJobActions';
@@ -63,8 +67,11 @@ const AppContent: React.FC = () => {
     logout, t,
     showSubscriptionModal, setShowSubscriptionModal,
     showAlert, currentAlert, updateUserInDB, refreshUser,
-    showEditProfile, setShowEditProfile
+    showEditProfile, setShowEditProfile,
+    isProfileComplete, hasInitialized, authStatus
   } = useUser();
+
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   // Initialize Keyboard Listener
   // This sets the --keyboard-height CSS variable for responsive layouts
@@ -83,6 +90,18 @@ const AppContent: React.FC = () => {
     console.log('[AppContent] Auth State:', { isLoggedIn, isAuthLoading, userId: user.id });
   }, [isLoggedIn, isAuthLoading, user.id]);
 
+  // Global Event Listener for Subscription Modal
+  useEffect(() => {
+    const handleOpenModal = () => setShowSubscriptionModal(true);
+    window.addEventListener('open-subscription-modal', handleOpenModal);
+    return () => window.removeEventListener('open-subscription-modal', handleOpenModal);
+  }, [setShowSubscriptionModal]);
+
+  // Redirect Worker to Find Jobs as default screen on startup
+  const navigate = useNavigate();
+  const location = useLocation();
+  const hasRedirectedRef = useRef(false);
+
   const {
     notifications,
     addNotification,
@@ -93,13 +112,9 @@ const AppContent: React.FC = () => {
     clearNotificationsForJob
   } = useNotification();
 
-  const { walletBalance, refreshWallet } = useWallet();
   const { completeJob, cancelJob, withdrawBid, replyToCounter, editJobLink } = useJobActions();
 
-
   const { jobs, updateJob, deleteJob, updateBid, getJobWithFullDetails, markJobAsReviewed, refreshJobs, loading, searchQuery, setSearchQuery } = useJobs();
-  const navigate = useNavigate();
-  const location = useLocation();
 
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
 
@@ -148,10 +163,6 @@ const AppContent: React.FC = () => {
   });
 
   // --- Auth State ---
-  const [showProfileCompletion, setShowProfileCompletion] = useState(false);
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [profileLocation, setProfileLocation] = useState('');
-  const [profileCoords, setProfileCoords] = useState<Coordinates | undefined>(undefined);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -327,15 +338,12 @@ const AppContent: React.FC = () => {
   }, [] as string[]).length;
 
   // --- Handlers ---
-  const handleGoogleSignIn = async () => {
-    setIsSigningIn(true);
-    const result = await signInWithGoogle();
-    if (!result.success) {
-      showAlert(result.error || 'Failed to sign in', 'error');
-    }
-    // Always reset after attempt (success leads to auth state change)
-    setIsSigningIn(false);
+  const handleOpenAuth = () => {
+    console.log('[App] handleOpenAuth called, opening AuthModal');
+    setShowAuthModal(true);
   };
+
+  // Onboarding logic is now handled by the authStatus gatekeeper in the render block
 
   // Reset signing in state when user is not logged in
   useEffect(() => {
@@ -371,21 +379,18 @@ const AppContent: React.FC = () => {
 
   // --- Memoized Handlers for Performance ---
   const handleOnBid = useCallback((id: string) => {
-    // CRITICAL: Prevent action if user session is invalid (Zombie state protection)
-    if (!user.id) {
-      console.warn('Attempted to bid without valid user ID');
+    if (!isLoggedIn) {
+      handleOpenAuth();
       return;
     }
 
-    if (!user.phone || !user.location || user.location === 'Not set') {
-      setShowEditProfile(true);
-      showAlert(language === 'en'
-        ? 'Please complete your profile (Phone & Location) before bidding.'
-        : 'बोली लगाने से पहले कृपया अपनी प्रोफ़ाइल (फ़ोन और स्थान) पूरी करें।', 'info');
+    if (!isProfileComplete) {
+      // In Super App mode, this point shouldn't be reachable if profile is incomplete,
+      // but we keep it for defensive stability.
       return;
     }
     setBidModalOpen({ isOpen: true, jobId: id });
-  }, [user.id, user.phone, user.location, language, showAlert, setShowEditProfile]);
+  }, [isLoggedIn, isProfileComplete, handleOpenAuth]);
 
   const handleOnViewBids = useCallback((j: Job) => {
     console.log('[App] onViewBids handler called', j.id);
@@ -419,13 +424,42 @@ const AppContent: React.FC = () => {
 
     // 1. If job is already completed, just handle the review part
     if (currentJob.status === JobStatus.COMPLETED) {
+      console.log('[App] handleCompleteJob: Job is COMPLETED', currentJob);
       if (currentJob.hasMyReview) {
+        console.log('[App] handleCompleteJob: Already reviewed');
         showAlert(language === 'en' ? 'You have already reviewed this user.' : 'आप पहले ही समीक्षा दे चुके हैं।', 'info');
         return;
       }
 
-      const acceptedBid = currentJob.bids.find(b => b.id === currentJob.acceptedBidId);
+      let acceptedBid = currentJob.bids?.find(b => b.id === currentJob.acceptedBidId);
+      console.log('[App] handleCompleteJob: Found acceptedBid?', acceptedBid, 'Bids:', currentJob.bids);
+
+      // Fallback: Fetch bid if missing (Robustness Fix)
+      if (!acceptedBid && currentJob.acceptedBidId) {
+        console.log('[App] Accepted bid missing in local state. Fetching fallback...', currentJob.acceptedBidId);
+        try {
+          const { data: fetchedBid } = await supabase
+            .from('bids')
+            .select('*, worker:profiles(name)')
+            .eq('id', currentJob.acceptedBidId)
+            .single();
+
+          if (fetchedBid) {
+            console.log('[App] Fallback fetch successful', fetchedBid);
+            acceptedBid = {
+              ...fetchedBid,
+              workerId: fetchedBid.worker_id,
+              workerName: fetchedBid.worker?.name || 'Worker',
+              // Minimal data for ReviewModal
+            } as any;
+          }
+        } catch (err) {
+          console.error('[App] Failed to fetch fallback bid', err);
+        }
+      }
+
       if (acceptedBid) {
+        console.log('[App] Opening ReviewModal with bid data');
         setReviewModalData({
           isOpen: true,
           revieweeId: role === UserRole.POSTER ? acceptedBid.workerId : currentJob.posterId,
@@ -433,7 +467,7 @@ const AppContent: React.FC = () => {
           jobId: currentJob.id
         });
       } else {
-        showAlert('No worker found to review.', 'error');
+        showAlert(language === 'en' ? 'Unable to load review details.' : 'समीक्षा विवरण लोड करने में असमर्थ।', 'error');
       }
       return;
     }
@@ -471,7 +505,10 @@ const AppContent: React.FC = () => {
 
   // --- Views ---
 
-  if (isAuthLoading || isHandlingLink) {
+  // --- SUPER APP GATEKEEPER ---
+
+  // 1. INITIALIZING / LOADING STATE
+  if (authStatus === 'loading') {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-text-primary">
         <Loader2 size={32} className="text-primary animate-spin mb-4" />
@@ -479,7 +516,6 @@ const AppContent: React.FC = () => {
           {isHandlingLink ? 'Verifying Login...' : loadingMessage}
         </p>
 
-        {/* Only show retry if NOT handling link and it's a timeout */}
         {!isHandlingLink && loadingMessage.includes('timeout') && (
           <button onClick={retryAuth} className="mt-4 px-4 py-2 bg-primary text-white rounded-lg shadow-lg hover:brightness-110 transition-all">Retry</button>
         )}
@@ -487,58 +523,72 @@ const AppContent: React.FC = () => {
     );
   }
 
-  const MobileWelcome = lazy(() => import('./components/MobileWelcome').then(m => ({ default: m.MobileWelcome })));
-
-  // CRITICAL FIX: Also show landing if isLoggedIn but user.id is empty (stale localStorage, session expired)
-  // This prevents the "blank user" bug where main UI shows without a valid session
-  if (!isLoggedIn || !user.id) {
-    // If localStorage thinks we're logged in but session isn't ready, show a brief loading state
-    if (isLoggedIn && !user.id) {
+  // 2. UNAUTHENTICATED STATE
+  if (authStatus === 'unauthenticated') {
+    // Explicitly allow Privacy Policy
+    if (location.pathname === '/privacy') {
       return (
-        <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-text-primary text-center">
-          <Loader2 size={32} className="text-primary animate-spin mb-4" />
-          <p className="text-text-secondary font-medium mb-6">{t.loading}</p>
-
-          {/* MANUAL KILL SWITCH: If user is stuck here for more than a few seconds, let them escape */}
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-1000 fill-mode-both">
-            <button
-              onClick={handleLogout}
-              className="px-6 py-2.5 bg-surface border border-border text-text-secondary rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-all"
-            >
-              {language === 'en' ? 'Stuck? Sign Out & Try Again' : 'अटक गए? साइन आउट करें और फिर से कोशिश करें'}
-            </button>
-          </div>
-        </div>
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-emerald-600" /></div>}>
+          <PrivacyPolicy />
+        </Suspense>
       );
     }
 
     return (
-      <Suspense fallback={
-        <div className="h-[100dvh] w-full flex flex-col items-center justify-center bg-background transition-colors duration-300">
-          <div className="relative">
-            <div className="w-16 h-16 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
-            <MapPin className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-primary animate-pulse" size={24} />
+      <>
+        <Suspense fallback={
+          <div className="h-[100dvh] w-full flex flex-col items-center justify-center bg-background transition-colors duration-300">
+            <div className="relative">
+              <div className="w-16 h-16 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+              <MapPin className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-primary animate-pulse" size={24} />
+            </div>
           </div>
-        </div>
-      }>
-        {Capacitor.isNativePlatform() ? (
-          <MobileWelcome
-            onGetStarted={handleGoogleSignIn}
-            language={language}
-            onLanguageToggle={() => setLanguage(l => getNextLanguage(l))}
-            isSigningIn={isSigningIn}
+        }>
+          {Capacitor.isNativePlatform() ? (
+            <MobileWelcome
+              onGetStarted={handleOpenAuth}
+              language={language}
+              onLanguageToggle={() => setLanguage(l => getNextLanguage(l))}
+              isSigningIn={isSigningIn}
+            />
+          ) : (
+            <LandingPage
+              onGetStarted={handleOpenAuth}
+              language={language}
+              onLanguageToggle={() => setLanguage(l => getNextLanguage(l))}
+              isSigningIn={isSigningIn}
+            />
+          )}
+        </Suspense>
+
+        <Suspense fallback={null}>
+          <AuthModal
+            isOpen={showAuthModal}
+            onClose={() => setShowAuthModal(false)}
           />
-        ) : (
-          <LandingPage
-            onGetStarted={handleGoogleSignIn}
-            language={language}
-            onLanguageToggle={() => setLanguage(l => getNextLanguage(l))}
-            isSigningIn={isSigningIn}
-          />
-        )}
-      </Suspense>
+        </Suspense>
+      </>
     );
   }
+
+  // 3. ONBOARDING STATE (Forces full screen onboarding)
+  if (authStatus === 'onboarding') {
+    return (
+      <div className="h-[100dvh] w-full bg-background overflow-hidden">
+        <Suspense fallback={null}>
+          <OnboardingModal
+            isOpen={true} // Locked to open
+            onComplete={(role) => {
+              setRole(role);
+              refreshUser();
+            }}
+          />
+        </Suspense>
+      </div>
+    );
+  }
+
+  // 4. READY STATE (Main App Shell)
 
 
   // --- Main Layout ---
@@ -546,7 +596,7 @@ const AppContent: React.FC = () => {
     <div className="h-[100dvh] w-full bg-background font-sans text-text-primary flex flex-col overflow-hidden transition-colors duration-300">
       {/* Header - Amazon/Super App Style */}
       {/* Hide header on specific mobile pages to avoid "Double Header", but keep it on Desktop for "Super App" feel */}
-      {(!['/wallet', '/profile', '/post', '/chat', '/category'].some(path => location.pathname.startsWith(path)) || isDesktop) && (
+      {(!['/profile', '/post', '/chat', '/category'].some(path => location.pathname.startsWith(path)) || isDesktop) && (
         <header className="bg-surface border-b border-border z-50 shadow-sm pt-safe sticky top-0">
           <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3 h-[60px]">
 
@@ -631,8 +681,8 @@ const AppContent: React.FC = () => {
                   {role === UserRole.WORKER && (
                     <div className="hidden md:flex items-center gap-1.5 mr-2 pr-2 border-r border-border">
                       <button
-                        onClick={() => navigate('/find')}
-                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 whitespace-nowrap ${location.pathname === '/find'
+                        onClick={() => navigate('/')}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 whitespace-nowrap ${location.pathname === '/' || location.pathname === '/find'
                           ? 'bg-primary text-white shadow-lg shadow-primary/40 ring-2 ring-primary/20'
                           : 'bg-background text-text-primary hover:bg-primary hover:text-white'
                           }`}
@@ -652,16 +702,7 @@ const AppContent: React.FC = () => {
                         <span>{language === 'en' ? 'My Jobs' : 'मेरा काम'}</span>
                       </button>
 
-                      <button
-                        onClick={() => navigate('/wallet')}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all font-bold text-sm ${location.pathname === '/wallet'
-                          ? 'bg-primary/10 active:bg-primary/20 text-primary'
-                          : 'text-text-secondary hover:bg-background'
-                          }`}
-                      >
-                        <Wallet size={18} strokeWidth={2.5} />
-                        <span>{language === 'en' ? 'Wallet' : 'वॉलेट'}</span>
-                      </button>
+
 
                       <button
                         onClick={() => navigate('/profile')}
@@ -699,16 +740,7 @@ const AppContent: React.FC = () => {
                         <span>{language === 'en' ? 'Dashboard' : 'डैशबोर्ड'}</span>
                       </button>
 
-                      <button
-                        onClick={() => navigate('/wallet')}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all font-bold text-sm ${location.pathname === '/wallet'
-                          ? 'bg-primary/10 active:bg-primary/20 text-primary'
-                          : 'text-text-secondary hover:bg-background'
-                          }`}
-                      >
-                        <Wallet size={18} strokeWidth={2.5} />
-                        <span>{language === 'en' ? 'Wallet' : 'वॉलेट'}</span>
-                      </button>
+
 
                       <button
                         onClick={() => navigate('/profile')}
@@ -855,16 +887,6 @@ const AppContent: React.FC = () => {
                           <span>{language === 'en' ? 'Dashboard' : 'डैशबोर्ड'}</span>
                         </button>
 
-                        <button
-                          onClick={() => navigate('/wallet')}
-                          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all font-bold text-sm ${location.pathname === '/wallet'
-                            ? 'bg-primary/10 active:bg-primary/20 text-primary'
-                            : 'text-text-secondary hover:bg-background'
-                            }`}
-                        >
-                          <Wallet size={18} strokeWidth={2.5} />
-                          <span>{language === 'en' ? 'Wallet' : 'वॉलेट'}</span>
-                        </button>
 
                         <button
                           onClick={() => navigate('/profile')}
@@ -920,6 +942,7 @@ const AppContent: React.FC = () => {
           </div>
         }>
           <Routes>
+            <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/" element={<Home
               onBid={handleOnBid}
               onViewBids={handleOnViewBids}
@@ -956,7 +979,8 @@ const AppContent: React.FC = () => {
             <Route path="/profile" element={<Profile setShowSubscriptionModal={setShowSubscriptionModal} onLogout={handleLogout} />} />
             <Route path="/post" element={<PostJob />} />
             <Route path="/analytics" element={<Analytics />} />
-            <Route path="/wallet" element={<WalletPage />} />
+            <Route path="/categories" element={<Categories />} />
+
             <Route path="/category/:categoryId" element={<CategoryJobs
               onBid={handleOnBid}
               onViewBids={handleOnViewBids}
@@ -968,6 +992,7 @@ const AppContent: React.FC = () => {
               setShowFilterModal={setShowFilterModal}
               showAlert={showAlert}
             />} />
+            <Route path="/admin" element={user?.email === 'as30041@gmail.com' ? <AdminSettings /> : <Navigate to="/" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
@@ -977,7 +1002,6 @@ const AppContent: React.FC = () => {
       <BottomNav
         unreadChatCount={unreadChatCount}
         unreadCount={unreadCount}
-        walletBalance={walletBalance}
         onChatClick={() => setShowChatList(true)}
         onTabChange={() => {
           setShowChatList(false);
@@ -1155,7 +1179,7 @@ const AppContent: React.FC = () => {
         <ReviewModal
           isOpen={reviewModalData?.isOpen || false}
           onClose={() => setReviewModalData(null)}
-          onSubmit={async (rating, comment) => {
+          onSubmit={async (rating, comment, tags) => {
             if (!reviewModalData) return;
 
             // Refactored to use reviewService for safety
@@ -1165,7 +1189,8 @@ const AppContent: React.FC = () => {
               reviewModalData.revieweeId,
               reviewModalData.jobId,
               rating,
-              comment
+              comment,
+              tags
             );
 
             if (success) {
@@ -1227,6 +1252,13 @@ const AppContent: React.FC = () => {
           onClose={() => setShowSubscriptionModal(false)}
         />
 
+        {/* Onboarding is now handled by the Gatekeeper early return */}
+
+        <AuthModal
+          isOpen={showAuthModal}
+          onClose={() => setShowAuthModal(false)}
+        />
+
       </Suspense>
 
     </div >
@@ -1237,11 +1269,11 @@ export const App: React.FC = () => {
   return (
     <ErrorBoundary>
       <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <LanguageProvider>
-          <ToastProvider>
-            <UserProvider>
-              <LoadingProvider>
-                <WalletProvider>
+        <AdminConfigProvider>
+          <LanguageProvider>
+            <ToastProvider>
+              <UserProvider>
+                <LoadingProvider>
                   <NotificationProvider>
                     <JobProvider>
                       <ThemeProvider>
@@ -1249,11 +1281,11 @@ export const App: React.FC = () => {
                       </ThemeProvider>
                     </JobProvider>
                   </NotificationProvider>
-                </WalletProvider>
-              </LoadingProvider>
-            </UserProvider>
-          </ToastProvider>
-        </LanguageProvider>
+                </LoadingProvider>
+              </UserProvider>
+            </ToastProvider>
+          </LanguageProvider>
+        </AdminConfigProvider>
       </Router>
     </ErrorBoundary>
   );

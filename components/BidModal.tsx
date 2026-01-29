@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, LayoutGrid, IndianRupee, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../contexts/UserContextDB';
-import { useWallet } from '../contexts/WalletContext';
 import { useJobs } from '../contexts/JobContextDB';
 import { Bid, UserRole } from '../types';
 import { enhanceBidMessageStream } from '../services/geminiService';
 import { supabase } from '../lib/supabase';
+
+import { useAdminConfig } from '../contexts/AdminConfigContext';
 
 interface BidModalProps {
     isOpen: boolean;
@@ -16,17 +17,16 @@ interface BidModalProps {
     showAlert: (message: string, type: 'success' | 'error' | 'info') => void;
 }
 
-
-
 export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSuccess, showAlert }) => {
     const {
         user: contextUser,
         t: contextT,
         checkFreeLimit: contextCheckFreeLimit,
         incrementAiUsage: contextIncrementAiUsage,
-        language: contextLanguage
+        language: contextLanguage,
+        setShowSubscriptionModal // FIX: Get access to modal
     } = useUser();
-    const { walletBalance, refreshWallet } = useWallet();
+    const { config } = useAdminConfig();
     const { jobs, addBid } = useJobs();
     const navigate = useNavigate();
 
@@ -97,7 +97,40 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
         };
 
         checkExistingBid();
+        checkExistingBid();
     }, [isOpen, jobId, contextUser.id]);
+
+
+    // Check Subscription Limits for Bidding
+    useEffect(() => {
+        if (!isOpen || !contextUser.id) return;
+
+        const checkLimits = async () => {
+            // Optimization: If user has SUPER or WORKER_PLUS, they are unlimited for bidding
+            if (contextUser.subscription_plan === 'SUPER' || contextUser.subscription_plan === 'WORKER_PLUS') {
+                return;
+            }
+
+            const { data, error } = await supabase.rpc('check_subscription_policy', {
+                p_user_id: contextUser.id,
+                p_action: 'PLACE_BID'
+            });
+
+            if (data && data.allowed === false) {
+                // UX Improvement: Ask to upgrade instead of just blocking
+                const confirmMsg = contextLanguage === 'en'
+                    ? 'Weekly Bid limit reached (5/5). Upgrade to Worker Plus or Super for Unlimited Bids?'
+                    : 'साप्ताहिक बोली सीमा पूरी हुई (5/5)। असीमित बोलियों के लिए "वर्कर प्लस" या "सुपर" लें?';
+
+                if (window.confirm(confirmMsg)) {
+                    const event = new CustomEvent('open-subscription-modal');
+                    window.dispatchEvent(event);
+                }
+                onClose();
+            }
+        };
+        checkLimits();
+    }, [isOpen, contextUser.id, contextUser.subscription_plan]);
 
     if (!isOpen || !jobId) return null;
 
@@ -120,17 +153,6 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
 
         const currentJob = jobs.find(j => j.id === jobId);
         if (!currentJob) return;
-
-        // VALIDATION 0: Check Wallet Balance
-        if (walletBalance < 1) {
-            showAlert(
-                contextLanguage === 'en'
-                    ? 'Insufficient coins to place a bid. Cost: 1 Coin.'
-                    : 'बोली लगाने के लिए अपर्याप्त सिक्के। लागत: 1 सिक्का।',
-                'error'
-            );
-            return;
-        }
 
         // VALIDATION 1: Check for duplicate bid (using fresh API check)
         if (existingBid) {
@@ -189,8 +211,6 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
 
             onSuccess();
             onClose();
-            // Refresh wallet to visually deduct the coin
-            refreshWallet();
             // Reset state
             setBidAmount('');
             setBidMessage('');
@@ -199,6 +219,16 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
             const msg = err.message || '';
             if (msg.includes('Job is closed') || msg.includes('no longer accepting')) {
                 showAlert(contextLanguage === 'en' ? 'Job is closed or no longer accepting bids.' : 'यह जॉब बंद हो गया है।', 'error');
+            } else if (msg.includes('SUBSCRIPTION_LIMIT_REACHED')) {
+                // Catch the Trigger Exception
+                const confirmMsg = contextLanguage === 'en'
+                    ? 'Weekly Bid Limit Reached! Upgrade to Worker Plus or Super for Unlimited Bids.'
+                    : 'साप्ताहिक बोली सीमा पूरी हुई! असीमित बोलियों के लिए "वर्कर प्लस" या "सुपर" लें।';
+
+                // Show Alert then Open Modal
+                showAlert(confirmMsg, 'error');
+                onClose(); // Close Bid Modal
+                setTimeout(() => setShowSubscriptionModal(true), 500); // Open Sub Modal
             } else {
                 showAlert(msg, 'error');
             }
@@ -207,13 +237,7 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
         }
     };
 
-    const handleRecharge = () => {
-        if (jobId) {
-            sessionStorage.setItem('pendingBidJobId', jobId);
-        }
-        onClose();
-        navigate('/wallet');
-    };
+
 
     return (
         <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center pointer-events-none sm:p-4">
@@ -321,13 +345,10 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
                         </div>
                     </div>
 
-                    {/* Cost Info */}
                     <div className="flex items-center justify-between py-2 text-xs font-medium text-gray-400 dark:text-gray-500 border-t border-gray-100 dark:border-gray-800 pt-4">
                         <span>Cost to bid</span>
-                        <div className={`flex items-center gap-1.5 font-bold ${walletBalance < 1 ? 'text-red-500' : 'text-gray-900 dark:text-white'}`}>
-                            1 Coin
-                            <span className="w-1 h-1 rounded-full bg-gray-300" />
-                            <span className="font-normal text-gray-400">Bal: {walletBalance}</span>
+                        <div className="flex items-center gap-1.5 font-bold text-emerald-600 dark:text-emerald-400">
+                            FREE
                         </div>
                     </div>
 
@@ -335,35 +356,20 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
 
                 {/* Footer Actions */}
                 <div className="p-8 pt-4 pb-safe bg-white dark:bg-gray-950 md:rounded-b-[2.5rem]">
-                    {walletBalance < 1 ? (
-                        <button
-                            onClick={handleRecharge}
-                            className="w-full py-5 rounded-[1.5rem] font-black text-sm uppercase tracking-[0.2em] shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-amber-500/20 hover:shadow-orange-500/40"
-                        >
-                            <IndianRupee size={18} />
-                            {contextLanguage === 'en' ? 'Recharge Wallet (1 Coin)' : 'वॉलेट रिचार्ज करें (1 सिक्का)'}
-                        </button>
-                    ) : (
-                        <button
-                            onClick={handlePlaceBid}
-                            disabled={!!existingBid || isSubmitting}
-                            className={`w-full py-5 rounded-[1.5rem] font-black text-sm uppercase tracking-[0.2em] shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 ${existingBid
-                                ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed shadow-none'
-                                : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-emerald-500/20 hover:shadow-emerald-500/40'
-                                }`}
-                        >
-                            {isSubmitting && <Loader2 size={18} className="animate-spin" />}
-                            {existingBid
-                                ? (contextLanguage === 'en' ? 'Bid Placed' : 'बोली लगी')
-                                : contextT.sendBid
-                            }
-                        </button>
-                    )}
-                    {walletBalance < 1 && (
-                        <p className="text-center text-[10px] text-amber-600 dark:text-amber-400 font-bold mt-3 uppercase tracking-widest">
-                            {contextLanguage === 'en' ? 'Low Balance Requires Top-up' : 'कम बैलेंस - रिचार्ज करें'}
-                        </p>
-                    )}
+                    <button
+                        onClick={handlePlaceBid}
+                        disabled={!!existingBid || isSubmitting}
+                        className={`w-full py-5 rounded-[1.5rem] font-black text-sm uppercase tracking-[0.2em] shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 ${existingBid
+                            ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed shadow-none'
+                            : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-emerald-500/20 hover:shadow-emerald-500/40'
+                            }`}
+                    >
+                        {isSubmitting && <Loader2 size={18} className="animate-spin" />}
+                        {existingBid
+                            ? (contextLanguage === 'en' ? 'Bid Placed' : 'बोली लगी')
+                            : contextT.sendBid
+                        }
+                    </button>
                 </div>
 
             </div >

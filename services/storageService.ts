@@ -2,6 +2,7 @@
 // Uploads files to Supabase Storage and returns public URLs
 
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 
 const JOB_IMAGES_BUCKET = 'job-images';
 
@@ -31,7 +32,7 @@ export const uploadJobImage = async (
         const fileName = `${jobId}_${Date.now()}.${extension}`;
         const filePath = `jobs/${fileName}`;
 
-        console.log('[Storage] Uploading image:', filePath);
+        logger.log('[Storage] Uploading image:', filePath);
 
         // Upload to Supabase Storage
         const { data, error } = await supabase.storage
@@ -51,7 +52,7 @@ export const uploadJobImage = async (
             .from(JOB_IMAGES_BUCKET)
             .getPublicUrl(data.path);
 
-        console.log('[Storage] Upload successful:', urlData.publicUrl);
+        logger.log('[Storage] Upload successful:', urlData.publicUrl);
         return { url: urlData.publicUrl, error: null };
 
     } catch (err: any) {
@@ -74,7 +75,7 @@ export const deleteJobImage = async (imageUrl: string): Promise<{ success: boole
         }
 
         const filePath = urlParts[1];
-        console.log('[Storage] Deleting image:', filePath);
+        logger.log('[Storage] Deleting image:', filePath);
 
         const { error } = await supabase.storage
             .from(JOB_IMAGES_BUCKET)
@@ -127,7 +128,7 @@ export const uploadProfileImage = async (
         const fileName = `${userId}_${Date.now()}.${extension}`;
         const filePath = `profiles/${fileName}`;
 
-        console.log('[Storage] Uploading profile image:', filePath);
+        logger.log('[Storage] Uploading profile image:', filePath);
 
         // Upload to Supabase Storage
         const { data, error } = await supabase.storage
@@ -147,7 +148,7 @@ export const uploadProfileImage = async (
             .from(PROFILE_IMAGES_BUCKET)
             .getPublicUrl(data.path);
 
-        console.log('[Storage] Profile upload successful:', urlData.publicUrl);
+        logger.log('[Storage] Profile upload successful:', urlData.publicUrl);
         return { url: urlData.publicUrl, error: null };
 
     } catch (err: any) {

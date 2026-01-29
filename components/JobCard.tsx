@@ -150,7 +150,7 @@ export const JobCard = React.memo<JobCardProps>(({
     }
 
     // Construct text to read
-    const textToRead = `${job.title}. ${job.description}. ${t.budget} ${job.budget} rupees.`;
+    const textToRead = `${job.title}. ${job.description}. ${t.budget} ₹${job.budget}.`;
 
     const utterance = new SpeechSynthesisUtterance(textToRead);
     // Use Indian English or Hindi voice based on text content or app language
@@ -250,13 +250,11 @@ export const JobCard = React.memo<JobCardProps>(({
 
     if (!myBid) return null;
 
-    if (myBid.status === 'ACCEPTED') {
-      return (
-        <div className="bg-emerald-500 text-white py-2 px-4 rounded-full font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-emerald-500/20">
-          <CheckCircle size={14} strokeWidth={3} /> {t.hired}: ₹{myBid.amount}
-        </div>
-      );
-    }
+    return (
+      <div className="bg-emerald-500 text-white py-2 px-4 rounded-full font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-emerald-500/20">
+        <CheckCircle size={14} strokeWidth={3} /> {t.hired}: ₹{myBid.amount}
+      </div>
+    );
     if (myBid.status === 'REJECTED') {
       return (
         <div className="flex items-center gap-2">
@@ -417,7 +415,6 @@ export const JobCard = React.memo<JobCardProps>(({
               </span>
             )}
             {/* Translation Badge */}
-            {/* Translation Badge or Trigger */}
             {isTranslated ? (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
                 <Languages size={10} /> {language.toUpperCase()}
@@ -433,26 +430,47 @@ export const JobCard = React.memo<JobCardProps>(({
               </button>
             ))}
           </div>
-          <h3 className="text-lg font-bold text-text-primary leading-tight line-clamp-2">
+
+          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-primary/80 mb-0.5">
+            {catT}
+          </p>
+          <h3 className="text-lg font-bold text-text-primary leading-tight line-clamp-2 mb-2">
             {displayTitle}
           </h3>
+
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            {distance !== undefined && (
+              <div className="flex items-center gap-1 bg-primary/5 text-primary px-2 py-1 rounded-lg text-[10px] font-bold border border-primary/10">
+                <MapPin size={12} />
+                {distance.toFixed(1)} km
+              </div>
+            )}
+            <div className="flex items-center gap-1 bg-surface border border-border/50 px-2 py-1 rounded-lg text-[10px] font-bold text-text-secondary">
+              <Calendar size={12} className="text-primary/70" />
+              {dateDisplay}
+            </div>
+            <div className="flex items-center gap-1 bg-surface border border-border/50 px-2 py-1 rounded-lg text-[10px] font-bold text-text-secondary">
+              <Clock size={12} className="text-primary/70" />
+              {getTimeAgo(job.createdAt)}
+            </div>
+          </div>
         </div>
 
         {/* Right: Price Pill (The "Hook") */}
         <div className="shrink-0">
           <div className="bg-emerald-600 dark:bg-emerald-500 text-white px-3 py-1.5 rounded-xl font-black text-sm shadow-lg shadow-emerald-500/20 flex flex-col items-center leading-none">
             <span className="text-[9px] opacity-80 uppercase font-bold tracking-widest mb-0.5">Pay</span>
-            <span>₹{job.budget}</span>
+            <span className="flex items-center gap-0.5">₹{job.budget}</span>
           </div>
         </div>
       </div>
-      {/* Description Snippet */}
+
       {/* Description Snippet */}
       <p className="text-sm text-text-secondary mb-6 line-clamp-2 leading-relaxed">
         {displayDescription}
       </p>
 
-      {/* Action Area - Remove stopPropagation from container so clicking empty space opens details */}
+      {/* Action Area */}
       <div className="flex items-center justify-between gap-4 pt-5 border-t border-border">
         <button
           onClick={handleSpeak}
@@ -467,8 +485,6 @@ export const JobCard = React.memo<JobCardProps>(({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  const btn = e.currentTarget;
-                  btn.classList.add('opacity-70', 'cursor-wait');
                   onBid(job.id);
                 }}
                 className="btn btn-primary rounded-full text-xs font-bold uppercase tracking-widest shadow-lg shadow-primary/20 hover:shadow-primary/40 group/btn transition-all active:scale-95"
@@ -490,16 +506,9 @@ export const JobCard = React.memo<JobCardProps>(({
               </button>
             ) : (
               <div className="flex flex-col items-end gap-2 w-full">
-                {/* Status Chips only if essential, otherwise the button does the heavy lifting */}
                 {getStatusUI()}
-
-                {/* Primary Action Button - Opens Modal */}
                 <button
                   onClick={(e) => {
-                    // We allow this button to propagate or call onClick directly if it helps, 
-                    // but usually specific buttons stop propagation. 
-                    // However, for "View Bids" it opens the SAME modal as card click, so it's fine.
-                    // Actually, let's keep it specific but make it look distinct.
                     e.stopPropagation();
                     onViewBids(job);
                   }}
@@ -553,6 +562,6 @@ export const JobCard = React.memo<JobCardProps>(({
           )}
         </div>
       </div>
-    </div >
+    </div>
   );
 });

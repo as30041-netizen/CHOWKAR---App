@@ -60,7 +60,8 @@ serve(async (req) => {
                 notes: {
                     userId: userId,
                     coins: coins || 0,
-                    type: type || 'coins'
+                    type: type || 'coins',
+                    planId: body.planId // Pass planId for webhook
                 }
             })
         })
@@ -77,7 +78,7 @@ serve(async (req) => {
 
         // Return the Order ID and details to the client
         return new Response(
-            JSON.stringify(data),
+            JSON.stringify({ ...data, key: RAZORPAY_KEY_ID }),
             {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
                 status: 200,

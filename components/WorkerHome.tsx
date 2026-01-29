@@ -1,7 +1,8 @@
 import React from 'react';
 import { useUser } from '../contexts/UserContextDB';
 import { useJobs } from '../contexts/JobContextDB';
-import { Briefcase, Clock, MapPin } from 'lucide-react';
+import { Briefcase, Clock, MapPin, ChevronRight } from 'lucide-react';
+import { CATEGORY_CONFIG } from '../constants';
 import { CategoryHero } from './CategoryHero';
 import { FilterPills } from './FilterPills';
 import { SkillNudgeCard } from './SkillNudgeCard';
@@ -144,12 +145,43 @@ export const WorkerHome: React.FC<WorkerHomeProps> = ({
                         </div>
                     )}
 
-                    <div className="px-6 mb-4">
-                        <h3 className="text-lg font-black text-text-primary tracking-tight">
-                            {language === 'en' ? 'Explore Categories' : language === 'hi' ? 'श्रेणियाँ खोजें' : 'ਸ਼੍ਰੇਣੀਆਂ ਦੇਖੋ'}
-                        </h3>
+                    <div className="px-6 mb-2">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-black text-text-primary tracking-tight">
+                                {language === 'en' ? 'Explore Categories' : language === 'hi' ? 'श्रेणियाँ खोजें' : 'ਸ਼੍ਰੇਣੀਆਂ ਦੇਖੋ'}
+                            </h3>
+                            <button
+                                onClick={() => navigate('/categories')}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/5 text-primary rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-primary/10 transition-all active:scale-95"
+                            >
+                                <LayoutGrid size={14} />
+                                {language === 'en' ? 'See All' : 'सभी देखें'}
+                                <ChevronRight size={14} />
+                            </button>
+                        </div>
+
+                        {/* Quick Popular Category Chips */}
+                        <div className="flex items-center gap-3 overflow-x-auto no-scrollbar -mx-6 px-6">
+                            {['Cleaning', 'Plumbing', 'Electrical', 'Construction', 'Gardening'].map(catId => {
+                                const cat = CATEGORY_CONFIG.find(c => c.id === catId);
+                                if (!cat) return null;
+                                return (
+                                    <button
+                                        key={catId}
+                                        onClick={() => navigate(`/category/${catId}`)}
+                                        className="flex flex-col items-center gap-2 shrink-0 group"
+                                    >
+                                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center bg-gradient-to-br ${cat.color} text-white shadow-sm transition-transform active:scale-90`}>
+                                            <cat.icon size={24} />
+                                        </div>
+                                        <span className="text-[10px] font-bold text-text-secondary group-hover:text-primary transition-colors">
+                                            {cat.label[language]}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
-                    <CategoryHero />
                     <SkillNudgeCard onClick={() => setShowEditProfile(true)} />
 
                     {/* Unified Sticky Control Bar */}
@@ -194,10 +226,10 @@ export const WorkerHome: React.FC<WorkerHomeProps> = ({
                                 </button>
                                 <button
                                     onClick={() => setFeedMode('ALL')}
-                                    className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-xl text-[10px] font-black uppercase tracking-[0.15em] transition-all ${feedMode === 'ALL' ? 'bg-white shadow-sm text-primary' : 'text-text-muted hover:text-text-primary'}`}
+                                    className={`flex-1 flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-xl text-[10px] font-black uppercase tracking-[0.15em] transition-all ${feedMode === 'ALL' ? 'bg-white shadow-sm text-primary' : 'text-text-muted hover:text-text-primary'}`}
                                 >
-                                    <ListIcon size={12} className={feedMode === 'ALL' ? 'text-primary' : ''} />
-                                    {language === 'en' ? 'Recent' : language === 'hi' ? 'हाल के' : 'ਹਾਲ ਹੀ ਵਿੱਚ'}
+                                    <LayoutGrid size={12} className={feedMode === 'ALL' ? 'text-primary' : ''} />
+                                    {language === 'en' ? 'All Jobs' : language === 'hi' ? 'सभी काम' : 'ਸਾਰੇ ਕੰਮ'}
                                 </button>
                             </div>
                         </div>
