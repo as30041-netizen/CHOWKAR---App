@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Users, Briefcase, Zap, ChevronRight, XCircle, RotateCw, Sparkles, LayoutDashboard, MapPin } from 'lucide-react';
+import { Plus, Users, Briefcase, Zap, ChevronRight, XCircle, RotateCw, Sparkles, LayoutDashboard, MapPin, Loader2 } from 'lucide-react';
 import { Job, JobStatus, DashboardStats, UserRole } from '../types';
 import { useUser } from '../contexts/UserContextDB';
 import { PosterJobCard } from './PosterJobCard';
@@ -19,10 +19,14 @@ interface PosterHomeProps {
     setPosterTab: (tab: 'ACTIVE' | 'HISTORY') => void;
     onChat?: (job: Job) => void;
     onClick: (job: Job) => void;
+    hasMore: boolean;          // NEW: Infinite Scroll
+    onLoadMore: () => void;    // NEW: Trigger Load
+    isLoadingMore: boolean;    // NEW: Loading State
 }
 
 export const PosterHome: React.FC<PosterHomeProps> = ({
-    jobs, loading, error, stats, onViewBids, onEdit, onHide, onRefresh, posterTab, setPosterTab, onChat, onClick
+    jobs, loading, error, stats, onViewBids, onEdit, onHide, onRefresh, posterTab, setPosterTab, onChat, onClick,
+    hasMore, onLoadMore, isLoadingMore
 }) => {
     const navigate = useNavigate();
     const { user, language } = useUser();
@@ -78,35 +82,7 @@ export const PosterHome: React.FC<PosterHomeProps> = ({
                 </div>
             </header>
 
-            <div className="px-6 mb-8">
-                <button
-                    onClick={() => navigate('/post')}
-                    className="w-full relative group overflow-hidden bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 rounded-[2rem] p-8 text-white shadow-xl shadow-blue-500/30 active:scale-[0.98] transition-all duration-300"
-                >
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-[60px] -translate-y-1/2 translate-x-1/2 animate-pulse-subtle" />
-                    <div className="absolute bottom-0 left-0 w-48 h-48 bg-black/20 rounded-full blur-[40px] translate-y-1/2 -translate-x-1/2" />
-                    <div className="absolute inset-0 opacity-10 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] mix-blend-overlay"></div>
 
-                    <div className="relative z-10 flex items-center justify-between">
-                        <div className="text-left space-y-4">
-                            <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-white border border-white/20 shadow-inner">
-                                <Plus size={28} strokeWidth={3} />
-                            </div>
-                            <div>
-                                <h2 className="text-2xl font-black leading-none mb-2 tracking-tight">
-                                    {language === 'en' ? 'Post a New Job' : 'नया काम पोस्ट करें'}
-                                </h2>
-                                <p className="text-blue-100 text-sm font-semibold opacity-90">
-                                    {language === 'en' ? 'Find specific workers in minutes' : 'मिनटों में वर्कर खोजें'}
-                                </p>
-                            </div>
-                        </div>
-                        <div className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-sm border border-white/30 flex items-center justify-center group-hover:bg-white group-hover:text-blue-600 transition-all duration-300 shadow-lg">
-                            <ChevronRight size={28} strokeWidth={3} className="-mr-1" />
-                        </div>
-                    </div>
-                </button>
-            </div>
 
             <div className="px-6 sticky top-0 z-30 bg-background/95 backdrop-blur-sm py-2 -mx-6 md:mx-0">
                 <div className="mx-6 bg-surface p-1.5 rounded-2xl flex relative max-w-md border border-border">
@@ -144,7 +120,7 @@ export const PosterHome: React.FC<PosterHomeProps> = ({
                         <p className="text-sm font-bold text-red-600">{error}</p>
                         <button onClick={onRefresh} className="mt-4 px-6 py-2 bg-white dark:bg-gray-800 rounded-full text-xs font-black uppercase shadow-sm text-red-600">Retry</button>
                     </div>
-                ) : jobs.length === 0 ? (
+                ) : (jobs.length === 0 && !hasMore) ? (
                     <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
                         <div className="w-24 h-24 bg-surface rounded-[2.5rem] flex items-center justify-center mb-8 border border-border shadow-sm transform -rotate-6 hover:rotate-0 transition-transform duration-500">
                             <div className="absolute inset-0 bg-primary/5 rounded-[2.5rem] animate-pulse" />
@@ -170,7 +146,7 @@ export const PosterHome: React.FC<PosterHomeProps> = ({
                         )}
                     </div>
                 ) : (
-                    <div className="space-y-4">
+                    <div className="space-y-4 pb-8">
                         {jobs.map(job => (
                             <PosterJobCard
                                 key={job.id}
@@ -185,6 +161,23 @@ export const PosterHome: React.FC<PosterHomeProps> = ({
                                 onClick={() => onClick(job)}
                             />
                         ))}
+
+                        {hasMore && (
+                            <button
+                                onClick={onLoadMore}
+                                disabled={isLoadingMore}
+                                className="w-full py-4 text-sm font-bold text-primary bg-primary/5 rounded-xl hover:bg-primary/10 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 mt-4"
+                            >
+                                {isLoadingMore && <Loader2 className="animate-spin" size={16} />}
+                                {language === 'en' ? 'Load More Jobs' : 'अधिक लोड करें'}
+                            </button>
+                        )}
+
+                        {jobs.length === 0 && hasMore && (
+                            <p className="text-center text-xs text-text-muted mt-2">
+                                {language === 'en' ? 'No jobs in this batch. Load more...' : 'इस बैच में कोई काम नहीं। और लोड करें...'}
+                            </p>
+                        )}
                     </div>
                 )}
             </div>

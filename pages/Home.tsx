@@ -292,6 +292,9 @@ export const Home: React.FC<HomeProps> = ({
                     setPosterTab={setPosterTab}
                     onChat={onChat}
                     onClick={onClick}
+                    hasMore={hasMore}
+                    onLoadMore={fetchMoreJobs}
+                    isLoadingMore={isLoadingMore}
                 />
             </div>
         );
