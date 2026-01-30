@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { X, ArrowLeft, XCircle, MapPin, Star, AlertCircle, Pencil, ExternalLink, IndianRupee, UserCircle, Users, ChevronRight, Loader2, Clock, Handshake, Trash2, Navigation, CheckCircle, Heart, MessageCircle, Phone, Sparkles, Languages, RotateCw } from 'lucide-react';
+import { X, ArrowLeft, XCircle, MapPin, Star, AlertCircle, Pencil, ExternalLink, IndianRupee, UserCircle, Users, ChevronRight, Loader2, Clock, Handshake, Trash2, Navigation, CheckCircle, Heart, MessageCircle, Phone, Sparkles, Languages, RotateCw, TrendingUp, Zap, Shield, Briefcase } from 'lucide-react';
 import { Job, UserRole, JobStatus } from '../types';
 import { useUser } from '../contexts/UserContextDB';
 import { useJobs } from '../contexts/JobContextDB';
@@ -273,28 +273,198 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                 </div>
 
                 <div className="overflow-y-auto flex-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none'] bg-background">
-                    {/* 1. HERO SECTION (Visual Impact) */}
-                    <div className="relative w-full h-64 md:h-96 overflow-hidden bg-slate-900 group">
-                        {liveJob.image ? (
-                            <img src={liveJob.image} alt={liveJob.title} className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" />
-                        ) : (
-                            <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-950 flex items-center justify-center">
-                                <Handshake size={64} className="text-white/10" />
+                    {/* 1. HERO SECTION (Visual Impact - Typography Focused) */}
+                    <div className="relative w-full bg-surface pt-20 md:pt-10 pb-6 px-6 md:px-10 border-b border-border/50">
+                        {/* Category & Status */}
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2">
+                                <span className="bg-primary/10 text-primary text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1.5 rounded-lg border border-primary/20">
+                                    {liveJob.category || 'General'}
+                                </span>
+                                {job?.posterRating && job.posterRating > 0 && (
+                                    <span className="flex items-center gap-1 bg-yellow-500/10 text-yellow-700 dark:text-yellow-500 text-[10px] font-black uppercase tracking-wider px-2 py-1.5 rounded-lg border border-yellow-500/20">
+                                        <Star size={10} fill="currentColor" /> {job.posterRating.toFixed(1)}
+                                    </span>
+                                )}
                             </div>
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent" />
-
-                        {/* Category Floating Badge */}
-                        <div className="absolute bottom-6 left-6 z-10 flex flex-col gap-2">
-                            <span className="w-fit bg-primary/20 backdrop-blur-md text-primary text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1.5 rounded-full border border-primary/20">
-                                {liveJob.category || 'General'}
+                            {/* Status Chip */}
+                            <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-tighter border ${liveJob.status === 'OPEN' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
+                                liveJob.status === 'IN_PROGRESS' ? 'bg-blue-500/10 text-blue-600 border-blue-500/20' :
+                                    'bg-surface text-text-muted border-border'
+                                }`}>
+                                {String(liveJob.status || 'UNKNOWN').replace('_', ' ')}
                             </span>
-                            <h1 className="text-2xl md:text-4xl font-black text-text-primary leading-tight tracking-tight drop-shadow-sm">{displayTitle}</h1>
+                        </div>
+
+                        <h1 className="text-3xl md:text-5xl font-black text-text-primary leading-[1.1] tracking-tight mb-2">
+                            {displayTitle}
+                        </h1>
+
+                        {/* Quick Distance/Time subtext */}
+                        <div className="flex items-center gap-3 text-xs text-text-secondary font-medium">
+                            <span>Posted {new Date(liveJob.createdAt).toLocaleDateString()}</span>
+                            <span className="w-1 h-1 rounded-full bg-border" />
+                            <span>{job?.location}</span>
                         </div>
                     </div>
 
-                    <div className="p-6 md:p-10 space-y-10">
-                        {/* 0. NEGOTIATION STATUS CARD (Top Priority) */}
+                    <div className="p-6 md:p-10 space-y-8 bg-background">
+                        {/* 1. KEY STATS BAR (Budget • Duration • Status) */}
+                        <div className="flex items-center gap-3 overflow-x-auto pb-2 [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+                            {/* Budget Pill */}
+                            <div className="px-4 py-2 rounded-xl bg-emerald-500/5 border border-emerald-500/10 text-emerald-700 dark:text-emerald-400 flex items-center gap-2 shrink-0">
+                                <IndianRupee size={16} strokeWidth={2.5} />
+                                <div className="flex flex-col leading-none">
+                                    <span className="text-[8px] font-black uppercase tracking-widest opacity-60">{t.budget}</span>
+                                    <span className="text-sm font-black">₹{liveJob.budget}</span>
+                                </div>
+                            </div>
+
+                            {/* Duration Pill */}
+                            <div className="px-4 py-2 rounded-xl bg-blue-500/5 border border-blue-500/10 text-blue-700 dark:text-blue-400 flex items-center gap-2 shrink-0">
+                                <Clock size={16} strokeWidth={2.5} />
+                                <div className="flex flex-col leading-none">
+                                    <span className="text-[8px] font-black uppercase tracking-widest opacity-60">{t.duration}</span>
+                                    <span className="text-sm font-black">{liveJob.duration?.replace('For ', '') || 'Flexible'}</span>
+                                </div>
+                            </div>
+
+                            {/* Status Pill */}
+                            <div className={`px-4 py-2 rounded-xl border flex items-center gap-2 shrink-0 ${liveJob.status === 'OPEN' ? 'bg-indigo-500/5 border-indigo-500/20 text-indigo-700' :
+                                'bg-surface border-border text-text-muted'
+                                }`}>
+                                <Sparkles size={16} strokeWidth={2.5} />
+                                <div className="flex flex-col leading-none">
+                                    <span className="text-[8px] font-black uppercase tracking-widest opacity-60">
+                                        {language === 'en' ? 'Status' : (language === 'hi' ? 'स्थिति' : 'ਸਥਿਤੀ')}
+                                    </span>
+                                    <span className="text-sm font-black">{String(liveJob.status || 'UNKNOWN').replace('_', ' ')}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 1.1 SMART INSIGHTS (Competition & Freshness) */}
+                        <div className="flex flex-wrap gap-2">
+                            {/* Competition Badge */}
+                            {(liveJob.bidCount || 0) > 5 ? (
+                                <div className="px-3 py-1.5 rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 text-[10px] font-black uppercase tracking-wider border border-red-500/20 flex items-center gap-1.5 animate-pulse-subtle">
+                                    <TrendingUp size={12} strokeWidth={3} />
+                                    {language === 'en' ? 'In High Demand' : (language === 'hi' ? 'भारी मांग में' : 'ਬਹੁਤ ਮੰਗ ਵਿੱਚ')}
+                                </div>
+                            ) : (
+                                <div className="px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-wider border border-emerald-500/20 flex items-center gap-1.5">
+                                    <Sparkles size={12} strokeWidth={3} />
+                                    {language === 'en' ? 'Low Competition' : (language === 'hi' ? 'आसान मुकाबला' : 'ਘੱਟ ਮੁਕਾਬਲਾ')}
+                                </div>
+                            )}
+
+                            {/* Freshness Badge */}
+                            {(Date.now() - liveJob.createdAt) < 24 * 60 * 60 * 1000 && (
+                                <div className="px-3 py-1.5 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[10px] font-black uppercase tracking-wider border border-blue-500/20 flex items-center gap-1.5">
+                                    <Clock size={12} strokeWidth={3} />
+                                    {language === 'en' ? 'New Posting' : (language === 'hi' ? 'नई पोस्ट' : 'ਨਵੀਂ ਪੋਸਟ')}
+                                </div>
+                            )}
+
+                            {/* Success Rate/Trust Badge */}
+                            {job?.posterRating && job.posterRating >= 4.5 && (
+                                <div className="px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-black uppercase tracking-wider border border-amber-500/20 flex items-center gap-1.5">
+                                    <CheckCircle size={12} strokeWidth={3} />
+                                    {language === 'en' ? 'Trusted Employer' : (language === 'hi' ? 'भरोसेमंद मालिक' : 'ਭਰੋਸੇਮੰਦ ਮਾਲਕ')}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 2. DESCRIPTION (Restored & Elevated) */}
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                                <h4 className="text-[11px] font-black text-text-muted uppercase tracking-[0.3em] flex items-center gap-3 ml-1">
+                                    <div className="w-1.5 h-4 bg-primary rounded-full px-0.5" />
+                                    {language === 'en' ? 'Task Scope & Details' : (language === 'hi' ? 'कार्य का विवरण' : 'ਕੰਮ ਦਾ ਵੇਰਵਾ')}
+                                </h4>
+                                <button
+                                    onClick={handleTranslate}
+                                    disabled={isTranslating}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${showTranslated
+                                        ? 'bg-primary text-white shadow-lg shadow-primary/20'
+                                        : 'bg-surface border border-border text-text-muted hover:border-primary/50 hover:text-primary'
+                                        }`}
+                                >
+                                    {isTranslating ? <RotateCw size={10} className="animate-spin" /> : <Languages size={10} strokeWidth={2.5} />}
+                                    {isTranslating ? t.translating : (showTranslated ? t.showOriginal : t.translate)}
+                                </button>
+                            </div>
+                            <div className="text-base text-text-primary whitespace-pre-wrap font-medium leading-[1.7] tracking-tight pl-2 border-l-2 border-border/50">
+                                {displayDescription}
+                            </div>
+                        </div>
+
+                        {/* 2.1 HOW IT WORKS (Process Guide) */}
+                        <div className="bg-surface/50 rounded-3xl p-6 border border-border/50">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                                    <Shield size={16} strokeWidth={3} />
+                                </div>
+                                <h4 className="text-[11px] font-black text-text-primary uppercase tracking-[0.2em]">
+                                    {language === 'en' ? 'How it Works' : (language === 'hi' ? 'यह कैसे काम करता है' : 'ਇਹ ਕਿਵੇਂ ਕੰਮ ਕਰਦਾ ਹੈ')}
+                                </h4>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2 relative">
+                                {/* Connector Line */}
+                                <div className="absolute top-4 left-[20%] right-[20%] h-0.5 bg-border/50 -z-0 hidden sm:block" />
+
+                                <div className="flex flex-col items-center gap-3 text-center relative z-10">
+                                    <div className="w-8 h-8 rounded-full bg-background border-2 border-primary flex items-center justify-center text-xs font-black text-primary shadow-sm">1</div>
+                                    <span className="text-[10px] font-bold text-text-secondary leading-tight">
+                                        {language === 'en' ? 'Send Bid' : (language === 'hi' ? 'बोली लगायें' : 'ਬੋਲੀ ਲਗਾਓ')}
+                                    </span>
+                                </div>
+
+                                <div className="flex flex-col items-center gap-3 text-center relative z-10">
+                                    <div className="w-8 h-8 rounded-full bg-background border-2 border-primary/30 flex items-center justify-center text-xs font-black text-text-muted">2</div>
+                                    <span className="text-[10px] font-bold text-text-muted leading-tight">
+                                        {language === 'en' ? 'Accept & Chat' : (language === 'hi' ? 'स्वीकार और चैट' : 'ਸਵੀਕਾਰ ਕਰੋ ਅਤੇ ਚੈਟ ਕਰੋ')}
+                                    </span>
+                                </div>
+
+                                <div className="flex flex-col items-center gap-3 text-center relative z-10">
+                                    <div className="w-8 h-8 rounded-full bg-background border-2 border-primary/30 flex items-center justify-center text-xs font-black text-text-muted">3</div>
+                                    <span className="text-[10px] font-bold text-text-muted leading-tight">
+                                        {language === 'en' ? 'Work & Pay' : (language === 'hi' ? 'काम और पैसा' : 'ਕੰਮ ਅਤੇ ਪੈਸਾ')}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Pro Tip (For Workers) */}
+                            {role === UserRole.WORKER && (
+                                <div className="mt-8 p-4 bg-primary/5 rounded-2xl border border-primary/10 flex items-start gap-3">
+                                    <div className="p-1.5 bg-primary/10 rounded-lg text-primary">
+                                        <Zap size={14} fill="currentColor" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] font-black text-primary uppercase tracking-widest leading-none">Pro Tip</p>
+                                        <p className="text-xs text-text-secondary font-medium leading-relaxed">
+                                            {language === 'en'
+                                                ? "Employers value speed. Apply fast to stay on top of the list!"
+                                                : (language === 'hi' ? "मालिक गति को महत्व देते हैं। सूची में शीर्ष पर रहने के लिए जल्दी आवेदन करें!" : "ਮਾਲਕ ਗਤੀ ਨੂੰ ਮਹੱਤਵ ਦਿੰਦੇ ਹਨ। ਸੂਚੀ ਵਿੱਚ ਸਿਖਰ 'ਤੇ ਰਹਿਣ ਲਈ ਜਲਦੀ ਅਰਜ਼ੀ ਦਿਓ!")}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 2.2 VALUE PROP (Zero Commission) */}
+                        <div className="flex items-center gap-2 px-4 py-3 bg-emerald-500/5 rounded-2xl border border-emerald-500/10">
+                            <Handshake size={14} className="text-emerald-500" strokeWidth={3} />
+                            <p className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
+                                {language === 'en'
+                                    ? "Zero Commission Platform • Pay 100% to Worker"
+                                    : (language === 'hi' ? "कोई कमीशन नहीं • वर्ਕਰ को सीधा पूरा भुगतान करें" : "ਜ਼ੀਰੋ ਕਮਿਸ਼ਨ ਪਲੇਟਫਾਰਮ • ਵਰਕਰ ਨੂੰ 100% ਭੁਗਤਾਨ ਕਰੋ")}
+                            </p>
+                        </div>
+
+                        {/* 0. NEGOTIATION STATUS CARD (Top Priority - Kept as is) */}
                         {myBid && (
                             <div className={`p-6 md:p-8 rounded-[2rem] border-2 border-dashed relative overflow-hidden group shadow-sm w-full mx-auto ${isWorkerTurn
                                 ? 'bg-amber-500/5 border-amber-500/20'
@@ -303,14 +473,14 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                                 <h4 className={`text-[10px] font-black uppercase tracking-[0.3em] mb-6 flex items-center gap-2 ${isWorkerTurn ? 'text-amber-600' : 'text-indigo-600'
                                     }`}>
                                     {isWorkerTurn ? <AlertCircle size={14} /> : <Clock size={14} />}
-                                    {language === 'en' ? 'Negotiation Status' : 'मोलभाव की स्थिति'}
+                                    {language === 'en' ? 'Negotiation Status' : (language === 'hi' ? 'मोलभाव की स्थिति' : 'ਬਾਤਚੀਤ ਦੀ ਸਥਿਤੀ')}
                                 </h4>
 
                                 <div className="flex items-center justify-between relative z-10 max-w-3xl mx-auto">
                                     {/* Left: Original */}
                                     <div className="flex flex-col items-start">
                                         <span className="text-[9px] font-bold text-text-muted uppercase tracking-wider mb-1.5 opacity-70">
-                                            {language === 'en' ? 'Original' : 'मूल प्रस्ताव'}
+                                            {language === 'en' ? 'Original' : (language === 'hi' ? 'मूल प्रस्ताव' : 'ਅਸਲ ਪੇਸ਼ਕਸ਼')}
                                         </span>
                                         <span className="text-xl md:text-3xl font-black text-text-secondary/40 line-through decoration-auto">
                                             ₹{liveJob.budget}
@@ -331,8 +501,8 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                                         <span className={`text-[9px] font-bold uppercase tracking-wider mb-1.5 ${isWorkerTurn ? 'text-amber-600' : 'text-indigo-600'
                                             }`}>
                                             {isWorkerTurn
-                                                ? (language === 'en' ? 'Poster Counter' : 'मालिक का प्रस्ताव')
-                                                : (language === 'en' ? 'Your Offer' : 'आपका प्रस्ताव')
+                                                ? (language === 'en' ? 'Poster Counter' : (language === 'hi' ? 'मालिक का प्रस्ताव' : 'ਮਾਲਕ ਦੀ ਪੇਸ਼ਕਸ਼'))
+                                                : (language === 'en' ? 'Your Offer' : (language === 'hi' ? 'आपका प्रस्ताव' : 'ਤੁਹਾਡੀ ਪੇਸ਼ਕਸ਼'))
                                             }
                                         </span>
                                         <div className={`px-5 py-2.5 md:py-3 md:px-6 rounded-2xl text-xl md:text-3xl font-black shadow-lg shadow-black/5 flex items-center gap-3 transform transition-all group-hover:scale-105 ${isWorkerTurn
@@ -357,90 +527,60 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                             </div>
                         )}
 
-                        {/* 2. PREMIUM METADATA CHIPS (High Scannability) */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="bg-surface border border-border/50 p-4 rounded-[2rem] shadow-sm flex flex-col items-center justify-center text-center group hover:border-emerald-500/30 transition-all active:scale-95 cursor-default">
-                                <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 mb-2 group-hover:rotate-12 transition-transform">
-                                    <IndianRupee size={20} strokeWidth={3} />
-                                </div>
-                                <p className="text-[10px] font-black text-text-muted uppercase tracking-widest mb-0.5">{t.budget}</p>
-                                <p className="text-lg font-black text-text-primary tracking-tighter">₹{liveJob.budget.toLocaleString()}</p>
-                            </div>
+                        {/* 3. POSTER CARD (Renumbered) & OTHER SECTIONS */}
 
-                            <div className="bg-surface border border-border/50 p-4 rounded-[2rem] shadow-sm flex flex-col items-center justify-center text-center group hover:border-blue-500/30 transition-all active:scale-95 cursor-default">
-                                <div className="w-10 h-10 rounded-2xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400 mb-2 group-hover:rotate-12 transition-transform">
-                                    <Clock size={20} strokeWidth={3} />
-                                </div>
-                                <p className="text-[10px] font-black text-text-muted uppercase tracking-widest mb-0.5">{t.duration || 'Duration'}</p>
-                                <p className="text-lg font-black text-text-primary tracking-tighter">{liveJob.duration} Days</p>
-                            </div>
-
-                            <div className="bg-surface border border-border/50 p-4 rounded-[2rem] shadow-sm flex flex-col items-center justify-center text-center group hover:border-indigo-500/30 transition-all active:scale-95 cursor-default col-span-2 md:col-span-2">
-                                <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400 mb-2 group-hover:-rotate-12 transition-transform">
-                                    <MapPin size={20} strokeWidth={3} />
-                                </div>
-                                <p className="text-[10px] font-black text-text-muted uppercase tracking-widest mb-0.5">{t.location || 'Location'}</p>
-                                <p className="text-sm font-bold text-text-primary tracking-tight truncate w-full px-2">{liveJob.location}</p>
-                            </div>
-
-
-                        </div>
-
-                        {/* 3. PREMIUM DESCRIPTION CARD */}
-                        <div className="space-y-4">
-                            <h4 className="text-[11px] font-black text-text-muted uppercase tracking-[0.3em] flex items-center gap-3">
-                                <div className="w-1.5 h-4 bg-primary rounded-full" />
-                                {t.description}
-                                <button
-                                    onClick={handleTranslate}
-                                    disabled={isTranslating}
-                                    className={`ml-auto flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${showTranslated
-                                        ? 'bg-primary text-white shadow-lg shadow-primary/20'
-                                        : 'bg-surface border border-border text-text-muted hover:border-primary/50 hover:text-primary'
-                                        }`}
-                                >
-                                    {isTranslating ? <RotateCw size={10} className="animate-spin" /> : <Languages size={10} strokeWidth={2.5} />}
-                                    {isTranslating ? t.translating : (showTranslated ? t.showOriginal : t.translate)}
-                                </button>
-                            </h4>
-                            <div className="bg-surface border border-border/50 rounded-[2.5rem] p-8 shadow-sm group hover:border-primary/20 transition-all">
-                                <p className="text-base text-text-secondary whitespace-pre-wrap font-medium leading-[1.8] tracking-tight">
-                                    {displayDescription}
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* 4. PREMIUM POSTER CARD (Mobile) */}
+                        {/* 4. PREMIUM POSTER CARD (Mobile & Desktop Unified Style) */}
                         {user.id !== liveJob.posterId && (
-                            <div
-                                className="md:hidden flex items-center justify-between bg-surface p-6 rounded-[2.5rem] border border-border/50 cursor-pointer hover:border-primary/50 transition-all shadow-sm group"
-                                onClick={() => onViewProfile(liveJob.posterId, liveJob.posterName)}
-                            >
-                                <div className="flex items-center gap-4">
-                                    <div className="w-14 h-14 rounded-2xl bg-background border border-border/50 flex items-center justify-center overflow-hidden shrink-0 shadow-inner group-hover:scale-105 transition-transform">
-                                        {liveJob.posterPhoto ? (
-                                            <img src={liveJob.posterPhoto} alt={liveJob.posterName || 'User'} className="w-full h-full object-cover" loading="lazy" />
-                                        ) : (
-                                            <UserCircle size={32} className="text-text-muted" />
-                                        )}
-                                    </div>
-                                    <div className="space-y-0.5">
-                                        <p className="font-black text-sm text-text-primary flex items-center gap-2 group-hover:text-primary transition-colors">
-                                            {liveJob.posterName || 'Partner Account'}
-                                            <ExternalLink size={12} className="text-text-muted opacity-50" />
-                                        </p>
-                                        <div className="flex items-center gap-2">
-                                            <div className="flex gap-0.5">
-                                                {[...Array(5)].map((_, i) => (
-                                                    <Star key={i} size={8} className={i < (liveJob.posterRating || 5) ? 'fill-amber-400 text-amber-400' : 'text-border'} />
-                                                ))}
+                            <div className="space-y-4">
+                                <h4 className="text-[11px] font-black text-text-muted uppercase tracking-[0.3em] flex items-center gap-3 ml-1">
+                                    <div className="w-1.5 h-4 bg-purple-500 rounded-full" />
+                                    {language === 'en' ? 'Posted By' : 'प्रकाशक'}
+                                </h4>
+                                <div
+                                    className="flex items-center justify-between bg-surface p-5 rounded-[2.5rem] border border-border/50 cursor-pointer hover:border-primary/50 transition-all shadow-sm group relative overflow-hidden"
+                                    onClick={() => onViewProfile(liveJob.posterId, liveJob.posterName)}
+                                >
+                                    {/* Decorative BG */}
+                                    <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-primary/5 to-transparent pointer-events-none" />
+
+                                    <div className="flex items-center gap-4 relative z-10">
+                                        <div className="w-16 h-16 rounded-2xl bg-background border border-border/50 flex items-center justify-center overflow-hidden shrink-0 shadow-inner group-hover:scale-105 transition-transform">
+                                            {liveJob.posterPhoto ? (
+                                                <img src={liveJob.posterPhoto} alt={liveJob.posterName || 'User'} className="w-full h-full object-cover" loading="lazy" />
+                                            ) : (
+                                                <UserCircle size={36} className="text-text-muted" />
+                                            )}
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="font-black text-base text-text-primary flex items-center gap-2 group-hover:text-primary transition-colors">
+                                                {liveJob.posterName || 'Partner Account'}
+                                                {job?.posterRating && job.posterRating >= 4.5 && <Sparkles size={12} className="text-amber-500" fill="currentColor" />}
+                                            </p>
+                                            <div className="flex flex-wrap items-center gap-3">
+                                                <div className="flex items-center gap-1.5">
+                                                    <div className="flex gap-0.5 bg-background px-1.5 py-0.5 rounded-md border border-border/50">
+                                                        {[...Array(5)].map((_, i) => (
+                                                            <Star key={i} size={8} className={i < (liveJob.posterRating || 5) ? 'fill-amber-400 text-amber-400' : 'text-gray-200 dark:text-gray-700'} />
+                                                        ))}
+                                                    </div>
+                                                    <span className="text-[10px] font-bold text-text-muted">{liveJob.posterRating || 5.0}</span>
+                                                </div>
+                                                <div className="flex items-center gap-3 text-[10px] font-bold text-text-muted">
+                                                    <span className="w-1 h-1 rounded-full bg-border" />
+                                                    <span className="flex items-center gap-1 uppercase tracking-tighter">
+                                                        {language === 'en' ? 'Member since 2024' : (language === 'hi' ? '2024 से सदस्य' : '2024 ਤੋਂ ਮੈਂਬਰ')}
+                                                    </span>
+                                                    <span className="w-1 h-1 rounded-full bg-border" />
+                                                    <span className="flex items-center gap-1 uppercase tracking-tighter">
+                                                        <Briefcase size={10} /> {language === 'en' ? 'Multiple Posts' : (language === 'hi' ? 'कई पोस्ट' : 'ਕਈ ਪੋਸਟਾਂ')}
+                                                    </span>
+                                                </div>
                                             </div>
-                                            <span className="text-[9px] font-black text-text-muted uppercase tracking-widest leading-none mt-0.5">Verified</span>
                                         </div>
                                     </div>
-                                </div>
-                                <div className="w-10 h-10 rounded-full bg-background flex items-center justify-center text-text-muted border border-border group-hover:bg-primary group-hover:text-white group-hover:border-primary transition-all">
-                                    <ChevronRight size={18} strokeWidth={3} />
+                                    <div className="w-10 h-10 rounded-full bg-background flex items-center justify-center text-text-muted border border-border group-hover:bg-primary group-hover:text-white group-hover:border-primary transition-all relative z-10">
+                                        <ChevronRight size={18} strokeWidth={3} />
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -448,30 +588,36 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                         {/* 5. INTERACTIVE MAP PREVIEW */}
                         {liveJob.coordinates && (
                             <div className="space-y-4">
-                                <h4 className="text-[11px] font-black text-text-muted uppercase tracking-[0.3em] flex items-center gap-3">
+                                <h4 className="text-[11px] font-black text-text-muted uppercase tracking-[0.3em] flex items-center gap-3 ml-1">
                                     <div className="w-1.5 h-4 bg-indigo-500 rounded-full" />
                                     {language === 'en' ? 'Job Location' : 'कार्य का स्थान'}
                                 </h4>
-                                <div className="relative rounded-[2.8rem] overflow-hidden border-4 border-white dark:border-gray-900 h-72 shadow-2xl group/map z-0">
+                                <div className="relative rounded-[2.5rem] overflow-hidden border border-border h-64 shadow-sm group/map z-0">
                                     <LeafletMap lat={liveJob.coordinates.lat} lng={liveJob.coordinates.lng} popupText={liveJob.location} />
-                                    <div className="absolute inset-x-0 bottom-0 p-5 bg-gradient-to-t from-black/70 to-transparent pointer-events-none flex justify-end">
+                                    <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/60 to-transparent pointer-events-none flex justify-end">
                                         <a
                                             href={`https://www.google.com/maps/dir/?api=1&destination=${liveJob.coordinates.lat},${liveJob.coordinates.lng}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="bg-white text-slate-900 text-[10px] font-black uppercase tracking-[0.2em] px-6 py-3 rounded-full shadow-2xl flex items-center gap-2 hover:scale-105 active:scale-95 transition-all pointer-events-auto"
+                                            className="bg-white dark:bg-gray-900 text-text-primary text-[9px] font-black uppercase tracking-[0.2em] px-5 py-2.5 rounded-full shadow-xl flex items-center gap-2 hover:scale-105 active:scale-95 transition-all pointer-events-auto border border-white/20"
                                         >
-                                            <Navigation size={14} fill="currentColor" /> {language === 'en' ? 'Get Directions' : 'दिशा निर्देश'}
+                                            <Navigation size={12} fill="currentColor" /> {language === 'en' ? 'Directions' : 'दिशा'}
                                         </a>
                                     </div>
                                 </div>
+                                <p className="text-[10px] font-medium text-text-muted mt-2 ml-4 flex items-center gap-1.5 leading-none">
+                                    <Shield size={10} className="text-emerald-500/50" />
+                                    {language === 'en'
+                                        ? 'Approximate location shown to protect user privacy'
+                                        : (language === 'hi' ? 'उपयोगकर्ता की गोपनीयता बनाए रखने के लिए अनुमानित स्थान दिखाया गया है' : 'ਉਪਭੋਗਤਾ ਦੀ ਗੋਪਨੀਯਤਾ ਦੀ ਰੱਖਿਆ ਲਈ ਅਨੁਮਾਨਿਤ ਸਥਾਨ ਦਿਖਾਇਆ ਗਿਆ ਹੈ')}
+                                </p>
                             </div>
                         )}
 
                         {/* 6. BIDS PREVIEW (For Poster - Quick Insight) */}
                         {role === UserRole.POSTER && liveJob.posterId === user.id && liveJob.status === JobStatus.OPEN && liveJob.bids && liveJob.bids.length > 0 && (
                             <div className="space-y-4">
-                                <h4 className="text-[10px] font-black text-text-muted uppercase tracking-[0.3em] flex items-center gap-3">
+                                <h4 className="text-[10px] font-black text-text-muted uppercase tracking-[0.3em] flex items-center gap-3 ml-1">
                                     <div className="w-1.5 h-3 bg-emerald-500/50 rounded-full" />
                                     {language === 'en' ? 'Bids Received' : 'प्राप्त बोलियां'}
                                 </h4>
@@ -511,7 +657,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                         {/* 7. REVIEWS BREAKDOWN (For Completed Jobs) */}
                         {liveJob.status === JobStatus.COMPLETED && liveJob.reviews && liveJob.reviews.length > 0 && (
                             <div className="space-y-6">
-                                <h4 className="text-[11px] font-black text-text-muted uppercase tracking-[0.3em] flex items-center gap-3">
+                                <h4 className="text-[11px] font-black text-text-muted uppercase tracking-[0.3em] flex items-center gap-3 ml-1">
                                     <div className="w-1.5 h-4 bg-amber-500 rounded-full" />
                                     {language === 'en' ? 'Task Feedback' : 'कार्य प्रतिक्रिया'}
                                 </h4>
@@ -547,7 +693,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                         {/* 8. NEGOTIATION HISTORY (Worker View) */}
                         {myBid && myBid.negotiationHistory && myBid.negotiationHistory.length > 0 && (
                             <div className="space-y-4">
-                                <h4 className="text-[11px] font-black text-text-muted uppercase tracking-[0.3em] flex items-center gap-3">
+                                <h4 className="text-[11px] font-black text-text-muted uppercase tracking-[0.3em] flex items-center gap-3 ml-1">
                                     <div className="w-1.5 h-4 bg-purple-500 rounded-full" />
                                     {language === 'en' ? 'Negotiation History' : 'बातचीत का इतिहास'}
                                 </h4>
@@ -587,13 +733,43 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                             </div>
                         )}
 
+                        {/* 9. PLATFORM COMMITMENTS */}
+                        <div className="grid grid-cols-2 gap-3 pt-4">
+                            <div className="p-3 bg-surface border border-border/30 rounded-2xl flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                                    <Shield size={16} strokeWidth={3} />
+                                </div>
+                                <div className="space-y-0.5">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-text-muted opacity-60">
+                                        {language === 'en' ? 'Safety' : (language === 'hi' ? 'सुरक्षा' : 'ਸੁਰੱਖਿਆ')}
+                                    </p>
+                                    <p className="text-[10px] font-bold text-text-primary">
+                                        {language === 'en' ? 'Verified Users' : (language === 'hi' ? 'सत्यापित उपयोगकर्ता' : 'ਤਸਦੀਕਸ਼ੁਦਾ ਉਪਭੋਗਤਾ')}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="p-3 bg-surface border border-border/30 rounded-2xl flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-indigo-500/10 flex items-center justify-center text-indigo-500">
+                                    <Handshake size={16} strokeWidth={3} />
+                                </div>
+                                <div className="space-y-0.5">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-text-muted opacity-60">
+                                        {language === 'en' ? 'Payment' : (language === 'hi' ? 'भुगतान' : 'ਭੁਗਤਾਨ')}
+                                    </p>
+                                    <p className="text-[10px] font-bold text-text-primary">
+                                        {language === 'en' ? 'Direct & 0% Fees' : (language === 'hi' ? 'सीधा और 0% शुल्क' : 'ਸਿੱਧਾ ਅਤੇ 0% ਫੀਸ')}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
                         {/* Spacer to avoid sticky footer overlap */}
                         <div className="h-24 md:hidden" />
                     </div>
                 </div>
 
                 {/* 6. MOBILE ACTION ISLAND (Sticky Footer) */}
-                <div className="md:hidden fixed bottom-6 inset-x-4 z-50">
+                <div className="md:hidden fixed bottom-6 inset-x-4 z-50 mb-safe">
                     <div className="bg-slate-950/90 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-3 shadow-2xl shadow-indigo-500/20 flex items-center gap-3">
                         {!myBid && liveJob.status === JobStatus.OPEN && role === UserRole.WORKER && (
                             <div className="pl-4 pr-2 border-r border-white/10 shrink-0">
@@ -739,7 +915,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
                             </div>
                             <div>
                                 <h3 className="font-black uppercase tracking-[0.2em] text-[10px] mb-0.5">
-                                    {language === 'en' ? 'Job Status' : 'कार्य की स्थिति'}
+                                    {language === 'en' ? 'Job Status' : (language === 'hi' ? 'कार्य की स्थिति' : 'ਕੰਮ ਦੀ ਸਥਿਤੀ')}
                                 </h3>
                                 <p className="text-lg font-black tracking-tight">{String(liveJob.status).replace('_', ' ')}</p>
                             </div>
@@ -847,7 +1023,7 @@ export const JobDetailsModal: React.FC<JobDetailsModalProps> = ({
 
                 {/* Overlays */}
                 {showCounterInput && (
-                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-end md:items-center justify-center p-4" onClick={() => setShowCounterInput(false)}>
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-end md:items-center justify-center p-4 pb-safe" onClick={() => setShowCounterInput(false)}>
                         <div className="w-full max-w-lg bg-background rounded-[2.5rem] p-8 shadow-2xl animate-in slide-in-from-bottom duration-300 relative border border-border" onClick={e => e.stopPropagation()}>
                             <div className="flex justify-between items-center mb-6">
                                 <div>

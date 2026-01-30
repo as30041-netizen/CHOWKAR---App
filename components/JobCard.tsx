@@ -375,98 +375,99 @@ export const JobCard = React.memo<JobCardProps>(({
     >
       {/* FUNCTIONAL PREMIUM HEADER */}
       <div className="flex justify-between items-start gap-3 mb-3">
-        {/* Left: Category Icon (The "Logo") */}
+        {/* Left: Category Icon (The visual anchor) */}
         <div className="shrink-0">
           {(() => {
             const catConfig = CATEGORY_CONFIG.find(c => c.id === job.category);
             const CatIcon = catConfig?.icon || Briefcase;
             return (
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${catConfig?.color || 'bg-gray-100'} text-white shadow-sm relative overflow-hidden group-hover:scale-105 transition-transform duration-300`}>
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-br ${catConfig?.color || 'from-slate-400 to-slate-600'} text-white shadow-sm relative overflow-hidden group-hover:scale-105 transition-transform duration-300`}>
                 <div className="absolute inset-0 bg-gradient-to-br from-white/30 to-transparent" />
-                <CatIcon size={22} strokeWidth={2.5} className="relative z-10" />
+                <CatIcon size={22} strokeWidth={2.5} className="relative z-10 text-white" />
               </div>
             );
           })()}
         </div>
 
-        {/* Middle: Title & Badges */}
+        {/* Middle: Title & Trust Signals */}
         <div className="flex-1 min-w-0 pt-0.5">
-          <div className="flex flex-wrap gap-1.5 mb-1.5">
-            {/* Match Badge (AI) */}
+          {/* Badges Row */}
+          <div className="flex flex-wrap gap-1.5 mb-1.5 align-middle">
+            {/* Poster Trust Signal (NEW) */}
+            {job.posterRating && job.posterRating > 0 && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-yellow-500/10 text-yellow-700 dark:text-yellow-500 border border-yellow-500/20">
+                <Star size={9} fill="currentColor" /> Poster: {job.posterRating.toFixed(1)}
+              </span>
+            )}
+
+            {/* Match Badge */}
             {(matchData?.score && matchData.score > 80) && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-purple-500/10 text-purple-600 border border-purple-500/20">
                 <Sparkles size={10} fill="currentColor" /> {matchData.score}% Match
               </span>
             )}
-            {isPremium && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-600 border border-amber-500/20">
-                <Star size={10} fill="currentColor" /> Premium
-              </span>
-            )}
-            {/* Recommended Badge */}
-            {job.isRecommended && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-indigo-500/10 text-indigo-600 border border-indigo-500/20 shadow-sm shadow-indigo-500/5">
-                <Sparkles size={10} fill="currentColor" /> {language === 'en' ? 'For You' : 'आपके लिए'}
-              </span>
-            )}
+
+            {/* Urgent Badge */}
             {(job.description.toLowerCase().includes('urgent') || job.title.toLowerCase().includes('urgent')) && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-red-500/10 text-red-600 border border-red-500/20 animate-pulse">
                 <Zap size={10} fill="currentColor" /> Urgent
               </span>
             )}
-            {/* Translation Badge */}
-            {isTranslated ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
-                <Languages size={10} /> {language.toUpperCase()}
-              </span>
-            ) : (language !== 'en' && (
-              <button
-                onClick={handleTranslate}
-                disabled={isTranslating}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-surface border border-border text-text-muted hover:border-primary hover:text-primary transition-colors z-10 relative"
-              >
-                {isTranslating ? <div className="animate-spin w-2.5 h-2.5 border-2 border-primary border-t-transparent rounded-full" /> : <Languages size={10} />}
-                {isTranslating ? (language === 'hi' ? '...' : language === 'pa' ? '...' : '...') : (language === 'hi' ? 'अनुवाद करें' : language === 'pa' ? 'ਅਨੁਵਾਦ ਕਰੋ' : 'Translate')}
-              </button>
-            ))}
           </div>
 
-          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-primary/80 mb-0.5">
+          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-primary/80 mb-0.5 truncate">
             {catT}
           </p>
           <h3 className="text-lg font-bold text-text-primary leading-tight line-clamp-2 mb-2">
             {displayTitle}
           </h3>
 
-          <div className="flex flex-wrap items-center gap-2 mb-1">
-            {distance !== undefined && (
-              <div className="flex items-center gap-1 bg-primary/5 text-primary px-2 py-1 rounded-lg text-[10px] font-bold border border-primary/10">
-                <MapPin size={12} />
-                {distance.toFixed(1)} km
-              </div>
-            )}
-            <div className="flex items-center gap-1 bg-surface border border-border/50 px-2 py-1 rounded-lg text-[10px] font-bold text-text-secondary">
-              <Calendar size={12} className="text-primary/70" />
-              {dateDisplay}
+          {/* Smart Metadata Grid (Location • Date • Duration) */}
+          <div className="flex flex-wrap items-center gap-2 text-xs text-text-secondary font-medium">
+            {/* Location */}
+            <div className="flex items-center gap-1">
+              <MapPin size={12} className="text-emerald-500 shrink-0" />
+              <span className="truncate max-w-[120px]">
+                {distance !== undefined ? `${distance.toFixed(1)} km away` : job.location}
+              </span>
             </div>
-            <div className="flex items-center gap-1 bg-surface border border-border/50 px-2 py-1 rounded-lg text-[10px] font-bold text-text-secondary">
-              <Clock size={12} className="text-primary/70" />
-              {getTimeAgo(job.createdAt)}
+
+            <span className="text-border mx-1">|</span>
+
+            {/* Date & Duration */}
+            <div className="flex items-center gap-1">
+              <Calendar size={12} className="text-blue-500 shrink-0" />
+              <span> Start: {dateDisplay}</span>
+              {job.duration && job.duration !== 'Flexible' && (
+                <>
+                  <span className="text-gray-300 px-1">•</span>
+                  <span className="text-text-primary font-bold">
+                    {(() => {
+                      const d = job.duration.trim();
+                      if (d.toLowerCase() === 'ongoing') return 'Ongoing';
+                      if (d.toLowerCase().startsWith('for ')) return d;
+                      return `For ${d}`;
+                    })()}
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Right: Price Pill (The "Hook") */}
-        <div className="shrink-0">
-          <div className="bg-emerald-600 dark:bg-emerald-500 text-white px-3 py-1.5 rounded-xl font-black text-sm shadow-lg shadow-emerald-500/20 flex flex-col items-center leading-none">
+        {/* Right: Price Pill (Prominent) */}
+        <div className="shrink-0 flex flex-col items-end gap-1">
+          <div className="bg-emerald-600 dark:bg-emerald-500 text-white px-3 py-2 rounded-xl font-black shadow-lg shadow-emerald-500/20 flex flex-col items-center leading-none min-w-[70px]">
             <span className="text-[9px] opacity-80 uppercase font-bold tracking-widest mb-0.5">Pay</span>
-            <span className="flex items-center gap-0.5">₹{job.budget}</span>
+            <span className="text-base">₹{job.budget}</span>
           </div>
+          {/* Quick Time Ago */}
+          <span className="text-[9px] font-bold text-gray-400">{getTimeAgo(job.createdAt)}</span>
         </div>
       </div>
 
       {/* Description Snippet */}
-      <p className="text-sm text-text-secondary mb-6 line-clamp-2 leading-relaxed">
+      <p className="text-sm text-text-secondary mb-5 line-clamp-2 leading-relaxed pl-1 border-l-2 border-border/50">
         {displayDescription}
       </p>
 

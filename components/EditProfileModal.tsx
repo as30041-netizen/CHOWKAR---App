@@ -222,10 +222,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                 </div>
 
                 <div
-                    className="overflow-y-auto px-5 sm:px-8 pt-6 sm:pt-8 space-y-8 sm:space-y-10 custom-scrollbar flex-1"
-                    style={{
-                        paddingBottom: isKeyboardOpen ? 'var(--keyboard-height, 120px)' : '100px'
-                    }}
+                    className="overflow-y-auto px-5 sm:px-8 pt-6 sm:pt-8 space-y-8 sm:space-y-10 custom-scrollbar flex-1 overscroll-contain"
                 >
                     {/* Photo Uploader */}
                     <div className="flex justify-center flex-col items-center gap-4 sm:gap-6">

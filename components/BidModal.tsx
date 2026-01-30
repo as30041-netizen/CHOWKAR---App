@@ -246,7 +246,7 @@ export const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, jobId, onSu
                 className="absolute inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto transition-opacity duration-300"
                 onClick={onClose}
             />
-            <div className="w-full md:w-[480px] bg-white dark:bg-gray-950 md:rounded-[2.5rem] rounded-t-[2.5rem] pointer-events-auto animate-in slide-in-from-bottom duration-300 relative shadow-2xl flex flex-col max-h-[90vh] pb-safe">
+            <div className="w-full md:w-[480px] bg-white dark:bg-gray-950 md:rounded-[2.5rem] rounded-t-[2.5rem] pointer-events-auto animate-in slide-in-from-bottom duration-300 relative shadow-2xl flex flex-col max-h-[90vh] pt-safe pb-safe">
 
                 {/* Mobile Drag Handle */}
                 <div className="w-full flex justify-center pt-3 pb-1 md:hidden">

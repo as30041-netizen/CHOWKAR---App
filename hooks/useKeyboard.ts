@@ -20,6 +20,7 @@ export const useKeyboard = (): KeyboardState => {
         let hideListenerHandle: any;
 
         const setupListeners = async () => {
+            // 1. Native Plugin Listeners
             showListenerHandle = await Keyboard.addListener('keyboardWillShow', (info) => {
                 setKeyboardState({
                     isOpen: true,
@@ -39,9 +40,39 @@ export const useKeyboard = (): KeyboardState => {
 
         setupListeners();
 
+        // 2. Fallback: Visual Viewport Resize Logic (vital for Android reliability)
+        // If the viewport grows back to near-original size, assume keyboard closed.
+        const originalHeight = window.innerHeight;
+        const handleResize = () => {
+            const currentHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+            // If height is close to original (> 85%), assume keyboard is closed
+            if (currentHeight > originalHeight * 0.85) {
+                setKeyboardState(prev => {
+                    // Only override if it currently thinks it's open
+                    if (prev.isOpen) {
+                        document.documentElement.style.setProperty('--keyboard-height', '0px');
+                        return { isOpen: false, keyboardHeight: 0 };
+                    }
+                    return prev;
+                });
+            }
+        };
+
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', handleResize);
+        } else {
+            window.addEventListener('resize', handleResize);
+        }
+
         return () => {
             if (showListenerHandle) showListenerHandle.remove();
             if (hideListenerHandle) hideListenerHandle.remove();
+
+            if (window.visualViewport) {
+                window.visualViewport.removeEventListener('resize', handleResize);
+            } else {
+                window.removeEventListener('resize', handleResize);
+            }
         };
     }, []);
 

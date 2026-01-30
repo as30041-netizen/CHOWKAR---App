@@ -19,6 +19,7 @@ interface PushPayload {
     data?: Record<string, string>
     type?: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR'
     relatedJobId?: string
+    skipDb?: boolean // Add this to prevent infinite loops when called by DB trigger
 }
 
 // Generate OAuth2 access token for FCM v1 API
@@ -160,7 +161,7 @@ serve(async (req) => {
 
     try {
         const payload: PushPayload = await req.json()
-        const { userId, title, body, data, type = 'INFO', relatedJobId } = payload
+        const { userId, title, body, data, type = 'INFO', relatedJobId, skipDb = false } = payload
 
         if (!userId || !title || !body) {
             return new Response(
@@ -171,27 +172,30 @@ serve(async (req) => {
 
         const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!)
 
-        // 1. INSERT INTO DB (Single Source of Truth)
-        // We do this BEFORE sending push, so history is preserved even if FCM fails.
-        // We use service_role, so RLS is bypassed (efficient).
-        const { data: insertedNotif, error: insertError } = await supabase
-            .from('notifications')
-            .insert({
-                user_id: userId,
-                title: title,
-                message: body,
-                type: type,
-                related_job_id: relatedJobId || null,
-                read: false
-            })
-            .select() // Return data so we can log it
+        let dbInsertError = null
 
-        if (insertError) {
-            console.error('Failed to insert notification into DB:', insertError)
-            // We continue to try sending the push even if DB fails, or should we abort?
-            // Safer to abort or at least log heavily. For now, proceeding but logging error.
+        // 1. INSERT INTO DB (Single Source of Truth)
+        // Skip if requested (usually because the DB Trigger already did the insert)
+        if (!skipDb) {
+            const { error: insertError } = await supabase
+                .from('notifications')
+                .insert({
+                    user_id: userId,
+                    title: title,
+                    message: body,
+                    type: type,
+                    related_job_id: relatedJobId || null,
+                    read: false
+                })
+
+            if (insertError) {
+                console.error('Failed to insert notification into DB:', insertError)
+                dbInsertError = insertError
+            } else {
+                console.log('Notification saved to DB')
+            }
         } else {
-            console.log('Notification saved to DB:', insertedNotif?.[0]?.id)
+            console.log('Skipping DB insert (requested by skipDb flag)')
         }
 
         // 2. FETCH PUSH TOKEN
@@ -225,26 +229,34 @@ serve(async (req) => {
         let fcmResult: any
         let apiUsed: string
 
+        // Build data object for deep linking
+        const fcmData = {
+            ...(data || {}),
+            type: (data?.type || type || 'INFO').toString(),
+            jobId: (data?.jobId || relatedJobId || '').toString(),
+            click_action: 'OPEN_ACTIVITY_1' // Legacy but helpful for some background listeners
+        }
+
         // Try v1 API first, fall back to legacy
         if (FIREBASE_PROJECT_ID && FIREBASE_CLIENT_EMAIL && FIREBASE_PRIVATE_KEY) {
-            console.log('Using FCM v1 API')
+            console.log('Using FCM v1 API', { userId, fcmData })
             apiUsed = 'v1'
             try {
-                fcmResult = await sendWithV1API(profile.push_token, title, body, data)
+                fcmResult = await sendWithV1API(profile.push_token, title, body, fcmData)
             } catch (v1Error) {
                 console.error('FCM v1 API failed:', v1Error)
                 if (FCM_SERVER_KEY) {
                     console.log('Falling back to Legacy API')
                     apiUsed = 'legacy'
-                    fcmResult = await sendWithLegacyAPI(profile.push_token, title, body, data)
+                    fcmResult = await sendWithLegacyAPI(profile.push_token, title, body, fcmData)
                 } else {
                     throw v1Error
                 }
             }
         } else if (FCM_SERVER_KEY) {
-            console.log('Using FCM Legacy API')
+            console.log('Using FCM Legacy API', { userId, fcmData })
             apiUsed = 'legacy'
-            fcmResult = await sendWithLegacyAPI(profile.push_token, title, body, data)
+            fcmResult = await sendWithLegacyAPI(profile.push_token, title, body, fcmData)
         } else {
             return new Response(
                 JSON.stringify({ error: 'FCM not configured. Set FIREBASE_PROJECT_ID + credentials OR FCM_SERVER_KEY' }),
@@ -269,7 +281,7 @@ serve(async (req) => {
         }
 
         return new Response(
-            JSON.stringify({ success: true, apiUsed, fcm: fcmResult, dbInsert: !insertError }),
+            JSON.stringify({ success: true, apiUsed, fcm: fcmResult, dbInsert: !dbInsertError && !skipDb }),
             { headers: { 'Content-Type': 'application/json' } }
         )
 

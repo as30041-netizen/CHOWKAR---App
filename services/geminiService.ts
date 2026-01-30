@@ -315,3 +315,76 @@ OUTPUT (JSON with BOTH fields required):
         return null;
     }
 };
+
+export const processVoicePostingConversation = async (
+    speech: string,
+    history: { role: 'user' | 'model'; parts: { text: string }[] }[],
+    currentData: any,
+    language: 'en' | 'hi' | 'pa' = 'en'
+): Promise<{ nextResponse: string; updatedData: any; phase: string; isComplete: boolean }> => {
+    try {
+        const ai = getAI();
+        if (!ai) return { nextResponse: "Speech processing is unavailable right now.", updatedData: currentData, phase: 'UNDERSTANDING', isComplete: false };
+
+        const model = ai.getGenerativeModel({
+            model: 'gemini-2.0-flash',
+            generationConfig: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: SchemaType.OBJECT,
+                    properties: {
+                        nextResponse: { type: SchemaType.STRING },
+                        updatedData: {
+                            type: SchemaType.OBJECT,
+                            properties: {
+                                title: { type: SchemaType.STRING },
+                                category: { type: SchemaType.STRING },
+                                description: { type: SchemaType.STRING },
+                                location: { type: SchemaType.STRING },
+                                budget: { type: SchemaType.STRING },
+                                timing: { type: SchemaType.STRING }
+                            }
+                        },
+                        phase: { type: SchemaType.STRING }, // UNDERSTANDING, CONFIRMING, DONE
+                        isComplete: { type: SchemaType.BOOLEAN }
+                    }
+                }
+            }
+        });
+
+        const langName = language === 'hi' ? 'Hindi' : language === 'pa' ? 'Punjabi' : 'English';
+
+        const prompt = `
+      You are "Chowkar Voice Assist", a warm, empathetic AI assistant for a labor marketplace in India. 
+      Your goal is to help an employer post a high-quality job requirement using only voice.
+
+      GUIDELINES:
+      1. Tone: Human-like, helpful, and polite. Use local greetings (Namaste/Sat Sri Akal).
+      2. Methodology: "Understand, Confirm, & Deepen" loop.
+      3. Active Verification: If high-level details (Category/Title) are gathered, ask: "Did I get that right?"
+      4. Deepening: Ask about tools, specific task size, or timing once the basics are understood.
+      5. Constraints: Categories MUST be one of: Farm Labor, Construction, Plumbing, Electrical, Driver, Cleaning, Delivery, Other.
+
+      USER INPUT: "${speech}"
+      LANGUAGE: ${langName}
+      CURRENT DATA: ${JSON.stringify(currentData)}
+      
+      Respond only with JSON.
+    `;
+
+        const chat = model.startChat({ history });
+        const result = await chat.sendMessage(prompt);
+        const response = await result.response;
+        const text = response.text();
+
+        return JSON.parse(text);
+    } catch (e) {
+        console.error("[GeminiService] Voice processing failed", e);
+        return {
+            nextResponse: language === 'hi' ? "माफ़ कीजिये, मैं समझ नहीं पाया। कृपया फिर से कहें।" : "Sorry, I couldn't understand that. Could you repeat?",
+            updatedData: currentData,
+            phase: 'UNDERSTANDING',
+            isComplete: false
+        };
+    }
+};

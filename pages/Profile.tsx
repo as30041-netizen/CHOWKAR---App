@@ -26,10 +26,15 @@ export const Profile: React.FC<ProfileProps> = ({ setShowSubscriptionModal, onLo
             const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id);
             if (!isValidUUID) return;
 
+            // Calculate start of current month
+            const now = new Date();
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
             const { count, error } = await supabase
                 .from('jobs')
                 .select('*', { count: 'exact', head: true })
-                .eq('poster_id', user.id);
+                .eq('poster_id', user.id)
+                .gte('created_at', startOfMonth);
 
             if (!error && count !== null) {
                 setPostedJobsCount(count);

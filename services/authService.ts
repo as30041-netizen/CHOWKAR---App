@@ -135,7 +135,7 @@ export const signOut = async (): Promise<{ success: boolean; error?: string }> =
   }
 };
 
-const mapDbProfileToUser = (profile: any, authEmail?: string, reviews: any[] = []): User => {
+const mapDbProfileToUser = (profile: any, authEmail?: string, reviews: any[] = [], weeklyBidsCount: number = 0): User => {
   return {
     id: profile.id,
     name: profile.name,
@@ -148,9 +148,10 @@ const mapDbProfileToUser = (profile: any, authEmail?: string, reviews: any[] = [
     rating: Number(profile.rating || 0),
     profilePhoto: profile.profile_photo || undefined,
     isPremium: profile.is_premium,
-    subscription_plan: profile.subscription_plan, // FIX: Map the plan
+    subscription_plan: profile.subscription_plan,
     subscription_expiry: profile.subscription_expiry ? new Date(profile.subscription_expiry).getTime() : undefined,
     aiUsageCount: profile.ai_usage_count || 0,
+    weeklyBidsCount: weeklyBidsCount,
     bio: profile.bio || '',
     skills: profile.skills || [],
     experience: profile.experience || '',
@@ -296,8 +297,47 @@ export const getCurrentUser = async (
       console.warn('[AuthService] Reviews fetch failed, continuing without reviews:', err);
     }
 
-    const user = mapDbProfileToUser(finalProfile, authUser.email, reviews);
-    console.log(`[AuthService] Source of Truth Synced: ${user.name} (Phone: ${user.phone})`);
+    // 4. Fetch Weekly Bids Count (Only for Free users)
+    let weeklyBidsCount = 0;
+    if (!finalProfile.subscription_plan || finalProfile.subscription_plan === 'FREE') {
+      try {
+        const now = new Date();
+        const day = now.getDay();
+        const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+        const monday = new Date(now.setDate(diff));
+        monday.setHours(0, 0, 0, 0);
+
+        // Check if supabase client is available, else use safeFetch
+        const { safeFetch } = await import('./fetchUtils');
+        const bidsResponse = await safeFetch(
+          `${supabaseUrl}/rest/v1/bids?worker_id=eq.${finalProfile.id}&created_at=gte.${monday.toISOString()}&select=*`,
+          {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Prefer': 'count=exact,head=true'
+            },
+            cache: 'no-store'
+          }
+        );
+
+        if (bidsResponse.ok) {
+          // Content-Range: 0-0/5 (5 is the count)
+          const range = bidsResponse.headers.get('Content-Range');
+          if (range) {
+            const parts = range.split('/');
+            if (parts.length > 1) {
+              weeklyBidsCount = parseInt(parts[1], 10) || 0;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[AuthService] Weekly bids fetch failed:', err);
+      }
+    }
+
+    const user = mapDbProfileToUser(finalProfile, authUser.email, reviews, weeklyBidsCount);
+    console.log(`[AuthService] Source of Truth Synced: ${user.name} (Phone: ${user.phone}) - Bids: ${weeklyBidsCount}`);
     return { user };
 
   } catch (error) {
@@ -448,7 +488,8 @@ export const getUserProfile = async (userId: string): Promise<{ user: User | nul
       jobsCompleted: profile.jobs_completed,
       joinDate: new Date(profile.join_date).getTime(),
       verified: profile.verified,
-      reviews: reviews
+      reviews: reviews,
+      weeklyBidsCount: 0 // Not fetching for public view to save resources
     };
 
     return { user };
@@ -491,12 +532,20 @@ export const incrementAIUsage = async (
 // Permanent Account Deletion
 export const deleteAccount = async (): Promise<{ success: boolean; error?: string }> => {
   try {
-    const { safeRPC } = await import('./fetchUtils');
-    const { error } = await safeRPC('delete_own_account', {});
+    const { safeFetch } = await import('./fetchUtils');
 
-    if (error) {
-      console.error('[AuthService] Delete Account RPC failed:', error);
-      return { success: false, error: error.message };
+    // Call the Edge Function for Hard Deletion (Auth + Cascade DB)
+    const response = await safeFetch(`${supabaseUrl}/functions/v1/delete-user`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('[AuthService] Hard Delete failed:', errorData);
+      return { success: false, error: errorData.error || 'Failed to delete account' };
     }
 
     // Force sign out to clear session

@@ -90,6 +90,14 @@ const AppContent: React.FC = () => {
     console.log('[AppContent] Auth State:', { isLoggedIn, isAuthLoading, userId: user.id });
   }, [isLoggedIn, isAuthLoading, user.id]);
 
+  // Automatically close AuthModal when logged in (Fix for persistent Google Auth modal)
+  useEffect(() => {
+    if (isLoggedIn && showAuthModal) {
+      console.log('[App] User logged in, auto-closing AuthModal');
+      setShowAuthModal(false);
+    }
+  }, [isLoggedIn, showAuthModal]);
+
   // Global Event Listener for Subscription Modal
   useEffect(() => {
     const handleOpenModal = () => setShowSubscriptionModal(true);

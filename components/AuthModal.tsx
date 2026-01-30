@@ -90,17 +90,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             />
 
             {/* Modal Card */}
-            <div className="relative w-full max-w-md bg-white dark:bg-gray-950 rounded-[2.5rem] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.3)] border border-white/20 overflow-hidden animate-in zoom-in-95 duration-300">
-                {/* Close Button */}
+            <div className="relative w-full max-w-md bg-white dark:bg-gray-950 rounded-[2.5rem] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.3)] border border-white/20 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300">
+                {/* Close Button - Absolute to the card frame */}
                 <button
                     onClick={onClose}
                     disabled={isLoading}
-                    className="absolute top-6 right-6 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors z-10"
+                    className="absolute top-6 right-6 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors z-20"
                 >
                     <X size={20} className="text-gray-400" />
                 </button>
 
-                <div className="p-8 sm:p-10">
+                <div className="p-8 sm:p-10 overflow-y-auto custom-scrollbar">
                     {/* Header */}
                     <div className="text-center mb-8">
                         <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-2xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 mx-auto mb-4 border border-emerald-200 dark:border-emerald-800/50 relative">
